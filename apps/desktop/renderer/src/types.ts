@@ -180,12 +180,34 @@ export interface GezhiApi {
   //   口型算法与系统语音是本地能力，不需要密钥。
   avatar: {
     probe(): Promise<AvatarProbe>;
-    ttsTest(p: { text?: string }): Promise<{
-      ok: boolean; bytes?: number; base64?: string | null;
-      format?: string; hasTiming?: boolean; timings?: unknown; error?: string;
-    }>;
+    /**
+     * 云端合成。返回带 timings（字级时间戳）—— 口型的真实数据源；
+     * 音频是 WAV（裸 PCM 已在主进程包好头，否则浏览器播不了）。
+     */
+    tts(p: { text?: string; voiceType?: number; speed?: number }): Promise<AvatarTtsResult>;
+    ttsTest(p: { text?: string }): Promise<AvatarTtsResult>;
     paths(): Promise<{ ok: boolean; credentials?: string; userData?: string }>;
   };
+}
+
+export interface AvatarTtsResult {
+  ok: boolean;
+  /** WAV 音频（base64） */
+  base64?: string | null;
+  mime?: string;
+  bytes?: number;
+  rawBytes?: number;
+  codec?: string;
+  sampleRate?: number;
+  chunks?: number;
+  totalMs?: number;
+  ms?: number;
+  /** 字级时间戳：口型的真实数据源 */
+  timings?: Array<{ text: string; beginMs: number; endMs: number }>;
+  timingAvailable?: boolean;
+  error?: string;
+  /** 常见错因的可操作提示（如密钥失效） */
+  hint?: string | null;
 }
 
 export interface AvatarCap {

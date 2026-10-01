@@ -1,0 +1,26 @@
+云端语音接入 + 对话持久化测试去偶发
+
+腾讯云语音（用户提供凭据，已存入加密凭据库）
+- 凭据存 %APPDATA%\gezhi\credentials.enc，DPAPI 模式（Windows 账户绑定，
+  不落明文）；之后可在设置里升级成主密码模式（scrypt + AES-256-GCM）
+- main/avatar-ipc.cjs:
+  · 新增 avatar:tts，与 avatar:ttsTest 共用 synthOnce（不复制两份逻辑）
+  · 裸 PCM 包 WAV 头 —— 浏览器不能播裸 PCM，会静默失败
+  · 回传字级时间戳（口型数据源）与 totalMs（口型对齐依据）
+  · 常见错因给可操作提示（密钥失效 / 频率超限 / 欠费）
+- renderer AvatarPanel:
+  · 云端口型改由**真实字级时间戳**驱动（原来按字数估算）
+  · 音频用 WAV blob 播放，语音时长以接口 totalMs 为准
+  · 本地估算与云端真实时间戳两套帧生成器并存，公式保持一致
+
+修复
+- synthesize() 的返回没有 ok 字段，失败是抛异常 —— 原先判 r.ok 会把成功当失败
+- 不用 ipcMain._invokeHandlers 做处理器转发（Electron 私有属性，升级即失效），
+  改为共享普通函数
+
+测试
+- verify-cloud-voice.mjs 新增 14/14：合成、WAV 头、字级时间戳、
+  时间戳递增、口型公式复算、216 字自动分段、检测结果不含密钥
+- verify-chat-persist.mjs 把"重启后"的固定等待改成显式等待：
+  冷启动比首次启动慢，原来 1 秒不够，导致偶发失败（看着像持久化坏了，
+  实际数据一直在）。连跑两次 10/10 稳定。

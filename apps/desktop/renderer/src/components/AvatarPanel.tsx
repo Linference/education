@@ -11,6 +11,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AvatarStage, { type VisemeFrame } from "./AvatarStage";
 
 /**
+ * 把**真实的**字级时间戳压成口型帧。
+ *
+ * 算法与 packages/voice 的 buildVisemeTrack 完全一致：
+ * 字中间张得最大、首尾收拢（sin 弧线），发音期间嘴至少微张 0.25。
+ * 在渲染进程重写一份是因为那个包是纯 ESM，这一侧不引它。
+ *
+ * ⚠️ 两份实现必须保持同一条公式，否则"本地估算"和"云端真实"驱动出来的
+ *    口型观感会不一致（同一个字一个快一个慢）。改动时两边一起改。
+ */
+function buildVisemeTrackFromTimings(
+  timings: Array<{ text: string; beginMs: number; endMs: number }>,
+  fps = 30,
+): VisemeFrame[] {
+  if (!timings.length) return [];
+  const step = 1000 / fps;
+  const end = timings[timings.length - 1].endMs;
+  const frames: VisemeFrame[] = [];
+  let ti = 0;
+  for (let ms = 0; ms <= end + step; ms += step) {
+    while (ti < timings.length && timings[ti].endMs < ms) ti++;
+    const cur = timings[ti];
+    let open = 0;
+    let c = "";
+    if (cur && ms >= cur.beginMs) {
+      const span = Math.max(1, cur.endMs - cur.beginMs);
+      const phase = Math.min(1, (ms - cur.beginMs) / span);
+      open = Math.max(0.25, Math.sin(Math.PI * phase));
+      c = cur.text;
+    }
+    frames.push({ t: Math.round(ms), open: Number(open.toFixed(3)), ch: c });
+  }
+  return frames;
+}
+
+/**
  * 把文本估算成"字级时间戳"，再压成口型帧。
  *
  * ★ 这是本地版（不需要密钥）。
@@ -148,9 +183,14 @@ export default function AvatarPanel({ vaultPath }: Props) {
 
   /**
    * 当前文本对应的口型帧。
-   * useMemo 缓存：文本没变就不重算（一帧序列是几百个对象）。
+   *
+   * 优先用**云端返回的真实时间戳**（cloudFrames），没有才退回本地估算。
+   * 这就是把"口型数据源"与"形象组件"解耦的收益：
+   * 形象只认 VisemeFrame[]，换成真实时间戳时它一行都不用改。
    */
-  const frames = useMemo(() => buildLocalVisemeTrack(speakText), [speakText]);
+  const localFrames = useMemo(() => buildLocalVisemeTrack(speakText), [speakText]);
+  const [cloudFrames, setCloudFrames] = useState<VisemeFrame[] | null>(null);
+  const frames = cloudFrames ?? localFrames;
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -284,22 +324,75 @@ export default function AvatarPanel({ vaultPath }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [speaking, frames, actualMs]);
 
-  /** 用腾讯云试听（需要密钥） */
+  /**
+   * 用腾讯云合成并播放（需要凭据）。
+   *
+   * ★ 与系统语音的关键差别：**腾讯云返回真实的字级时间戳**。
+   *   所以口型不再是估算的，而是每个字精确起止 ——
+   *   这就是"免费拿到 viseme 数据"的做法（EnableSubtitle）。
+   *
+   * ★ 音频是 WAV：主进程已经把裸 PCM 包好头了。
+   *   浏览器不能直接播裸 PCM，会静默失败。
+   */
   const speakCloud = async () => {
-    setSpeakMsg("正在请求语音合成…");
+    setSpeakMsg("正在请求云端语音合成…");
+    setCloudFrames(null);
     try {
-      const r = await window.gezhi.avatar.ttsTest({ text: speakText });
-      if (!r.ok) { setSpeakMsg("合成失败：" + (r.error ?? "未知")); return; }
-      if (!r.base64) { setSpeakMsg("合成返回了空音频"); return; }
+      const r = await window.gezhi.avatar.tts({ text: speakText });
+      if (!r.ok || !r.base64) {
+        setSpeakMsg(`合成失败：${r.error ?? "未知原因"}${r.hint ? ` —— ${r.hint}` : ""}`);
+        return;
+      }
+
+      // 音频 → blob → 播放
       const bin = atob(r.base64);
       const bytes = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob = new Blob([bytes], { type: "audio/mpeg" });
+      const blob = new Blob([bytes], { type: r.mime ?? "audio/wav" });
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
+
+      // ★ 用真实时间戳压口型帧
+      let realFrames: VisemeFrame[] | null = null;
+      if (r.timings?.length) {
+        realFrames = buildVisemeTrackFromTimings(r.timings);
+        setCloudFrames(realFrames);
+      }
+
+      // 语音实际时长：接口给的 totalMs 最准，拿不到就用音频元素的 duration
+      const knownMs = r.totalMs && r.totalMs > 0 ? r.totalMs : null;
+
+      audio.onplay = () => {
+        setSpeaking(true);
+        setActualMs(knownMs);
+      };
+      audio.onended = () => {
+        setSpeaking(false);
+        setCurChar("");
+        setActualMs(knownMs);
+        URL.revokeObjectURL(url);
+        const bits = [
+          `已播放（${(r.bytes! / 1024).toFixed(0)} KB）`,
+          r.timingAvailable ? `${r.timings!.length} 段真实时间戳驱动口型` : "无可用的时间戳",
+          `${r.ms}ms 合成`,
+        ];
+        setSpeakMsg(bits.join(" · "));
+      };
+      audio.onerror = () => {
+        setSpeaking(false);
+        setCurChar("");
+        URL.revokeObjectURL(url);
+        setSpeakMsg("音频播放失败（格式可能不被支持）");
+      };
+
+      // duration 兜底：真到播放时才知道
+      audio.onloadedmetadata = () => {
+        if (!knownMs && Number.isFinite(audio.duration) && audio.duration > 0) {
+          setActualMs(Math.round(audio.duration * 1000));
+        }
+      };
+
       await audio.play();
-      setSpeakMsg(`已播放腾讯云合成（${(r.bytes / 1024).toFixed(0)} KB${r.hasTiming ? "，含时间戳可做口型" : ""}）`);
     } catch (e: any) {
       setSpeakMsg("播放失败：" + (e?.message ?? e));
     }

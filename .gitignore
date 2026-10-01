@@ -77,3 +77,4 @@ vendor/soffice/*
 .tmp-vscode-office/
 _acl-report/
 .git-commit-msg.txt
+credentials.enc

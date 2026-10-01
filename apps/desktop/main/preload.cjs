@@ -141,6 +141,13 @@ const api = {
   //   界面上必须分开说，否则用户以为整个功能都废了。
   avatar: {
     probe: () => ipcRenderer.invoke("avatar:probe"),
+    /**
+     * 云端合成（腾讯云）。
+     * 返回里带 **timings**（字级时间戳）—— 那是口型的真实数据源，
+     * 比本地估算准得多。音频是 WAV（裸 PCM 已在主进程包好头）。
+     */
+    tts: (payload) => ipcRenderer.invoke("avatar:tts", payload ?? {}),
+    /** 旧名字，内部走同一个实现（保留是为了不破坏已有调用） */
     ttsTest: (payload) => ipcRenderer.invoke("avatar:ttsTest", payload ?? {}),
     paths: () => ipcRenderer.invoke("avatar:paths"),
   },

@@ -127,11 +127,30 @@ try {
     await page.waitForSelector(".app", { timeout: 30000 });
     await page.waitForFunction(() => Boolean(window.__gezhiTest), { timeout: 20000 });
     await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
-    await page.waitForTimeout(1000);
+
+    /*
+     * ⚠️ 这里必须**显式等待对话渲染出来**，不能用固定 waitForTimeout。
+     *
+     * 原来写的是 waitForTimeout(1000)，于是偶发失败（时好时坏）。
+     * 原因：重新启动应用是**冷启动**，比首次启动慢；
+     * 1 秒内 AiChat 还没把 localStorage 里的对话读出来渲染，断言就跑了。
+     *
+     * 这种偶发失败最误导人 —— 看着像"持久化坏了"，其实功能是好的。
+     * 我用完整种子手工复现过两轮：数据一直在磁盘上，界面也一直显示。
+     */
+    let rendered = false;
+    for (let i = 0; i < 60; i++) {
+      const seen = await page.evaluate(() =>
+        document.body.innerText.includes("帮我把这篇笔记整理成大纲"));
+      if (seen) { rendered = true; break; }
+      await page.waitForTimeout(250);
+    }
     const afterRestart = await page.evaluate(() => document.body.innerText);
-    check("★ 重启软件后对话仍在（持久化生效）",
-      afterRestart.includes("帮我把这篇笔记整理成大纲"),
-      afterRestart.includes("帮我把这篇笔记整理成大纲") ? "" : "重启后对话丢失");
+    check("★ 重启软件后对话仍在（持久化生效）", rendered,
+      rendered ? "" : "等了 15 秒仍未渲染出对话");
+    check("重启后两轮问答都完整",
+      afterRestart.includes("我整理成了三级大纲") && afterRestart.includes("补充了公式"),
+      "");
   } finally {
     await app2.close();
   }

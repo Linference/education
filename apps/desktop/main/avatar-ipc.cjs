@@ -33,6 +33,37 @@ async function loadVoice() {
   return null;
 }
 
+/**
+ * 给裸 PCM 套一个 WAV 头，让浏览器/`<audio>` 能直接播。
+ *
+ * ★ 为什么必须做这一步：
+ *   腾讯云 TTS 默认返回 `pcm` —— 那是**没有文件头的裸采样数据**，
+ *   浏览器拿到它无法解码（`new Audio()` 会直接失败，且不报明确原因）。
+ *   实测返回：16000 Hz、16 bit、单声道 → 每帧 2 字节。
+ *   包成 WAV 只是一个 44 字节的头，不需要任何转码，也就没有额外依赖。
+ *
+ * 如果以后把 codec 改成 mp3，这个函数就用不上了（mp3 自带帧头）。
+ */
+function pcmToWav(pcm, { sampleRate = 16000, channels = 1, bitsPerSample = 16 } = {}) {
+  const byteRate = (sampleRate * channels * bitsPerSample) / 8;
+  const blockAlign = (channels * bitsPerSample) / 8;
+  const header = Buffer.alloc(44);
+  header.write("RIFF", 0, "ascii");
+  header.writeUInt32LE(36 + pcm.length, 4);       // 整个文件大小 - 8
+  header.write("WAVE", 8, "ascii");
+  header.write("fmt ", 12, "ascii");
+  header.writeUInt32LE(16, 16);                   // fmt 块长度
+  header.writeUInt16LE(1, 20);                    // 1 = PCM
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36, "ascii");
+  header.writeUInt32LE(pcm.length, 40);
+  return Buffer.concat([header, pcm]);
+}
+
 function registerAvatar(ipcMain, getWindow, app) {
   /**
    * 一次性返回所有检测结果。
@@ -121,29 +152,81 @@ function registerAvatar(ipcMain, getWindow, app) {
   });
 
   /**
-   * 试听。
-   * 没有凭据时返回明确原因，而不是抛错。
+   * 合成一段语音（共享实现）。
+   *
+   * ⚠️ 不要用 ipcMain._invokeHandlers 去"转发"到另一个处理器 ——
+   *    那是 Electron 的私有属性，版本升级就可能没了。
+   *    两个 IPC 入口共用一个普通函数，才是稳的做法。
    */
-  ipcMain.handle("avatar:ttsTest", async (_e, { text = "你好，我是格致。" } = {}) => {
+  async function synthOnce({ text = "", voiceType, speed } = {}) {
     const voice = await loadVoice();
     if (!voice) return { ok: false, error: "找不到语音模块" };
+    if (!String(text).trim()) return { ok: false, error: "文本为空" };
+
+    // 先查凭据，没配就明确说清楚，不去打网络
+    const st = voice.credentialsStatus();
+    if (!st.ready) {
+      return {
+        ok: false,
+        error: `还没有配置腾讯云凭据。设置环境变量 ${voice.ENV_KEYS?.secretId ?? "TENCENT_SECRET_ID"} / ` +
+               `${voice.ENV_KEYS?.secretKey ?? "TENCENT_SECRET_KEY"}，或存进 ${st.storePath}`,
+      };
+    }
+
     try {
-      const r = await voice.synthesize(text, {});
-      if (!r?.ok) return { ok: false, error: r?.error ?? "合成失败" };
-      // 音频以 base64 回传，渲染进程用它做 <audio> 或算时长
-      const audio = r.audio ?? r.buffer ?? r.data ?? null;
+      const t0 = Date.now();
+      // ⚠️ synthesize 的返回没有 `ok` 字段，**失败是抛异常**。
+      //    第一版判 r.ok，把成功当成了失败。
+      const r = await voice.synthesize(text, {
+        ...(voiceType ? { voiceType } : {}),
+        ...(speed !== undefined ? { speed } : {}),
+      });
+      if (!r?.audio?.length) return { ok: false, error: "接口返回了空音频" };
+
+      // 裸 PCM 要包 WAV 头；其他编码（mp3 等）原样返回
+      const isPcm = (r.codec ?? "").toLowerCase() === "pcm";
+      const playable = isPcm
+        ? pcmToWav(r.audio, { sampleRate: r.sampleRate ?? 16000 })
+        : r.audio;
+
       return {
         ok: true,
-        bytes: audio ? audio.length : 0,
-        base64: audio ? Buffer.from(audio).toString("base64") : null,
-        format: r.format ?? "mp3",
-        hasTiming: Boolean(r.timings?.length),
-        timings: r.timings ?? null,
+        base64: playable.toString("base64"),
+        mime: isPcm ? "audio/wav" : `audio/${r.codec}`,
+        bytes: playable.length,
+        rawBytes: r.audio.length,
+        codec: r.codec,
+        sampleRate: r.sampleRate,
+        chunks: r.chunks,
+        totalMs: r.totalMs,
+        ms: Date.now() - t0,
+        // 口型数据源：字级时间戳
+        timings: r.timings ?? [],
+        timingAvailable: Boolean(r.timingAvailable),
       };
     } catch (e) {
-      return { ok: false, error: e.message };
+      // 常见错因给出可操作的提示，而不是把原始报错直接丢给用户
+      const msg = String(e?.message ?? e);
+      let hint = null;
+      if (/AuthFailure|Signature|secretId|SecretId|UnauthorizedOperation/i.test(msg)) {
+        hint = "密钥可能不正确或已被禁用，请到腾讯云控制台核对。";
+      } else if (/LimitExceeded|RequestLimit/i.test(msg)) {
+        hint = "调用频率超限，稍等再试。";
+      } else if (/ResourceInsufficient|Insufficient|欠费/i.test(msg)) {
+        hint = "账户余额不足，或语音合成服务未开通。";
+      }
+      return { ok: false, error: msg, hint };
     }
-  });
+  }
+
+  /** 云端合成（带真实字级时间戳，可驱动口型） */
+  ipcMain.handle("avatar:tts", (_e, payload) => synthOnce(payload ?? {}));
+
+  /**
+   * 试听 —— 保留旧名字，内部走同一个 synthOnce。
+   * 不删它是因为已有测试与界面在调；改成共用实现，避免两套逻辑漂移。
+   */
+  ipcMain.handle("avatar:ttsTest", (_e, payload) => synthOnce(payload ?? { text: "你好，我是格致。" }));
 
   /** 打开日志/诊断信息用的数据库与配置位置 */
   ipcMain.handle("avatar:paths", async () => ({
