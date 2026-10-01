@@ -20,6 +20,7 @@ const fs = require("node:fs");
 const { registerAIStream, registerAI } = require("./ai.cjs");
 const { registerExport } = require("./export-ipc.cjs");
 const { registerVaultFs } = require("./vault-fs.cjs");
+const { registerSearch } = require("./search-ipc.cjs");
 const { extractDocText, extractPptText } = require("./lib/doc-extract.cjs");
 const { parsePptxFile } = require("./lib/pptx.cjs");
 
@@ -202,6 +203,9 @@ function registerIpc() {
 
   // 库内文件操作：新建 / 重命名 / 删除 / 保存
   registerVaultFs(ipcMain);
+
+  // 全文检索与反向链接（SQLite + FTS5，索引库放 %APPDATA%）
+  registerSearch(ipcMain, () => mainWindow, app);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */

@@ -76,10 +76,12 @@ const ITEMS = [
   // ---------- P3 图谱/反链/搜索 ----------
   ["关系图谱的数据模型（links / kp_edges）", "P3", () => hasTable("links") && hasTable("kp_edges"), "表已建"],
   ["★ 关系图谱界面", "P3", () => exists("apps/desktop/renderer/src/components/GraphView.tsx"), "**未实现**"],
-  ["反向链接的数据模型（links）", "P3", () => hasTable("links"), "表已建"],
-  ["★ 反向链接面板", "P3", () => has("apps/desktop/renderer/src/App.tsx", "反向链接的实际数据"), "**界面只占位**"],
-  ["全文检索数据层（FTS5 + 中文 trigram）", "P3", () => anyHas(["packages/db/schema.sql"], "chunks_fts_trigram"), "双 FTS 已建"],
-  ["★ 全文检索接进界面", "P3", () => has("apps/desktop/main/index.cjs", "search:query"), "**未接**"],
+  ["★ 反向链接（面板 + 点击跳转）", "P3", () => exists("apps/desktop/renderer/src/components/BacklinksPanel.tsx"), "BacklinksPanel"],
+  ["★ 出链（这篇引用了谁）", "P3", () => has("apps/desktop/main/indexer.cjs", "function outlinks"), "indexer.cjs"],
+  ["★ wikilink 解析（跳过代码块/行内代码）", "P3", () => has("apps/desktop/main/indexer.cjs", "extractLinks"), "indexer.cjs"],
+  ["★ 全文检索接进界面", "P3", () => exists("apps/desktop/renderer/src/components/SearchPanel.tsx"), "SearchPanel"],
+  ["★ 中文检索（含双字词）", "P3", () => has("apps/desktop/main/indexer.cjs", "like-fallback"), "≥3字走FTS，≤2字走LIKE"],
+  ["★ 索引器（切块/增量/删除同步）", "P3", () => has("apps/desktop/main/indexer.cjs", "indexVault"), "后台索引 + 保存后重索引"],
 
   // ---------- P4 AI/Agent ----------
   ["DSH 接入界面（事件流实时显示）", "P4", () => exists("apps/desktop/main/ai.cjs"), "ai.cjs"],

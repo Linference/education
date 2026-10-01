@@ -70,6 +70,32 @@ const api = {
     run: (payload) => ipcRenderer.invoke("export:run", payload),
     reveal: (p) => ipcRenderer.invoke("export:reveal", p),
   },
+  // 全文检索与反向链接
+  search: {
+    /** 打开库时调用：拿到统计并触发后台索引 */
+    open: (vault) => ipcRenderer.invoke("search:open", vault),
+    /** 全量重建索引 */
+    reindex: (vault) => ipcRenderer.invoke("search:reindex", vault),
+    /** 单个文件重新索引（保存后调） */
+    reindexFile: (payload) => ipcRenderer.invoke("search:reindexFile", payload),
+    /** 等后台索引跑完（测试与"保存后立刻检索"用） */
+    waitIdle: () => ipcRenderer.invoke("search:waitIdle"),
+    query: (payload) => ipcRenderer.invoke("search:query", payload),
+    backlinks: (payload) => ipcRenderer.invoke("search:backlinks", payload),
+    outlinks: (payload) => ipcRenderer.invoke("search:outlinks", payload),
+    stats: (vault) => ipcRenderer.invoke("search:stats", vault),
+    dbInfo: () => ipcRenderer.invoke("search:dbInfo"),
+    /** 订阅索引进度 / 完成 / 出错 */
+    onEvent: (cb) => {
+      const chans = ["search:progress", "search:indexed", "search:error"];
+      const hs = chans.map((c) => {
+        const h = (_e, p) => cb(c, p);
+        ipcRenderer.on(c, h);
+        return [c, h];
+      });
+      return () => hs.forEach(([c, h]) => ipcRenderer.removeListener(c, h));
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld("gezhi", api);

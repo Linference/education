@@ -16,6 +16,8 @@ import CodeView from "./components/CodeView";
 import AiChat from "./components/AiChat";
 import ExportMenu from "./components/ExportMenu";
 import MdEditor from "./components/MdEditor";
+import SearchPanel from "./components/SearchPanel";
+import BacklinksPanel from "./components/BacklinksPanel";
 import logoMark from "./assets/app-icon-256.png";
 
 // ---------------------------------------------------------------- 类型
@@ -175,8 +177,14 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(260);
   const [showRight, setShowRight] = useState(true);
   const [showLeft, setShowLeft] = useState(true);
-  const [rightTab, setRightTab] = useState<"ai" | "info">("ai");
-  /** 文件名过滤（ribbon 的搜索按钮会聚焦这个输入框） */
+  const [rightTab, setRightTab] = useState<"ai" | "info" | "links">("ai");
+  /** 左栏视图：文件树 / 全文检索 */
+  const [leftView, setLeftView] = useState<"files" | "search">("files");
+  /** 索引版本号：索引完成后 +1，用来触发反链面板重新拉取 */
+  const [indexVersion, setIndexVersion] = useState(0);
+  /** 索引状态（界面上显示"已索引 N 篇"） */
+  const [indexStatus, setIndexStatus] = useState<{ docs: number; chunks: number; links: number } | null>(null);
+  /** 文件名过滤（左栏文件树用；与全文检索是两回事） */
   const [filter, setFilter] = useState("");
   const filterRef = useRef<HTMLInputElement>(null);
   /** 筛选时是否正在预加载整棵树（加载完过滤才准确） */
@@ -257,6 +265,26 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+
+    // 触发后台索引（不阻塞界面）。索引完成后会通过事件通知，
+    // 界面据此刷新统计与反链面板。
+    window.gezhi.search.open(v.path).then((r) => {
+      if (r?.stats) setIndexStatus(r.stats);
+    }).catch(() => { /* 索引失败不影响基本使用 */ });
+  }, []);
+
+  // 订阅索引事件：完成后刷新统计并让反链面板重新拉数据
+  useEffect(() => {
+    const off = window.gezhi.search.onEvent((chan, p) => {
+      if (chan === "search:indexed") {
+        setIndexVersion((v) => v + 1);
+        setIndexStatus({ docs: p?.indexed ?? 0, chunks: p?.chunks ?? 0, links: p?.links ?? 0 });
+        setStatus(`索引已更新：${p?.indexed ?? 0} 篇变化，共 ${p?.scanned ?? 0} 篇`);
+      } else if (chan === "search:error") {
+        setStatus("索引出错：" + String(p?.error ?? ""));
+      }
+    });
+    return off;
   }, []);
 
   const openVaultDialog = useCallback(async () => {
@@ -424,8 +452,23 @@ export default function App() {
     setTabs((prev) => prev.map((t) => t.path === tab.path ? { ...t, text, size: r.size ?? t.size } : t));
     setStatus(`已保存 ${tab.name}`);
     setFsNotice({ ok: true, text: `已保存「${tab.name}」` });
+
+    // 保存后重新索引这个文件 —— 否则刚写的内容搜不到，
+    // 而且新加的 [[wikilink]] 也不会出现在反向链接里。
+    //
+    // ⚠️ 必须 `await` 之后再递增 indexVersion。
+    //    早先是 `.then(() => setIndexVersion(v => v+1))`，问题在于：
+    //    反链面板可能在**索引真正完成之前**就收到版本变化并重新查询，
+    //    于是拿到旧数据（实测出现过：刚写完 [[索引页]] 的反链显示 0 处）。
+    //    先等索引落库再通知，面板才拉得到新数据。
+    if (vault?.path) {
+      try {
+        await window.gezhi.search.reindexFile({ vault: vault.path, filePath: tab.path });
+        setIndexVersion((v) => v + 1);
+      } catch { /* 索引失败不阻断保存流程 */ }
+    }
     return true;
-  }, [tabs, activePath, drafts, dirty]);
+  }, [tabs, activePath, drafts, dirty, vault]);
 
   // 右键菜单：点别处关掉
   useEffect(() => {
@@ -1029,12 +1072,9 @@ export default function App() {
           </button>
 
           <button
-            className="ribbon-btn"
-            onClick={() => {
-              setShowLeft(true);
-              setTimeout(() => filterRef.current?.focus(), 60);
-            }}
-            title="按文件名筛选（Ctrl+F）"
+            className={`ribbon-btn${leftView === "search" ? " active" : ""}`}
+            onClick={() => { setShowLeft(true); setLeftView((v) => (v === "search" ? "files" : "search")); }}
+            title={leftView === "search" ? "回到文件列表" : "全文检索（Ctrl+Shift+F）"}
           >
             <Icon.search />
           </button>
@@ -1079,6 +1119,55 @@ export default function App() {
         {showLeft && (
           <>
             <div className="sidebar" style={{ width: leftWidth }}>
+              {/* 两个视图：文件列表 / 全文检索。
+                  检索作为独立视图而不是"筛选文件名"的增强 ——
+                  两者是不同的事：一个找文件，一个找内容。 */}
+              <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
+                {([["files", "文件"], ["search", "检索"]] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setLeftView(k)}
+                    style={{
+                      flex: "1 1 auto", padding: "6px 0", fontSize: 12,
+                      color: leftView === k ? "var(--accent)" : "var(--text-muted)",
+                      borderBottom: leftView === k ? "2px solid var(--accent)" : "2px solid transparent",
+                      fontWeight: leftView === k ? 600 : 400,
+                    }}
+                  >
+                    {label}
+                    {k === "search" && indexStatus && (
+                      <span style={{ fontSize: 10, color: "var(--text-faint)", marginLeft: 4 }}>
+                        {indexStatus.docs}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {leftView === "search" ? (
+                <SearchPanel
+                  vaultPath={vault?.path ?? null}
+                  dirtyCount={dirty.size}
+                  onOpen={async (filePath) => {
+                    // 检索结果给的是路径 → 找到条目打开
+                    const dir = filePath.slice(0, Math.max(filePath.lastIndexOf("\\"), filePath.lastIndexOf("/")));
+                    const name = filePath.slice(Math.max(filePath.lastIndexOf("\\"), filePath.lastIndexOf("/")) + 1);
+                    const rr = await window.gezhi.vault.list(dir);
+                    const entry = rr.entries.find((x) => x.name === name);
+                    if (entry) await openFile(entry);
+                    else setFsNotice({ ok: false, text: `找不到文件：${name}` });
+                  }}
+                  onCreate={async (name) => {
+                    // 出链指向不存在的笔记 → 一键创建
+                    if (!vault?.path) return;
+                    const r = await window.gezhi.fsx.createFile({ dir: vault.path, name });
+                    if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
+                    setFsNotice({ ok: true, text: `已创建「${r.name}」` });
+                    await refreshTree();
+                  }}
+                />
+              ) : (
+              <>
               {/* 面板头：标题 + 新建按钮。新建入口必须**一眼可见** ——
                   藏进右键菜单的话，很多人根本不知道能新建。 */}
               <div className="panel-head" style={{ paddingRight: 6 }}>
@@ -1188,6 +1277,8 @@ export default function App() {
                   右键文件可重命名 / 删除
                 </div>
               )}
+              </>
+              )}
             </div>
             <div
               style={{ width: 4, cursor: "col-resize", flex: "0 0 auto" }}
@@ -1283,11 +1374,11 @@ export default function App() {
               onMouseDown={(e) => { dragRef.current = { side: "right", startX: e.clientX, startW: rightWidth }; document.body.style.cursor = "col-resize"; }}
             />
             <div className="sidebar right" style={{ width: rightWidth, display: "flex", flexDirection: "column" }}>
-              {/* 右栏顶部两个页签：信息 / AI。
+              {/* 右栏顶部三个页签：AI / 信息 / 链接。
                   合成一栏而不是各占一栏，是因为窄屏下三栏已经吃满，
                   再切一栏会把正文挤到不可读。 */}
               <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-                {(["ai", "info"] as const).map((k) => (
+                {(["ai", "info", "links"] as const).map((k) => (
                   <button
                     key={k}
                     onClick={() => setRightTab(k)}
@@ -1300,7 +1391,7 @@ export default function App() {
                       fontWeight: rightTab === k ? 600 : 400,
                     }}
                   >
-                    {k === "ai" ? "AI 助手" : "信息"}
+                    {k === "ai" ? "AI 助手" : k === "info" ? "信息" : "链接"}
                   </button>
                 ))}
               </div>
@@ -1320,6 +1411,38 @@ export default function App() {
                 }}
               >
                 <AiChat vaultPath={vault?.path ?? null} onFilesChanged={refreshTree} />
+              </div>
+
+              {/* 链接面板（反向链接 / 出链）。
+                  同样保持挂载：它自己有展开状态与已拉取的数据，
+                  卸载后每次切回来都要重新查库。 */}
+              <div
+                style={{
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  display: rightTab === "links" ? "flex" : "none",
+                  flexDirection: "column",
+                }}
+              >
+                <BacklinksPanel
+                  vaultPath={vault?.path ?? null}
+                  activePath={activePath}
+                  indexVersion={indexVersion}
+                  onOpen={async (filePath) => {
+                    const dir = filePath.slice(0, Math.max(filePath.lastIndexOf("\\"), filePath.lastIndexOf("/")));
+                    const name = filePath.slice(Math.max(filePath.lastIndexOf("\\"), filePath.lastIndexOf("/")) + 1);
+                    const rr = await window.gezhi.vault.list(dir);
+                    const entry = rr.entries.find((x) => x.name === name);
+                    if (entry) await openFile(entry);
+                  }}
+                  onCreate={async (name) => {
+                    if (!vault?.path) return;
+                    const r = await window.gezhi.fsx.createFile({ dir: vault.path, name });
+                    if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
+                    setFsNotice({ ok: true, text: `已创建「${r.name}」` });
+                    await refreshTree();
+                  }}
+                />
               </div>
 
               <div

@@ -117,8 +117,61 @@ export interface GezhiApi {
     }): Promise<ExportResult>;
     reveal(p: string): Promise<{ ok: boolean; error?: string }>;
   };
+  // 全文检索与反向链接
+  search: {
+    open(vault: string): Promise<{ ok: boolean; stats?: IndexStats; dbPath?: string; error?: string }>;
+    reindex(vault: string): Promise<{ ok: boolean; indexed?: number; error?: string }>;
+    reindexFile(payload: { vault: string; filePath: string }): Promise<{ ok: boolean; error?: string }>;
+    waitIdle(): Promise<{ ok: boolean }>;
+    query(payload: { vault: string; query: string; limit?: number }): Promise<SearchResult>;
+    backlinks(payload: { vault: string; path: string }): Promise<BacklinksResult>;
+    outlinks(payload: { vault: string; path: string }): Promise<{ ok: boolean; links: Array<{ target: string; label: string; line: number }> }>;
+    stats(vault: string): Promise<IndexStats>;
+    dbInfo(): Promise<{ ok: boolean; path?: string; size?: number; exists?: boolean }>;
+    onEvent(cb: (channel: string, payload: any) => void): () => void;
+  };
 }
 
+export interface IndexStats {
+  ok?: boolean;
+  docs: number;
+  chunks: number;
+  links: number;
+  lastIndexed?: string | null;
+}
+
+export interface SearchHit {
+  path: string;
+  name: string;
+  text: string;
+  /** 命中片段；FTS 用 \u0001…\u0002 标出命中词 */
+  snip: string;
+}
+
+export interface SearchResult {
+  ok: boolean;
+  hits: SearchHit[];
+  /** fts = 走索引；like = 短词扫描；like-fallback = 索引无结果的兜底 */
+  strategy: "fts" | "like" | "like-fallback" | "none" | string;
+  ms: number;
+  query?: string;
+  error?: string;
+}
+
+export interface BacklinksResult {
+  ok: boolean;
+  total: number;
+  files: Array<{
+    path: string;
+    name: string;
+    refs: Array<{ line: number; label: string; target: string }>;
+  }>;
+  error?: string;
+}
+
+// ⚠️ 这个开头被我插入新类型时误删过一次（替换的 `}` 匹配到了本接口的结尾），
+//    结果字段体裸露在文件里、构建报 "Unexpected :"。改文件时要注意
+//    `}` + 声明 这种锚点在 TypeScript 里非常不唯一。
 export interface ExportCapability {
   available: boolean;
   reason?: string | null;

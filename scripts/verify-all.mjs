@@ -29,6 +29,11 @@ const MAX_RETRY = retryIdx >= 0 ? Number(args[retryIdx + 1]) || 2 : 2;
  * 测试清单。
  *   heavy: true  → 要启动 Electron，冷启动偶发失败，需要重试
  *   heavy: false → 纯 Node 脚本，很快，不该失败
+ *   electron: true → 必须用 **Electron 的运行时**启动这个脚本本身
+ *      （脚本里 `require("electron")` 要拿 `app` 对象，
+ *        用普通 node 跑会得到 undefined，
+ *        报错是 "Cannot read properties of undefined (reading 'whenReady')" ——
+ *        看着像代码坏了，其实只是启动方式不对）
  */
 const SUITES = [
   // ---- 代码与数据质量 ----
@@ -45,13 +50,23 @@ const SUITES = [
   // ---- 导出 ----
   { name: "导出内核（PDF/Word/无署名）", cmd: ["scripts/verify-export.mjs"], heavy: false },
 
-  // ---- 界面（要启动 Electron）----
+  // ---- 数据库（要 Electron 运行时提供 node:sqlite 的主进程环境）----
+  { name: "检索策略（trigram 双字词坑）", cmd: ["apps/desktop/verify-search-strategy.cjs"], heavy: true, electron: true },
+  { name: "索引器（切块/反链/增量）", cmd: ["apps/desktop/verify-indexer.cjs"], heavy: true, electron: true },
+
+  // ---- 界面（要启动 Electron 应用）----
   { name: "Markdown 渲染", cmd: ["apps/desktop/verify-markdown.mjs"], heavy: true },
   { name: "界面渲染（公式/PDF）", cmd: ["apps/desktop/verify-render.mjs"], heavy: true },
   { name: "Word 查看", cmd: ["apps/desktop/verify-docx.mjs"], heavy: true },
   { name: ".doc 界面", cmd: ["apps/desktop/verify-doc.mjs"], heavy: true },
   { name: "★ 编辑器与模式切换", cmd: ["apps/desktop/verify-editor.mjs"], heavy: true },
   { name: "★ 库内文件操作（含安全边界）", cmd: ["apps/desktop/verify-vault-fs.mjs"], heavy: true },
+  { name: "★ 全文检索与反向链接", cmd: ["apps/desktop/verify-search-ui.mjs"], heavy: true },
+  // ⚠️ 这两个 .cjs 测试**已经在上面的「数据库」分组里登记过**（带 electron: true）。
+  //    在这里再登记一次会导致同一测试跑两遍：第一遍用 Electron 通过，
+  //    第二遍用普通 node 启动 → require("electron") 拿到 undefined →
+  //    报 "Cannot read properties of undefined (reading 'whenReady')"，
+  //    汇总里就是红的。实测踩过：日志里同一条测试先 PASS 后 FAIL。
   { name: "左上角交互", cmd: ["apps/desktop/verify-topleft.mjs"], heavy: true },
   { name: "Office 格式（CSV/PPTX/PPT）", cmd: ["apps/desktop/verify-office.mjs"], heavy: true },
   { name: "Office 界面", cmd: ["apps/desktop/verify-office-ui.mjs"], heavy: true },
@@ -68,13 +83,42 @@ for (const s of SUITES) {
   }
 }
 
-function run(cmdArgs) {
-  const r = spawnSync(process.execPath, cmdArgs, {
+function run(suite) {
+  const cmdArgs = suite.cmd;
+  let exe = process.execPath;
+  let args = cmdArgs;
+
+  // 需要 Electron 运行时的测试：换成 Electron 可执行文件启动脚本本身
+  if (suite.electron) {
+    const candidates = [
+      path.join(ROOT, "apps", "desktop", "node_modules", "electron", "dist", "electron.exe"),
+      path.join(ROOT, "node_modules", "electron", "dist", "electron.exe"),
+    ];
+    const found = candidates.find((p) => fs.existsSync(p));
+    if (!found) {
+      return { code: 1, out: `找不到 Electron 可执行文件，试过：\n  ${candidates.join("\n  ")}` };
+    }
+    exe = found;
+    // Electron 的 cwd 会变成脚本目录，所以给绝对路径
+    args = [path.join(ROOT, cmdArgs[0])];
+  }
+
+  const env = { ...process.env };
+  // ★ ELECTRON_RUN_AS_NODE 会让 Electron 退化成普通 Node，
+  //   于是 require("electron") 拿不到 app。必须清掉。
+  delete env.ELECTRON_RUN_AS_NODE;
+
+  const r = spawnSync(exe, args, {
     cwd: ROOT,
     encoding: "utf8",
     timeout: 15 * 60 * 1000,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined },
+    env,
   });
+  // 启动方式出错时（用错运行时）报错很难懂，所以把实际命令打出来
+  if (process.env.VERIFY_DEBUG) {
+    console.log(`       [调试] ${exe} ${args.join(" ")}`);
+    console.log(`       [调试] 退出码=${r.status} 信号=${r.signal ?? "无"} 错误=${r.error?.message ?? "无"}`);
+  }
   return { code: r.status ?? 1, out: String(r.stdout ?? "") + String(r.stderr ?? "") };
 }
 
@@ -97,6 +141,24 @@ function summarize(out) {
 console.log("=== 格致 · 全量验证 ===\n");
 if (quick) console.log("  （--quick：跳过需要启动 Electron 的界面测试）\n");
 
+// ---- 清单自检：同一条测试只应登记一次 ----
+// 为什么要查：重复登记时同一条测试会跑两遍，第二遍可能用错运行时
+// （例如 .cjs 用普通 node 跑 → require("electron") 拿到 undefined），
+// 日志里表现为**先 PASS 后 FAIL**，很容易被误判成"代码坏了"。
+const seen = new Map();
+const dupes = [];
+for (const s of SUITES) {
+  const key = s.cmd[0];
+  if (seen.has(key)) dupes.push(`${key}（登记了 ${seen.get(key)} 与 ${s.name}）`);
+  else seen.set(key, s.name);
+}
+if (dupes.length) {
+  console.log("  [清单错误] 以下测试重复登记：");
+  for (const d of dupes) console.log(`    · ${d}`);
+  console.log("");
+  process.exit(1);
+}
+
 const results = [];
 let failed = 0;
 
@@ -117,7 +179,7 @@ for (const s of SUITES) {
 
   while (attempt <= (s.heavy ? MAX_RETRY : 0)) {
     attempt++;
-    last = run(s.cmd);
+    last = run(s);
     if (last.code === 0) { ok = true; break; }
     if (attempt <= (s.heavy ? MAX_RETRY : 0)) {
       console.log(`  [重试] ${s.name}（第 ${attempt} 次失败，重试…）`);
