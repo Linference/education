@@ -83,6 +83,42 @@ export interface GezhiApi {
     stop(): Promise<{ ok: boolean; stopped?: boolean }>;
     onEvent(cb: (payload: { seq: number; at: number; event: DshEvent }) => void): () => void;
   };
+  // 导出：格式由用户选（产品硬规矩）
+  exporter: {
+    probe(): Promise<ExportCapabilities>;
+    run(payload: {
+      format: "pdf" | "docx" | "markdown";
+      markdown: string;
+      sourcePath: string;
+      defaultName?: string;
+      author?: string;
+      saveAs?: boolean;
+    }): Promise<ExportResult>;
+    reveal(p: string): Promise<{ ok: boolean; error?: string }>;
+  };
+}
+
+export interface ExportCapability {
+  available: boolean;
+  reason?: string | null;
+  engine?: string | null;
+  template?: boolean;
+}
+
+export interface ExportCapabilities {
+  pdf: ExportCapability;
+  docx: ExportCapability;
+  markdown: ExportCapability;
+  paths: { templatePath: string; docxScriptPath: string; packed: boolean };
+}
+
+export interface ExportResult {
+  ok: boolean;
+  path?: string;
+  size?: number;
+  error?: string;
+  canceled?: boolean;
+  engine?: string;
 }
 
 // ---------------------------------------------------------------- DSH 事件

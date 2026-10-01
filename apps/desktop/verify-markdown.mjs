@@ -52,12 +52,22 @@ const CASES = [
     src: "行内公式 $E = mc^2$ 要渲染。",
     must: ["katex"],
     mustNot: ["mc^2", "$E"],
+    // ★ 公式只能出现一次：界面截图里曾出现"渲染后的公式 + 原始源码"两行
+    maxKatex: 1,
   },
   {
     name: "块级公式（含竖线，容易被表格规则截断）",
     src: "$$P(A|B) = \\frac{P(B|A)P(A)}{P(B)}$$",
     must: ["katex-display", "katex"],
     mustNot: ["\\frac", "P(A|B)"],
+    maxKatex: 1,
+  },
+  {
+    name: "块级 + 行内公式同时存在（回归：曾出现碎片重复）",
+    src: "$$\\frac{P(B|A)P(A)}{P(B)}$$\n\n行内 $E = mc^2$ 也要渲染。",
+    must: ["katex-display", "katex"],
+    mustNot: [],
+    maxKatex: 2,          // 一个块级 + 一个行内，不能更多
   },
   {
     name: "任务列表",
@@ -135,6 +145,26 @@ for (const c of CASES) {
   for (const m of c.must) if (!html.includes(m)) problems.push(`缺少 ${JSON.stringify(m)}`);
   for (const m of c.mustNot) {
     if (text.includes(m)) problems.push(`可见文本里残留原始源码 ${JSON.stringify(m)}`);
+  }
+  // 公式数量上限：多了说明有重复渲染（界面截图里出现过这个 bug）
+  //
+  // ⚠️ 不能数 `class="katex` —— KaTeX 一个公式会生成多个内部 span：
+  //    <span class="katex"><span class="katex-mathml">…</span>
+  //      <span class="katex-html">…</span></span>
+  //    实测一个行内公式就有 8 个 `class="katex`，于是"数出来 8 个"看着像重复，
+  //    其实只有一个公式。**统计口径错了会让人去修没坏的代码。**
+  //    正确口径：只数**最外层**容器 —— 行内数 `class="katex"`（后面紧跟 >），
+  //    块级数 `katex-display`。
+  if (c.maxKatex !== undefined) {
+    // ⚠️ `class="katex"` 是 `class="katex-display"` 的**前缀**，
+    //    直接用 /class="katex"/ 会把同一个块级公式数两次（实测踩过）。
+    //    必须用词边界：属性值后面紧跟引号或空格才算。
+    const inlineOuter = (html.match(/class="katex"(?=["\s])/g) ?? []).length;
+    const displayOuter = (html.match(/<div class="katex-display">/g) ?? []).length;
+    const n = inlineOuter + displayOuter;
+    if (n > c.maxKatex) {
+      problems.push(`公式容器数 ${n}（行内 ${inlineOuter} + 块级 ${displayOuter}）超过上限 ${c.maxKatex}（疑似重复渲染）`);
+    }
   }
   if (problems.length) {
     fail++;

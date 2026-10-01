@@ -44,6 +44,13 @@ const api = {
       return () => ipcRenderer.removeListener("ai:event", h);
     },
   },
+  // 导出：Markdown → PDF / Word / Markdown（格式由用户选，产品硬规矩）
+  exporter: {
+    /** 探测三种格式各自是否可用（缺 Typst / python-docx 时给安装提示） */
+    probe: () => ipcRenderer.invoke("export:probe"),
+    run: (payload) => ipcRenderer.invoke("export:run", payload),
+    reveal: (p) => ipcRenderer.invoke("export:reveal", p),
+  },
 };
 
 contextBridge.exposeInMainWorld("gezhi", api);

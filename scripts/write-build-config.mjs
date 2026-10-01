@@ -34,12 +34,15 @@ pkg.build = {
   // 相对于 directories.app（即 apps/desktop）
   files: ["main/**/*", "renderer/**/*", "package.json", "!**/*.map"],
 
-  // ★ AI 内核要随包走：main/ai.cjs 会在运行时 import packages/dsh-bridge。
-  //   不 extraResources 的话，打包版里找不到它，AI 面板会显示"DSH 不可用"
-  //   —— 而开发模式一切正常，属于最容易漏掉的那类问题。
-  //   放到 resources/dsh-bridge 下，ai.cjs 里有对应的查找路径。
+  // ★ 随包的运行期资源。
+  //   1) dsh-bridge：AI 内核。不带上，打包版会显示"DSH 不可用"（开发态正常，
+  //      所以这类问题最难发现 —— 有 verify-packaged.mjs 专门盯它）
+  //   2) templates：Typst 讲义模板与 python-docx 脚本。不带上，
+  //      打包版能打开导出菜单但一导出就失败。
   extraResources: [
     { from: "packages/dsh-bridge/src", to: "dsh-bridge" },
+    { from: "templates/typst", to: "templates/typst" },
+    { from: "templates/docx", to: "templates/docx" },
   ],
 
   asar: true,

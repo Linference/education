@@ -25,6 +25,11 @@
     "ui:verify:docx": "node apps/desktop/verify-docx.mjs",
     "ui:verify:ai": "node apps/desktop/verify-ai.mjs",
     "ui:verify:packaged": "node apps/desktop/verify-packaged.mjs",
+    "ui:verify:export": "node apps/desktop/verify-export-ui.mjs",
+    "ui:verify:export:packed": "node apps/desktop/verify-packaged-export.mjs",
+    "export:verify": "node scripts/verify-export.mjs",
+    "export:latex:test": "node scripts/latex2typst.test.cjs",
+    "export:isolate": "node scripts/_isolate-typst.mjs",
     "installer": "node scripts/build-installer.mjs"
   },
   "devDependencies": {
@@ -50,6 +55,14 @@
       {
         "from": "packages/dsh-bridge/src",
         "to": "dsh-bridge"
+      },
+      {
+        "from": "templates/typst",
+        "to": "templates/typst"
+      },
+      {
+        "from": "templates/docx",
+        "to": "templates/docx"
       }
     ],
     "asar": true,

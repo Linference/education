@@ -10,6 +10,7 @@ import PdfViewer from "./components/PdfViewer";
 import DocxViewer from "./components/DocxViewer";
 import CodeView from "./components/CodeView";
 import AiChat from "./components/AiChat";
+import ExportMenu from "./components/ExportMenu";
 
 // ---------------------------------------------------------------- 类型
 
@@ -470,6 +471,17 @@ export default function App() {
             {tabs.length === 0 && (
               <div style={{ padding: "0 12px", display: "flex", alignItems: "center", color: "var(--text-faint)", fontSize: 13 }}>
                 没有打开的文件
+              </div>
+            )}
+            <div style={{ flex: "1 1 auto" }} />
+            {/* 导出按钮：只对 Markdown 文件显示（其他格式没什么可导出的） */}
+            {activeTab?.kind === "markdown" && activeTab.text != null && (
+              <div style={{ display: "flex", alignItems: "center", padding: "0 8px" }}>
+                <ExportMenu
+                  markdown={activeTab.text}
+                  sourcePath={activeTab.path}
+                  defaultName={activeTab.name.replace(/\.(md|markdown)$/i, "")}
+                />
               </div>
             )}
           </div>

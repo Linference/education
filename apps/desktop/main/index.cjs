@@ -18,6 +18,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { registerAIStream, registerAI } = require("./ai.cjs");
+const { registerExport } = require("./export-ipc.cjs");
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -146,6 +147,9 @@ function registerIpc() {
   // AI 助手：把 DeepSeek Harness 接进来（这是"融合 DSH"落地的地方）
   registerAI(ipcMain, () => mainWindow);
   registerAIStream(ipcMain, () => mainWindow);
+
+  // 导出：Markdown → PDF / Word / Markdown
+  registerExport(ipcMain, () => mainWindow);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */
