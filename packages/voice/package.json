@@ -1,0 +1,15 @@
+﻿{
+  "name": "@gezhi/voice",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "格致语音服务：腾讯云 ASR/TTS 封装（密钥只走环境变量或加密存储）",
+  "scripts": {
+    "test": "node src/offline.test.mjs",
+    "verify": "node verify-tencent.mjs"
+  },
+  "dependencies": {
+    "tencentcloud-sdk-nodejs-asr": "^4.1.315",
+    "tencentcloud-sdk-nodejs-tts": "^4.1.237"
+  }
+}

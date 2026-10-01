@@ -104,6 +104,26 @@ expect("放行占位符写法",
 expect("放行 node_modules（依赖里总有测试用的假 key）",
   { "node_modules/pkg/test.js": `apiKey = "${FAKE.deepseek}"\n` }, false);
 
+// 回归用例：这条是真实误报逼出来的 ——
+// 把 process.env.X 抽成常量后，`secretId: "TENCENT_SECRET_ID"` 被当成硬编码密钥。
+// 真实密钥不会长成全大写下划线形式，所以要放行。
+expect("放行环境变量名常量（实测误报的回归用例）",
+  {
+    "src/env.mjs": [
+      `export const ENV_KEYS = {`,
+      `  secretId: "TENCENT_SECRET_ID",`,
+      `  secretKey: "TENCENT_SECRET_KEY",`,
+      `};`,
+      ``,
+    ].join("\n"),
+  }, false);
+
+expect("放行同行的 environment 访问",
+  { "src/a.mjs": `const k = process.env["MY_SECRET_KEY_VALUE_X"];\n` }, false);
+
+expect("但仍然拦住形似真密钥的赋值（不能因为加了例外就漏）",
+  { "src/b.mjs": `const apiKey = "aB3xK9mQ2pL7vN4zR8tY1wC6";\n` }, true, ["硬编码"]);
+
 expect("放行锁文件与二进制",
   { "package-lock.json": `{"x":"${FAKE.deepseek}"}\n` }, false);
 

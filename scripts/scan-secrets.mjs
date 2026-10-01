@@ -57,19 +57,32 @@ const RULES = [
   {
     id: "generic-assignment",
     label: "疑似硬编码密钥的赋值",
-    // 形如 secretKey = "xxxx" / api_key: 'xxxxxxxx' —— 但排除明显的占位符
+    // 形如 secretKey = "xxxx" / api_key: 'xxxxxxxx' —— 但排除明显的占位符与非密钥值
     re: /(secret[_-]?key|secret[_-]?id|api[_-]?key|access[_-]?token|password|passwd)\s*[:=]\s*["'`]([^"'`\s]{16,})["'`]/gi,
     why: "把密钥写进代码或配置是最常见的泄露方式",
-    filter: (m) => {
-      const v = (m[2] ?? "").toLowerCase();
-      // 占位符与示例值放行
-      const okPatterns = [
+    filter: (m, lineText) => {
+      const v = (m[2] ?? "");
+      const lower = v.toLowerCase();
+
+      // ① 占位符与示例值
+      const placeholders = [
         /^(your|my|xxx+|placeholder|example|test|demo|sample|dummy|fake|redacted|todo)/,
         /^\$\{/, /^<.*>$/, /^\{\{/, /^(process\.)?env\./,
         /^(none|null|undefined|changeme|change_me|replace|insert)/,
         /^[a-z]+_here$/, /^0+$/, /^\*+$/,
       ];
-      return !okPatterns.some((r) => r.test(v));
+      if (placeholders.some((r) => r.test(lower))) return false;
+
+      // ② ★ 全大写下划线形式的值 —— 那是**环境变量名 / 常量名**，不是密钥
+      //    真实密钥不会长成 "TENCENT_SECRET_ID" 这样。
+      //    （这条是实测逼出来的：把 process.env.X 拆成常量后，
+      //      `secretId: "TENCENT_SECRET_ID"` 被误判成泄露。）
+      if (/^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(v)) return false;
+
+      // ③ 该行本身就出现了环境变量访问 —— 说明值来自 env 而非硬编码
+      if (lineText && /process\.env|import\.meta\.env|env\[|os\.environ|getenv/i.test(lineText)) return false;
+
+      return true;
     },
   },
 ];
@@ -143,9 +156,15 @@ export function scanFiles(files) {
       rule.re.lastIndex = 0;
       let m;
       while ((m = rule.re.exec(text)) !== null) {
-        if (rule.filter && !rule.filter(m)) continue;
         const idx = m.index;
         const lineNo = text.slice(0, idx).split(/\r?\n/).length;
+        const lineText = lines[lineNo - 1] ?? "";
+        // filter 同时拿到匹配与所在行 —— 有些误报要结合整行才能排除
+        // （例如 `secretId: "TENCENT_SECRET_ID"` 里的值是环境变量名而非密钥）
+        if (rule.filter && !rule.filter(m, lineText)) {
+          if (rule.re.lastIndex === m.index) rule.re.lastIndex++;
+          continue;
+        }
         findings.push({
           rule: rule.id,
           label: rule.label,
@@ -153,7 +172,7 @@ export function scanFiles(files) {
           file: f,
           line: lineNo,
           preview: mask(m[0]),
-          context: (lines[lineNo - 1] ?? "").trim().slice(0, 120),
+          context: lineText.trim().slice(0, 120),
         });
         if (rule.re.lastIndex === m.index) rule.re.lastIndex++;  // 防零宽死循环
       }

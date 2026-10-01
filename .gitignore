@@ -46,3 +46,7 @@ desktop.ini
 # 提交信息临时文件
 .commit-msg-tmp.txt
 
+
+# 语音测试产物
+packages/voice/out/
+
