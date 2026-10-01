@@ -28,10 +28,18 @@
     "ui:verify:export": "node apps/desktop/verify-export-ui.mjs",
     "ui:verify:export:packed": "node apps/desktop/verify-packaged-export.mjs",
     "ui:verify:doc": "node apps/desktop/verify-doc.mjs",
+    "ui:verify:office": "node apps/desktop/verify-office.mjs",
+    "ui:verify:office:ui": "node apps/desktop/verify-office-ui.mjs",
+    "ui:verify:chat": "node apps/desktop/verify-chat-persist.mjs",
+    "ui:verify:typography": "node apps/desktop/verify-chat-typography.mjs",
+    "verify": "node scripts/verify-all.mjs",
+    "verify:quick": "node scripts/verify-all.mjs --quick",
     "doc:test": "node scripts/doc-extract.test.cjs",
+    "ppt:test": "node scripts/ppt-placeholder.test.cjs",
     "export:verify": "node scripts/verify-export.mjs",
     "export:latex:test": "node scripts/latex2typst.test.cjs",
     "export:isolate": "node scripts/_isolate-typst.mjs",
+    "vendor:typst": "node scripts/vendor-typst.mjs",
     "installer": "node scripts/build-installer.mjs"
   },
   "devDependencies": {

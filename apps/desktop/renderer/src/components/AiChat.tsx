@@ -40,7 +40,56 @@ interface Msg {
   done?: boolean;
 }
 
+/**
+ * 对话持久化的 localStorage 键。
+ *
+ * 为什么要持久化：用户实测反馈"点一下信息再回来，对话全没了" ——
+ * 那个的直接原因是组件被卸载（切右栏用的三元表达式），已改成 CSS 隐藏。
+ * 但如果只修那一处，**关掉软件对话照样丢**。
+ * 一个能写笔记、能改文件的 AI 助手，对话不该是易失的。
+ *
+ * 按库路径分键：不同资料库的对话不该混在一起。
+ */
+const STORE_KEY = (vaultPath: string | null) => `gezhi.chat.${vaultPath ?? "__none__"}`;
+
+/** 一条对话最多保留多少条消息（避免 localStorage 无限膨胀） */
+const MAX_PERSISTED_MSGS = 60;
+
+function loadPersisted(vaultPath: string | null): { msgs: Msg[]; sessionId: string | null } {
+  try {
+    const raw = localStorage.getItem(STORE_KEY(vaultPath));
+    if (!raw) return { msgs: [], sessionId: null };
+    const j = JSON.parse(raw);
+    // 不做过度校验：坏数据就当没有，不要因为持久化把界面搞崩
+    return {
+      msgs: Array.isArray(j?.msgs) ? j.msgs : [],
+      sessionId: typeof j?.sessionId === "string" ? j.sessionId : null,
+    };
+  } catch {
+    return { msgs: [], sessionId: null };
+  }
+}
+
+function savePersisted(vaultPath: string | null, msgs: Msg[], sessionId: string | null) {
+  try {
+    // 只留最近若干条；steps 可能很大（工具返回内容），也做截断
+    const slim = msgs.slice(-MAX_PERSISTED_MSGS).map((m) => ({
+      ...m,
+      steps: m.steps?.slice(-40).map((s) => ({
+        ...s,
+        // 工具返回内容截到 4000 字，否则 localStorage 很快写满
+        resultText: s.resultText ? s.resultText.slice(0, 4000) : undefined,
+      })),
+    }));
+    localStorage.setItem(STORE_KEY(vaultPath), JSON.stringify({ msgs: slim, sessionId }));
+  } catch {
+    // 写不进去（比如配额满了）就放弃持久化，不影响当前会话继续用
+  }
+}
+
 export default function AiChat({ vaultPath, onFilesChanged }: Props) {
+  // 初始值从持久化里读 —— 重启软件后对话还在
+  const initial = useRef(loadPersisted(null));
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
@@ -49,6 +98,24 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stepIdRef = useRef(0);
   const touchedFilesRef = useRef(false);
+  /** 当前已加载的是哪个库的对话（切库时要换） */
+  const loadedForRef = useRef<string | null>(null);
+  void initial;
+
+  // 切库时载入那个库的对话
+  useEffect(() => {
+    const key = vaultPath ?? null;
+    if (loadedForRef.current === key) return;
+    loadedForRef.current = key;
+    const r = loadPersisted(key);
+    setMsgs(r.msgs);
+    setSessionId(r.sessionId);
+  }, [vaultPath]);
+
+  // 对话变化就存起来
+  useEffect(() => {
+    savePersisted(vaultPath ?? null, msgs, sessionId);
+  }, [msgs, sessionId, vaultPath]);
 
   // DSH 健康检查
   useEffect(() => {
@@ -265,20 +332,21 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
                   <StepView key={s.id} step={s} />
                 ))}
 
-                {/* 最终回答：Markdown 渲染 */}
+                {/* 最终回答：Markdown 渲染。
+                    用 compact 模式 —— 默认的阅读排版是给 760px 正文区设计的，
+                    h1 近 30px、留白很大，塞进 340px 的聊天栏又大又散
+                    （用户实测反馈"格式大小也太大了"）。 */}
                 {m.text && (
                   <div
                     style={{
                       marginTop: 6,
                       fontSize: 13.5,
-                      lineHeight: 1.7,
+                      lineHeight: 1.65,
                       borderLeft: "2px solid var(--accent)",
                       paddingLeft: 10,
                     }}
                   >
-                    <div style={{ maxWidth: "100%" }}>
-                      <MarkdownView text={m.text} />
-                    </div>
+                    <MarkdownView text={m.text} compact showProps={false} />
                   </div>
                 )}
 

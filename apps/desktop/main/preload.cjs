@@ -16,6 +16,19 @@ const api = {
     pick: () => ipcRenderer.invoke("vault:pick"),
     info: (dir) => ipcRenderer.invoke("vault:info", dir),
     list: (dir) => ipcRenderer.invoke("vault:list", dir),
+    /** 告诉主进程当前打开的库（文件写入的路径校验要用） */
+    set: (dir) => ipcRenderer.invoke("vault:set", dir),
+  },
+
+  // 库内文件操作：新建 / 重命名 / 删除 / 保存
+  fsx: {
+    createFile: (payload) => ipcRenderer.invoke("fs:createFile", payload),
+    createFolder: (payload) => ipcRenderer.invoke("fs:createFolder", payload),
+    rename: (payload) => ipcRenderer.invoke("fs:rename", payload),
+    /** 默认移到回收站（笔记不能一删就没） */
+    remove: (payload) => ipcRenderer.invoke("fs:delete", payload),
+    writeText: (payload) => ipcRenderer.invoke("fs:writeText", payload),
+    currentVault: () => ipcRenderer.invoke("fs:currentVault"),
   },
 
   file: {
@@ -24,6 +37,10 @@ const api = {
     readBinary: (p) => ipcRenderer.invoke("file:readBinary", p),
     /** 读旧版 .doc（OLE 二进制），返回提取出的纯文本 */
     readDoc: (p) => ipcRenderer.invoke("file:readDoc", p),
+    /** 读旧版 .ppt（OLE 二进制），返回近似分页的文本 */
+    readPpt: (p) => ipcRenderer.invoke("file:readPpt", p),
+    /** 读 .pptx：**主进程解析，只回传文字**（219MB 的文件不适合走字节 IPC） */
+    readPptx: (p) => ipcRenderer.invoke("file:readPptx", p),
     reveal: (p) => ipcRenderer.invoke("file:reveal", p),
     /** 另存为（导出用） */
     saveAs: (payload) => ipcRenderer.invoke("file:saveAs", payload),

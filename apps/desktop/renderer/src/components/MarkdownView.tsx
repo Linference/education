@@ -10,9 +10,20 @@ interface Props {
   text: string;
   /** 点击 wikilink 时回调（用来跳转到另一篇笔记） */
   onWikilink?: (target: string) => void;
+  /**
+   * 紧凑模式 —— 给**窄容器**（AI 聊天栏、侧栏预览）用。
+   *
+   * 为什么需要：`.markdown-body` 是给 760px 宽的笔记正文设计的，
+   * h1 接近 30px、段落上下留白很大。直接塞进 340px 的聊天栏就显得
+   * 又大又散 —— 用户实测反馈"AI 回答的格式大小也太大了"。
+   * 紧凑模式按比例缩小标题、收紧行距与间距，并去掉居中留白。
+   */
+  compact?: boolean;
+  /** 是否显示 frontmatter 属性面板（聊天里不需要） */
+  showProps?: boolean;
 }
 
-export default function MarkdownView({ text, onWikilink }: Props) {
+export default function MarkdownView({ text, onWikilink, compact, showProps = true }: Props) {
   const { frontmatter, html } = useMemo(() => {
     const { frontmatter } = splitFrontmatter(text);
     return { frontmatter, html: renderMarkdown(text) };
@@ -37,7 +48,7 @@ export default function MarkdownView({ text, onWikilink }: Props) {
 
   return (
     <div className="selectable">
-      {frontmatter && (
+      {showProps && !compact && frontmatter && (
         <div className="props">
           <div className="props-title">笔记属性</div>
           {Object.entries(frontmatter).map(([k, v]) => (
@@ -63,7 +74,7 @@ export default function MarkdownView({ text, onWikilink }: Props) {
       )}
       <div
         ref={bodyRef}
-        className="markdown-body"
+        className={compact ? "markdown-body markdown-compact" : "markdown-body"}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>

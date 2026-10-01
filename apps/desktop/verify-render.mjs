@@ -101,6 +101,11 @@ console.log("=== 格致 · 界面渲染验证 ===");
 const app = await electron.launch({
   executablePath: path.join(HERE, "node_modules", "electron", "dist", "electron.exe"),
   args: [APP_DIR],
+  // ⚠️ 必须带 GEZHI_TEST=1 —— 测试钩子 window.__gezhiTest 只在
+  //    主进程给页面加 ?test=1 时才挂载（生产构建里不再无条件启用）。
+  //    漏了这个会卡在下面的 waitForFunction 上，报"超时"而不是"没设环境变量"，
+  //    很难一眼看出原因。
+  env: { ...process.env, GEZHI_TEST: "1" },
 });
 const page = await app.firstWindow();
 const errs = [];

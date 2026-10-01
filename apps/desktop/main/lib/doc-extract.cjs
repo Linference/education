@@ -381,4 +381,144 @@ function cleanText(t) {
     .trim();
 }
 
-module.exports = { extractDocText, readOle, extractTextFromDoc, rtfToText, cleanText };
+// ---------------------------------------------------------------- PPT（旧版）
+
+/**
+ * 旧版 .ppt（PowerPoint 97-2003）文本提取。
+ *
+ * 与 .doc 同样是 OLE 复合文档，但流的组织不同：
+ *   - 正文在 **"PowerPoint Document"** 流里（注意有空格）
+ *   - 该流由一串**记录（record）**组成，头 8 字节是：
+ *       [0..1]  recVer(4bit) + recInstance(12bit)
+ *       [2..3]  recType
+ *       [4..7]  recLen
+ *   - 文字藏在两类记录里：
+ *       TextCharsAtom (4000)  → UTF-16LE 文本
+ *       TextBytesAtom (4008)  → 单字节文本（中文通常是 GBK 系）
+ *   而且它们**分散在多个 Drawing/Shape 容器里**，所以做法是：
+ *   遍历整条记录链，凡是遇到这两类就收集，按出现顺序拼起来。
+ *
+ * 这样做会丢版式、丢图片、丢动画，但**能把文字读出来** ——
+ * 对"预览课件写了什么"这个目的够了。
+ */
+function extractTextFromPpt(streams) {
+  // 流名可能带前导 \x05 之类，宽松匹配
+  let ppt = streams.get("PowerPoint Document");
+  if (!ppt) {
+    for (const [k, v] of streams) {
+      if (/PowerPoint\s*Document/i.test(k.replace(/[\u0000-\u001f]/g, ""))) { ppt = v; break; }
+    }
+  }
+  if (!ppt || ppt.length < 16) throw new Error("缺少 PowerPoint Document 流");
+
+  const REC_TEXT_CHARS = 4000;   // UTF-16LE
+  const REC_TEXT_BYTES = 4008;   // 单字节
+
+  const chunks = [];
+  let i = 0;
+  let guard = 0;
+
+  // 线性扫描：不严格解析嵌套容器（容器头也是记录头，所以线性扫能穿过它们）
+  while (i + 8 <= ppt.length && guard++ < 4_000_000) {
+    const verInst = ppt.readUInt16LE(i);
+    const recType = ppt.readUInt16LE(i + 2);
+    const recLen = ppt.readUInt32LE(i + 4);
+
+    // 长度不合理 → 说明这里不是记录头，往后挪一个字节重新对齐
+    if (recLen > ppt.length || i + 8 + recLen > ppt.length) { i += 1; continue; }
+
+    if (recType === REC_TEXT_CHARS) {
+      const t = ppt.subarray(i + 8, i + 8 + recLen).toString("utf16le");
+      if (t.trim()) chunks.push(t);
+    } else if (recType === REC_TEXT_BYTES) {
+      const raw = ppt.subarray(i + 8, i + 8 + recLen);
+      // 单字节记录多为 ASCII 或系统代码页；中文课件里偶见 GBK
+      let t;
+      try { t = new TextDecoder("gbk", { fatal: false }).decode(raw); }
+      catch { t = raw.toString("latin1"); }
+      if (t.trim()) chunks.push(t);
+    }
+
+    // 容器记录（recVer === 0xF）内部还有子记录，要继续往里走；
+    // 非容器则整块跳过。统一用"往前走 8 字节"来保证不会漏掉嵌套内容，
+    // 因为子记录紧跟在容器头之后。
+    if ((verInst & 0x000f) === 0x000f) {
+      i += 8;                       // 进入容器
+    } else {
+      i += 8 + recLen;              // 跳过整块
+    }
+  }
+
+  // 拼接：一条记录常是一行/一段。处理顺序有讲究，见下面的两个坑。
+
+  // ★ 插入空行作为"近似分页"的依据。
+  //
+  //   为什么：.ppt 的每张幻灯片在记录流里是一段连续文本，段与段之间原本没有分隔。
+  //   直接拼起来就是一大坨，用户没法定位。
+  //   PowerPoint 的精确页码在另一套结构（PersistPtr / SlideListWithText）里，
+  //   再实现一层收益不大。
+  //
+  //   折中：**在每条文本记录之间插一个空行**，把连续空行压成一个。
+  //   得到的是"按内容分段"的近似页 —— 界面上会**明确标注这是近似**，
+  //   不会让用户以为那就是原始页码。
+  //
+  //   ⚠️ 两个坑（都实测踩过）：
+  //     1. 换行符是 `\r` 不是 `\n` —— 必须**先统一再过滤**，否则整块是一行，
+  //        母版样板的 `^...$` 规则匹配不上（30/36 个文件漏过）。
+  //     2. 过滤规则里**不能加 /^\s*$/ 删空行** —— 空行就是分段依据，
+  //        删了之后近似分页退化成 1 段，等于自己把功能删掉了。
+
+  const MASTER_PLACEHOLDERS = [
+    // 中文版有两个变体：旧版"单击此处…"、新版"单击以…"（实测都遇到过）
+    /^单击(此处|以)?编辑母版.*$/,
+    /^单击(此处|以)?编辑.*样式$/,
+    /^Click to edit Master.*$/i,
+    /^第二级$/, /^第三级$/, /^第四级$/, /^第五级$/,
+    /^[·•\-\*]\s*$/,                      // 母版里的项目符号占位
+  ];
+
+  const text = chunks
+    .join("\n\n")                          // ← 记录之间留空行 = 分段依据
+    .replace(/\r\n?/g, "\n")               // ← 必须在过滤之前统一换行
+    .replace(/\u000b/g, "\n")
+    .replace(/[\u0000-\u0008\u000e-\u001f]/g, "")
+    .split("\n")
+    .filter((l) => !MASTER_PLACEHOLDERS.some((re) => re.test(l.trim())))
+    .join("\n")
+    .replace(/[ \t]+\n/g, "\n")            // 行尾空白
+    .replace(/\n{3,}/g, "\n\n")            // 连续空行压成一个
+    .trim();
+
+  if (!text) throw new Error("PowerPoint Document 流里没有找到文字（可能整份都是图片）");
+  return { text, chunkCount: chunks.length };
+}
+
+/** 对外：提取 .ppt 文本 */
+function extractPptText(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    if (buf.length < 8) return { ok: false, error: "文件为空或过小" };
+    if (!buf.subarray(0, 8).equals(OLE_MAGIC)) {
+      // 有可能是 pptx 改名
+      if (buf[0] === 0x50 && buf[1] === 0x4b) {
+        return { ok: false, error: "__IS_PPTX__", hint: "这个文件其实是 .pptx 格式（扩展名写成 .ppt），按 pptx 打开即可" };
+      }
+      return { ok: false, error: "不是 OLE 复合文档，无法识别为 .ppt" };
+    }
+    const { streams } = readOle(buf);
+    const r = extractTextFromPpt(streams);
+    return { ok: true, text: cleanText(r.text), method: `记录流提取（${r.chunkCount} 段）` };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+module.exports = {
+  extractDocText,
+  extractPptText,
+  readOle,
+  extractTextFromDoc,
+  extractTextFromPpt,
+  rtfToText,
+  cleanText,
+};

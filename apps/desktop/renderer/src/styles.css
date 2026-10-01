@@ -99,28 +99,48 @@ button {
   border-bottom: 1px solid var(--bd);
 }
 
-/* 左侧竖条工具栏 —— Obsidian 的 ribbon */
+/* 左侧竖条工具栏 —— 参照 Obsidian 的 ribbon，但按格致的实际情况调整：
+   宽度 44 → 38、图标 18 → 17（原来那排大图标悬在空白里显得空），
+   并加了分组分隔线。未实现的功能统一用 .disabled 明确置灰。 */
 .ribbon {
-  width: 44px;
+  width: 38px;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 6px 0;
+  gap: 1px;
+  padding: 8px 0 10px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--bd);
 }
 .ribbon-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: 5px;
   color: var(--text-muted);
+  transition: background 0.1s, color 0.1s;
 }
 .ribbon-btn:hover { background: var(--bg-hover); color: var(--text-normal); }
 .ribbon-btn.active { background: var(--accent-soft); color: var(--accent); }
+/* 未启用的功能：置灰 + 禁止点击 + 提示写明"未启用"。
+   之前它们和真按钮长得一样，点了没反应 —— 那是在骗用户。 */
+.ribbon-btn.disabled, .ribbon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.ribbon-btn.disabled:hover, .ribbon-btn:disabled:hover {
+  background: none;
+  color: var(--text-muted);
+}
+.ribbon-sep {
+  width: 20px;
+  height: 1px;
+  background: var(--bd-strong);
+  margin: 5px 0;
+  flex: 0 0 auto;
+}
 .ribbon-spacer { flex: 1 1 auto; }
 
 .main {
@@ -205,6 +225,9 @@ button {
 .tree-row .ic { width: 16px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-muted); }
 .tree-row .nm { overflow: hidden; text-overflow: ellipsis; }
 .tree-row .sz { margin-left: auto; padding-left: 8px; color: var(--text-faint); font-size: 11px; }
+/* 未保存标记：小圆点贴在文件名后面，不抢视线 */
+.tree-row .dot { color: var(--accent); font-size: 8px; margin-left: 4px; flex: 0 0 auto; }
+.tree-row.dirty .nm { font-style: italic; }
 
 .tree-empty { padding: 16px 12px; color: var(--text-faint); font-size: 13px; line-height: 1.7; }
 
@@ -355,6 +378,59 @@ button {
 
 /* 行内代码里的中文要好看 */
 .markdown-body code, .markdown-body pre code { font-variant-ligatures: none; }
+
+/* ---- 紧凑排版：给窄容器（AI 聊天栏、侧栏预览）用 ----
+ *
+ * 为什么单独一套：`.markdown-body` 是给 760px 宽的笔记正文设计的 ——
+ * h1 接近 30px、段落间距 0.9em、左右留白各 40px。
+ * 直接塞进 340px 的聊天栏就显得又大又散（用户实测反馈「格式大小也太大了」）。
+ *
+ * 紧凑版的取舍：
+ *   - 标题整体降一档（h1 不再是「页面大标题」，而是「回答里的一级标题」）
+ *   - 行高收到 1.65，段间距从 0.9em 收到 0.6em
+ *   - 去掉左右 padding 与居中 max-width（外层已经决定了宽度）
+ *   - 代码块字号再小一档，避免窄栏里横向滚动
+ *   - 表格改成 table-layout: fixed 允许换行 —— 窄栏里横向滚动很难用
+ */
+.markdown-compact {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+.markdown-compact h1 { font-size: 1.25em; margin: 0.7em 0 0.35em; }
+.markdown-compact h2 { font-size: 1.15em; margin: 0.8em 0 0.3em; }
+.markdown-compact h3 { font-size: 1.06em; margin: 0.7em 0 0.25em; }
+.markdown-compact h4,
+.markdown-compact h5,
+.markdown-compact h6 { font-size: 1em; margin: 0.6em 0 0.2em; }
+.markdown-compact > *:first-child { margin-top: 0; }
+.markdown-compact p { margin: 0 0 0.6em; }
+.markdown-compact ul,
+.markdown-compact ol { margin: 0 0 0.6em; padding-left: 1.4em; }
+.markdown-compact li { margin: 0.15em 0; }
+.markdown-compact hr { margin: 0.9em 0; }
+.markdown-compact blockquote { margin: 0 0 0.6em; padding-left: 0.8em; }
+.markdown-compact code { font-size: 0.86em; padding: 0.1em 0.3em; }
+.markdown-compact pre {
+  margin: 0 0 0.7em;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.markdown-compact pre code { font-size: 12px; }
+.markdown-compact table {
+  display: table;
+  width: 100%;
+  font-size: 0.9em;
+  table-layout: fixed;
+  word-break: break-word;
+}
+.markdown-compact th,
+.markdown-compact td { padding: 3px 6px; }
+.markdown-compact .katex-display { margin: 0.6em 0; }
+.markdown-compact .katex { font-size: 1em; }
 
 /* ---- PDF 查看 ---- */
 .pdf-viewer { display: flex; flex-direction: column; height: 100%; }

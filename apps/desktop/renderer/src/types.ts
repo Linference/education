@@ -86,6 +86,8 @@ export interface GezhiApi {
     readBinary(p: string): Promise<BinaryResult>;
     /** 旧版 .doc：主进程解析 OLE 二进制，返回提取出的纯文本 */
     readDoc(p: string): Promise<DocResult>;
+    /** 旧版 .ppt：主进程解析 OLE 二进制，返回近似分页的文本 */
+    readPpt(p: string): Promise<PptResult>;
     reveal(p: string): Promise<boolean>;
     saveAs(payload: { defaultName: string; data: Uint8Array }): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
   };
@@ -170,6 +172,23 @@ export interface DshEvent {
   error?: string;
 }
 
+/** 旧版 .ppt 的解析结果 */
+export interface PptResult {
+  ok: boolean;
+  path?: string;
+  text?: string;
+  /** 按空行切出的近似分页（.ppt 没有可靠的页边界，界面会如实说明） */
+  slides?: Array<{ index: number; title: string; lines: string[] }>;
+  slideCount?: number;
+  method?: string;
+  size?: number;
+  ms?: number;
+  lossy?: boolean;
+  approximatePages?: boolean;
+  error?: string;
+  isActuallyPptx?: boolean;
+}
+
 declare global {
   interface Window {
     gezhi: GezhiApi;
@@ -177,10 +196,15 @@ declare global {
 }
 
 /** 文件类型分类 —— 决定用哪个查看器 */
-export type FileKind = "markdown" | "text" | "pdf" | "docx" | "doc" | "image" | "code" | "unsupported";
+export type FileKind =
+  | "markdown" | "text" | "csv"
+  | "pdf" | "docx" | "doc"
+  | "pptx" | "ppt"
+  | "image" | "code" | "unsupported";
 
 const MD = new Set([".md", ".markdown"]);
-const TEXT = new Set([".txt", ".log", ".csv", ".tsv"]);
+const CSV = new Set([".csv", ".tsv"]);          // 表格视图（虚拟滚动），不是当纯文本看
+const TEXT = new Set([".txt", ".log", ".rtf"]);
 const CODE = new Set([
   ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".py", ".c", ".cpp", ".cc", ".h", ".hpp",
   ".java", ".rs", ".go", ".rb", ".php", ".sh", ".ps1", ".sql", ".json", ".yaml", ".yml",
@@ -191,9 +215,12 @@ const IMAGE = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp",
 export function kindOf(ext: string): FileKind {
   const e = ext.toLowerCase();
   if (MD.has(e)) return "markdown";
+  if (CSV.has(e)) return "csv";
   if (e === ".pdf") return "pdf";
   if (e === ".docx") return "docx";
   if (e === ".doc") return "doc";      // 旧版二进制格式，走主进程解析
+  if (e === ".pptx") return "pptx";
+  if (e === ".ppt") return "ppt";      // 旧版 OLE 二进制
   if (IMAGE.has(e)) return "image";
   if (TEXT.has(e)) return "text";
   if (CODE.has(e)) return "code";
@@ -209,6 +236,9 @@ export function iconFor(entry: { isDir: boolean; ext: string; name: string }): s
     case "pdf": return "P";
     case "docx": return "W";
     case "doc": return "W";
+    case "pptx": return "P";
+    case "ppt": return "P";
+    case "csv": return "▦";
     case "image": return "▣";
     case "code": return "<>";
     case "text": return "≡";

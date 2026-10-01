@@ -89,13 +89,24 @@ try {
   await page.screenshot({ path: shot });
   console.log(`\n  截图：${path.relative(process.cwd(), shot)}`);
 
-  // 顺便验证 .doc（旧格式）给出的是明确提示，而不是白屏
-  const oldDoc = path.join(vault, "旧格式.doc");
-  fs.writeFileSync(oldDoc, "not a real doc", "utf8");
-  await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), oldDoc);
+  // 边界：**坏掉的 .doc** 应当给出明确错误，而不是白屏
+  //
+  // ⚠️ 这条断言原来写的是"旧版 .doc 给出明确提示（不白屏）" ——
+  //    那是**还不支持 .doc 时**写的，期望的是"本软件不支持，请自己转"。
+  //    后来实现了 .doc 解析器（见 verify-doc.mjs），这条就过时了，
+  //    继续留着会让测试永远失败。
+  //    现在改成测真正的边界：内容不是合法 OLE 的文件该报错。
+  const badDoc = path.join(vault, "损坏文件.doc");
+  fs.writeFileSync(badDoc, "这不是一个合法的 OLE 复合文档", "utf8");
+  await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), badDoc);
   await page.waitForTimeout(1500);
-  const docMsg = await page.evaluate(() => document.querySelector(".empty-state")?.textContent ?? "");
-  check("旧版 .doc 给出明确提示（不白屏）", docMsg.includes(".doc"), docMsg.slice(0, 80));
+  const docMsg = await page.evaluate(() => ({
+    empty: document.querySelector(".empty-state")?.textContent ?? "",
+    body: document.body.innerText.slice(0, 400),
+  }));
+  check("损坏的 .doc 给出明确错误（不白屏）",
+    docMsg.empty.length > 0 || /无法|不是|识别|失败/.test(docMsg.body),
+    docMsg.empty.slice(0, 90));
 } finally {
   await app.close();
   try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
