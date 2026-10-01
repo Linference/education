@@ -8,6 +8,7 @@ import { kindOf, iconFor } from "./types";
 import MarkdownView from "./components/MarkdownView";
 import PdfViewer from "./components/PdfViewer";
 import DocxViewer from "./components/DocxViewer";
+import DocViewer from "./components/DocViewer";
 import CodeView from "./components/CodeView";
 import AiChat from "./components/AiChat";
 import ExportMenu from "./components/ExportMenu";
@@ -19,11 +20,16 @@ interface Tab {
   name: string;
   ext: string;
   kind: FileKind;
-  text?: string;          // markdown / 文本 / 代码
+  text?: string;          // markdown / 文本 / 代码 / .doc 提取出的文字
   bytes?: Uint8Array;     // pdf / docx / 图片
   size: number;
   mtime: string | null;
   error?: string;
+  /** .doc 专用：提取方式与耗时（界面上如实展示） */
+  docMethod?: string;
+  docMs?: number;
+  /** true 表示版式有损（.doc 提取的是纯文本） */
+  lossyText?: boolean;
 }
 
 // ---------------------------------------------------------------- 图标（内联 SVG，避免引图标库）
@@ -223,6 +229,13 @@ export default function App() {
         tab = r.ok
           ? { ...base, bytes: r.bytes! }
           : { ...base, error: r.error ?? "读取失败" };
+      } else if (kind === "doc") {
+        // 旧版 .doc 必须走主进程的 OLE 解析器（渲染进程没有 fs，
+        // 而且解析是 Node 侧的 Buffer 操作）
+        const r = await window.gezhi.file.readDoc(entry.path);
+        tab = r.ok
+          ? { ...base, text: r.text, docMethod: r.method, docMs: r.ms, lossyText: r.lossy }
+          : { ...base, error: r.error ?? "读取失败" };
       } else {
         const r = await window.gezhi.file.read(entry.path);
         tab = r.ok
@@ -385,6 +398,8 @@ export default function App() {
         return <PdfViewer bytes={activeTab.bytes!} path={activeTab.path} />;
       case "docx":
         return <DocxViewer bytes={activeTab.bytes!} path={activeTab.path} ext={activeTab.ext} />;
+      case "doc":
+        return <DocViewer path={activeTab.path} name={activeTab.name} />;
       case "image": {
         const b64 = activeTab.bytes ? btoa(String.fromCharCode(...activeTab.bytes.slice(0, 0))) : "";
         void b64;

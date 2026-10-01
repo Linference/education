@@ -34,15 +34,21 @@ pkg.build = {
   // 相对于 directories.app（即 apps/desktop）
   files: ["main/**/*", "renderer/**/*", "package.json", "!**/*.map"],
 
-  // ★ 随包的运行期资源。
-  //   1) dsh-bridge：AI 内核。不带上，打包版会显示"DSH 不可用"（开发态正常，
-  //      所以这类问题最难发现 —— 有 verify-packaged.mjs 专门盯它）
-  //   2) templates：Typst 讲义模板与 python-docx 脚本。不带上，
-  //      打包版能打开导出菜单但一导出就失败。
+  // ★ 随包的运行期资源（"全内置"目标：装完就能用，不需要用户自己装任何东西）
+  //
+  //   1) dsh-bridge  —— AI 内核。不带上，打包版会显示"DSH 不可用"
+  //                     （开发态正常，这类问题最难发现 —— 有 verify-packaged.mjs 盯它）
+  //   2) templates   —— Typst 讲义模板 + 字体栈。不带上，一导出就失败
+  //   3) typst       —— **Typst 可执行文件（约 50 MB）**。
+  //                     目标用户是中学生，让他们自己 `winget install Typst.Typst`
+  //                     不现实。内置后导 PDF 开箱即用。
+  //                     代价：安装包从 ~124 MB 涨到 ~170 MB。这是用户明确选择"全内置"。
+  //                     同时带上 LICENSE/NOTICE —— Typst 是 Apache-2.0，随包分发要副署。
   extraResources: [
     { from: "packages/dsh-bridge/src", to: "dsh-bridge" },
     { from: "templates/typst", to: "templates/typst" },
     { from: "templates/docx", to: "templates/docx" },
+    { from: "vendor/typst", to: "typst" },
   ],
 
   asar: true,

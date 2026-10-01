@@ -29,12 +29,27 @@ function registerExport(ipcMain, getWindow) {
   const templatePath = findRes("templates/typst/handout.typ", path.join("templates", "typst", "handout.typ"));
   const docxScriptPath = findRes("templates/docx/md2docx.py", path.join("templates", "docx", "md2docx.py"));
 
+  /**
+   * 内置 Typst 的路径（全内置安装包的核心）。
+   *
+   * 打包后 typst.exe 在 resources/typst/ 下（由 extraResources 放进去）；
+   * 开发态在仓库的 vendor/typst/ 下。两处都找不到才退回系统安装的 Typst。
+   */
+  const bundledTypst = (() => {
+    const cands = [
+      path.join(process.resourcesPath ?? "", "typst", "typst.exe"),
+      path.join(ROOT, "vendor", "typst", "typst.exe"),
+    ];
+    for (const c of cands) if (c && fs.existsSync(c)) return c;
+    return null;
+  })();
+
   // 能力探测：界面据此决定哪些格式可点、缺工具怎么装
   ipcMain.handle("export:probe", () => {
-    const cap = probeExportCapabilities({ templatePath, docxScriptPath });
+    const cap = probeExportCapabilities({ templatePath, docxScriptPath, typstBundled: bundledTypst });
     return {
       ...cap,
-      paths: { templatePath, docxScriptPath, packed: isPacked },
+      paths: { templatePath, docxScriptPath, bundledTypst, packed: isPacked },
     };
   });
 
@@ -104,6 +119,7 @@ function registerExport(ipcMain, getWindow) {
         title: stem,
         author: author || undefined,
         templatePath,
+        bundledTypst,        // 优先用内置的 typst.exe
       });
     }
     if (format === "docx") {

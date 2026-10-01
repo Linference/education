@@ -57,6 +57,23 @@ export interface BinaryResult {
   unsupported?: boolean;
 }
 
+/** 旧版 .doc 的解析结果 */
+export interface DocResult {
+  ok: boolean;
+  path?: string;
+  text?: string;
+  /** piece-table = 精确提取；scan-fallback = FIB 不可用时的扫描兜底 */
+  method?: string;
+  size?: number;
+  mtime?: string;
+  ms?: number;
+  /** true 表示版式有损（.doc 无法还原排版，界面要如实告知） */
+  lossy?: boolean;
+  error?: string;
+  /** 文件其实是 docx 改名而来 */
+  isActuallyDocx?: boolean;
+}
+
 export interface GezhiApi {
   info(): Promise<AppInfo>;
   vault: {
@@ -67,6 +84,8 @@ export interface GezhiApi {
   file: {
     read(p: string): Promise<TextResult>;
     readBinary(p: string): Promise<BinaryResult>;
+    /** 旧版 .doc：主进程解析 OLE 二进制，返回提取出的纯文本 */
+    readDoc(p: string): Promise<DocResult>;
     reveal(p: string): Promise<boolean>;
     saveAs(payload: { defaultName: string; data: Uint8Array }): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
   };
@@ -158,7 +177,7 @@ declare global {
 }
 
 /** 文件类型分类 —— 决定用哪个查看器 */
-export type FileKind = "markdown" | "text" | "pdf" | "docx" | "image" | "code" | "unsupported";
+export type FileKind = "markdown" | "text" | "pdf" | "docx" | "doc" | "image" | "code" | "unsupported";
 
 const MD = new Set([".md", ".markdown"]);
 const TEXT = new Set([".txt", ".log", ".csv", ".tsv"]);
@@ -173,7 +192,8 @@ export function kindOf(ext: string): FileKind {
   const e = ext.toLowerCase();
   if (MD.has(e)) return "markdown";
   if (e === ".pdf") return "pdf";
-  if (e === ".docx" || e === ".doc") return "docx";
+  if (e === ".docx") return "docx";
+  if (e === ".doc") return "doc";      // 旧版二进制格式，走主进程解析
   if (IMAGE.has(e)) return "image";
   if (TEXT.has(e)) return "text";
   if (CODE.has(e)) return "code";
@@ -188,6 +208,7 @@ export function iconFor(entry: { isDir: boolean; ext: string; name: string }): s
     case "markdown": return "M";
     case "pdf": return "P";
     case "docx": return "W";
+    case "doc": return "W";
     case "image": return "▣";
     case "code": return "<>";
     case "text": return "≡";

@@ -54,3 +54,6 @@ packages/voice/out/
 # 构建产物
 dist/
 
+
+# 内置二进制（用 node scripts/vendor-typst.mjs 准备）
+vendor/typst/*.exe

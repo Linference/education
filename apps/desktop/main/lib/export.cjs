@@ -23,13 +23,30 @@ const { markdownToTypst, buildTypstDocument } = require("./md2typst.cjs");
 /**
  * 找 typst 可执行文件。
  *
- * 为什么要找而不是直接用 "typst"：
- *   winget 装的 typst 不一定在 PATH 里（本机就没有），
- *   spawn("typst") 会直接 ENOENT。必须按已知位置逐个试。
+ * 查找顺序（**先找随包内置的**，再找系统的）：
+ *   1. 环境变量 GEZHI_TYPST（调试用）
+ *   2. **随包内置**：resources/typst/typst.exe（全内置安装包的路径）
+ *   3. 同目录下的 typst/（打包后 process.resourcesPath 已由调用方传入）
+ *   4. PATH
+ *   5. 常见安装位置（cargo、Program Files、winget 包目录）
+ *
+ * 为什么要内置：目标用户是中学生，让他们自己去 `winget install Typst.Typst`
+ * 不现实。全内置版把 typst.exe 打进安装包，装完就能导 PDF。
  */
-function findTypst() {
+function findTypst(bundledPath) {
   const envPath = process.env.GEZHI_TYPST;
   if (envPath && fs.existsSync(envPath)) return envPath;
+
+  // 随包内置（优先级高于系统安装的：版本可控，行为可预期）
+  const bundled = [];
+  if (bundledPath) bundled.push(bundledPath);
+  if (process.resourcesPath) {
+    bundled.push(path.join(process.resourcesPath, "typst", "typst.exe"));
+    bundled.push(path.join(process.resourcesPath, "typst", "typst"));
+  }
+  for (const b of bundled) {
+    if (b && fs.existsSync(b)) return b;
+  }
 
   const candidates = [
     // PATH 里能直接找到
@@ -116,15 +133,16 @@ function findPython() {
  *   走 stdin 时没有"当前文件所在目录"的概念，图片和模板都找不到。
  *   所以老老实实写进源文件同目录，编译完再清理（只留 .typ 方便用户改版式）。
  */
-async function exportPdf({ markdown, sourcePath, outputPath, title, author, templatePath, keepTypst }) {
-  const typstBin = findTypst();
+async function exportPdf({ markdown, sourcePath, outputPath, title, author, templatePath, keepTypst, bundledTypst }) {
+  // 优先用随包内置的 typst.exe（全内置安装包的目标：装完就能导，用户不用装任何东西）
+  const typstBin = findTypst(bundledTypst);
   if (!typstBin) {
     return {
       ok: false,
       error:
-        "找不到 Typst。导出 PDF 需要它。\n" +
-        "安装：winget install Typst.Typst\n" +
-        "（装完重启格致；或在设置里指定 typst.exe 的路径）",
+        "找不到 Typst。全内置版的安装包应当自带了它；\n" +
+        "如果你是开发态运行，请先执行：node scripts/vendor-typst.mjs\n" +
+        "（或 winget install Typst.Typst）",
     };
   }
 
@@ -210,25 +228,38 @@ ${body}
 }
 
 // ---------------------------------------------------------------- Word
+//
+// 用**纯 JavaScript** 的 docx 库生成，不再依赖 python-docx。
+//
+// 为什么换掉 python-docx：
+//   它需要随包带一个 Python 运行时。本机装完是 11 GB；即便用 embeddable 版
+//   也要 40–60 MB，还得自己解决 lxml 的二进制依赖。
+//   而 docx 这个 npm 库是 MIT 许可、解包 9 MB、纯 JS、直接生成 OOXML。
+//   对"全内置安装包"这个目标，差距是一个量级。
+//
+// 原来的 python-docx 路径**保留为后备**：万一 docx 库在某个文档上出问题，
+// 装了 Python 的机器还能走老路（findPython 仍然保留）。
+async function exportDocx({ markdown, sourcePath, outputPath, title, scriptPath, preferPython }) {
+  const dir = path.dirname(sourcePath);
+  const stem = path.basename(sourcePath, path.extname(sourcePath));
+  const docxPath = outputPath ?? path.join(dir, `${stem}.docx`);
 
-/** Markdown → Word（调用 templates/docx/md2docx.py） */
-async function exportDocx({ markdown, sourcePath, outputPath, title, scriptPath }) {
+  // 默认走纯 JS（内置、无外部依赖）
+  if (!preferPython) {
+    const { exportDocxNative } = require("./docx-native.cjs");
+    return exportDocxNative({ markdown, outputPath: docxPath, title: title ?? stem });
+  }
+
+  // 后备：python-docx
   const py = findPython();
   if (!py) {
-    return {
-      ok: false,
-      error: "找不到带 python-docx 的 Python。安装：python -m pip install python-docx",
-    };
+    return { ok: false, error: "找不到带 python-docx 的 Python（且未启用内置转换器）" };
   }
   if (!fs.existsSync(scriptPath)) {
     return { ok: false, error: `找不到转换脚本：${scriptPath}` };
   }
 
-  const dir = path.dirname(sourcePath);
-  const stem = path.basename(sourcePath, path.extname(sourcePath));
   const mdTmp = path.join(dir, `${stem}.gezhi-export.md`);
-  const docxPath = outputPath ?? path.join(dir, `${stem}.docx`);
-
   try {
     fs.writeFileSync(mdTmp, markdown, "utf8");
     const r = spawnSync(py, [scriptPath, mdTmp, docxPath, title ?? stem], {
@@ -253,20 +284,23 @@ async function exportDocx({ markdown, sourcePath, outputPath, title, scriptPath 
 // ---------------------------------------------------------------- 能力探测
 
 /** 导出能力自检：界面据此决定哪些格式可选、缺什么怎么装 */
-function probeExportCapabilities({ templatePath, docxScriptPath }) {
-  const typst = findTypst();
-  const py = findPython();
+function probeExportCapabilities({ templatePath, docxScriptPath, typstBundled }) {
+  // Typst：优先用随包内置的，其次找系统的
+  const typst = typstBundled && fs.existsSync(typstBundled) ? typstBundled : findTypst();
   return {
     pdf: {
       available: Boolean(typst),
       engine: typst,
+      bundled: Boolean(typstBundled && fs.existsSync(typstBundled)),
       template: fs.existsSync(templatePath),
-      reason: typst ? null : "未找到 Typst（winget install Typst.Typst）",
+      reason: typst ? null : "未找到 Typst（全内置版应自带；开发态可 winget install Typst.Typst）",
     },
     docx: {
-      available: Boolean(py) && fs.existsSync(docxScriptPath),
-      engine: py,
-      reason: !py ? "未找到带 python-docx 的 Python" : !fs.existsSync(docxScriptPath) ? "缺少转换脚本" : null,
+      // 纯 JS 转换器是内置的，永远可用 —— 不再依赖 Python
+      available: true,
+      engine: "内置（纯 JavaScript）",
+      pythonFallback: Boolean(findPython()) && fs.existsSync(docxScriptPath),
+      reason: null,
     },
     markdown: { available: true },
   };

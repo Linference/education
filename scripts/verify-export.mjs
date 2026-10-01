@@ -169,39 +169,42 @@ if (pdfOk && fs.existsSync(pdfPath)) {
 }
 
 // ---------------------------------------------------------------- 3. Word
-console.log("\n── 3. Markdown → Word（python-docx）──");
+//
+// 走**内置的纯 JS 转换器**（docx npm 库），不再依赖 python-docx。
+// 理由：全内置安装包不能要求用户装 Python（本机装完 11 GB）。
+console.log("\n── 3. Markdown → Word（内置纯 JS 转换器）──");
 const docxPath = path.join(OUT, "导出测试.docx");
-let docxOk = false;
-try {
-  execFileSync(PY, [DOCX_SCRIPT, src, docxPath, "情态动词"], { encoding: "utf8", timeout: 120000, stdio: "pipe" });
-  docxOk = true;
-} catch (e) {
-  console.log("        Python 报错：");
-  console.log(String(e.stderr ?? e.message).split("\n").slice(0, 10).map((l) => "        " + l).join("\n"));
-}
-check("★ 生成 docx 成功", docxOk && fs.existsSync(docxPath));
-if (docxOk && fs.existsSync(docxPath)) {
+const { exportDocxNative } = require(path.join(ROOT, "apps/desktop/main/lib/docx-native.cjs"));
+const docxRes = await exportDocxNative({ markdown: MD, outputPath: docxPath, title: "情态动词" });
+check("★ 生成 docx 成功", docxRes.ok === true, docxRes.ok ? docxRes.engine : String(docxRes.error));
+if (docxRes.ok && fs.existsSync(docxPath)) {
   const size = fs.statSync(docxPath).size;
   check("docx 体积合理", size > 5000, `${(size / 1024).toFixed(1)} KB`);
 
-  // 解压检查内容与字体设置
-  const { execFileSync: ex } = await import("node:child_process");
-  const xml = ex(PY, ["-c", `
-import zipfile,sys
-z=zipfile.ZipFile(r"${docxPath.replace(/\\/g, "\\\\")}")
-d=z.read("word/document.xml").decode("utf-8")
-s=z.read("word/styles.xml").decode("utf-8")
-print("LEN", len(d))
-print("HAS_TITLE", "情态动词" in d)
-print("HAS_MUST", "must" in d)
-print("HAS_EASTASIA", "eastAsia" in d or "eastAsia" in s)
-print("HAS_BOLD", "<w:b/>" in d or "<w:b " in d)
-`], { encoding: "utf8" });
-  check("docx 里有正文内容", /LEN [1-9]\d{3,}/.test(xml), xml.match(/LEN \d+/)?.[0]);
-  check("docx 里有标题", xml.includes("HAS_TITLE True"));
-  check("docx 里有表格内容（must）", xml.includes("HAS_MUST True"));
-  check("★ 设置了中文字体 eastAsia（否则 Word 里中文回退）", xml.includes("HAS_EASTASIA True"));
-  check("docx 里有粗体样式", xml.includes("HAS_BOLD True"));
+  // 用纯 Node 解 zip 检查内容 —— 验证导出产物**不该反过来依赖 Python/PowerShell**
+  // （Expand-Archive 还只认 .zip 扩展名，.docx 直接拒绝）
+  const { readZipText, listZip } = require(path.join(ROOT, "scripts/lib/zip-read.cjs"));
+  try {
+    const names = [...listZip(docxPath).keys()];
+    check("docx 是合法 zip（含 OOXML 必要部件）",
+      names.includes("[Content_Types].xml") && names.includes("word/document.xml"),
+      `${names.length} 个内部文件`);
+
+    const docXml = readZipText(docxPath, "word/document.xml");
+    const stylesXml = names.includes("word/styles.xml") ? readZipText(docxPath, "word/styles.xml") : "";
+
+    check("docx 里有正文内容", docXml.length > 1500, `document.xml ${docXml.length} 字节`);
+    check("docx 里有标题", docXml.includes("情态动词"));
+    check("docx 里有表格内容（must）", docXml.includes("must"));
+    check("docx 里有表格结构", docXml.includes("<w:tbl>"));
+    check("★ 设置了中文字体 eastAsia（否则 Word 里中文回退）",
+      docXml.includes("eastAsia") || stylesXml.includes("eastAsia"));
+    check("docx 里有粗体样式", /<w:b\/>|<w:b /.test(docXml));
+    check("docx 里有代码块（等宽字体 Consolas）", docXml.includes("Consolas"));
+    check("docx 里没有 frontmatter 残留", !docXml.includes("type: 语法讲义"));
+  } catch (e) {
+    check("docx 内容检查", false, String(e.message).slice(0, 160));
+  }
   console.log(`        Word：${path.relative(ROOT, docxPath)}（${(size / 1024).toFixed(1)} KB）`);
 }
 

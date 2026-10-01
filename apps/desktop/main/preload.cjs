@@ -22,6 +22,8 @@ const api = {
     read: (p) => ipcRenderer.invoke("file:read", p),
     /** 读二进制（PDF / Word / 图片），返回 Uint8Array */
     readBinary: (p) => ipcRenderer.invoke("file:readBinary", p),
+    /** 读旧版 .doc（OLE 二进制），返回提取出的纯文本 */
+    readDoc: (p) => ipcRenderer.invoke("file:readDoc", p),
     reveal: (p) => ipcRenderer.invoke("file:reveal", p),
     /** 另存为（导出用） */
     saveAs: (payload) => ipcRenderer.invoke("file:saveAs", payload),

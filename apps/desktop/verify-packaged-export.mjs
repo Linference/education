@@ -29,16 +29,25 @@ if (!fs.existsSync(EXE)) {
   process.exit(1);
 }
 
-// ---- 静态检查：模板有没有进 resources ----
+// ---- 静态检查：随包资源是否齐全 ----
 const res = path.join(PACKED, "resources");
 for (const [rel, label] of [
   ["templates/typst/handout.typ", "Typst 讲义模板"],
   ["templates/typst/gezhi.typ", "Typst 字体栈"],
-  ["templates/docx/md2docx.py", "Word 转换脚本"],
+  ["typst/typst.exe", "★ 内置 Typst 可执行文件"],
+  ["typst/LICENSE", "Typst 许可（Apache-2.0 副署要求）"],
+  ["typst/NOTICE", "Typst NOTICE"],
 ]) {
   const p = path.join(res, rel);
   check(`resources 里有${label}`, fs.existsSync(p),
-    fs.existsSync(p) ? `${(fs.statSync(p).size / 1024).toFixed(1)} KB` : "缺失");
+    fs.existsSync(p) ? `${(fs.statSync(p).size / 1024 / 1024).toFixed(1)} MB` : "缺失");
+}
+
+// docx 库（纯 JS 生成 Word）应打进 app.asar
+const asarPath = path.join(res, "app.asar");
+if (fs.existsSync(asarPath)) {
+  const sizeMB = fs.statSync(asarPath).size / 1024 / 1024;
+  check("app.asar 存在且含运行依赖", sizeMB > 30, `${sizeMB.toFixed(1)} MB`);
 }
 
 // ---- 动态检查：真的启动打包版导出一次 ----
@@ -72,10 +81,21 @@ const src = path.join(vault, "打包测试.md");
 fs.writeFileSync(src, MD, "utf8");
 
 console.log("\n  启动打包后的应用…");
+// ★ 关键测试手法：**把系统 Typst 藏起来**
+//   设 GEZHI_TYPST 指向一个不存在的路径，这样 findTypst 的环境变量分支失效，
+//   系统 PATH / winget 也可能被绕过 —— 唯一能用的就是随包内置的那份。
+//   如果导出仍然成功，就证明"全内置"是真的成立，而不是悄悄用了系统装的 Typst。
 const app = await electron.launch({
   executablePath: EXE,
   args: [],
-  env: { ...process.env, GEZHI_TEST: "1" },
+  env: {
+    ...process.env,
+    GEZHI_TEST: "1",
+    GEZHI_TYPST: "C:\\__gezhi_should_not_exist__\\typst.exe",
+    // 再把 PATH 里可能存在的 typst 拿掉（findTypst 会试 PATH）
+    PATH: String(process.env.PATH ?? "").split(path.delimiter)
+      .filter((p) => !/typst|cargo/i.test(p)).join(path.delimiter),
+  },
 });
 const page = await app.firstWindow();
 const errs = [];
@@ -88,11 +108,15 @@ try {
   const probe = await page.evaluate(() => window.gezhi.exporter.probe());
   check("★ 打包版探测到 Typst", probe.pdf.available === true,
     probe.pdf.available ? String(probe.pdf.engine) : String(probe.pdf.reason));
+  check("★ 用的是**随包内置**的 typst（不是系统装的）",
+    probe.pdf.bundled === true && String(probe.pdf.engine).includes("resources"),
+    `${probe.pdf.bundled ? "bundled" : "系统"}：${probe.pdf.engine}`);
   check("★ 打包版模板路径指向 resources（不是仓库）",
     String(probe.paths.templatePath).includes("resources"),
     probe.paths.templatePath);
-  check("★ 打包版探测到 python-docx", probe.docx.available === true,
-    probe.docx.available ? String(probe.docx.engine) : String(probe.docx.reason));
+  check("★ Word 用内置纯 JS 转换器（不依赖 Python）",
+    probe.docx.available === true && String(probe.docx.engine).includes("内置"),
+    String(probe.docx.engine));
 
   for (const [fmt, ext, min] of [["pdf", ".pdf", 20000], ["docx", ".docx", 5000]]) {
     const r = await page.evaluate(async ([md, s, f]) => {

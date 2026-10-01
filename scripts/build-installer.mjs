@@ -11,7 +11,7 @@
 // 然后构建前会先做两项检查（这是本项目的规矩）：
 //   1. 依赖许可门禁 —— AGPL / 非商业许可不许进安装包
 //   2. 图标资产是否齐全 —— 缺图标会让安装包变成默认丑陋图标
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,6 +65,37 @@ for (const f of ["apps/desktop/main/index.cjs", "apps/desktop/main/preload.cjs"]
   }
 }
 console.log("  [OK] 主进程与 preload 存在且无 BOM");
+
+step("3.2 内置依赖检查（全内置目标：装完就能用）");
+// Typst：导 PDF 用。不带上，用户得自己 winget install —— 中学生做不到。
+const typstVendor = path.join(ROOT, "vendor", "typst", "typst.exe");
+if (!fs.existsSync(typstVendor)) {
+  console.error("  [FAIL] 缺 vendor/typst/typst.exe");
+  console.error("         运行：node scripts/vendor-typst.mjs");
+  process.exit(1);
+}
+try {
+  const v = execFileSync(typstVendor, ["--version"], { encoding: "utf8", timeout: 30000 }).trim();
+  const lic = fs.existsSync(path.join(ROOT, "vendor", "typst", "LICENSE"));
+  console.log(`  [OK] 内置 Typst：${v}（${(fs.statSync(typstVendor).size / 1024 / 1024).toFixed(1)} MB）`);
+  if (!lic) {
+    console.error("  [FAIL] 缺 vendor/typst/LICENSE —— Typst 是 Apache-2.0，随包分发必须副署");
+    process.exit(1);
+  }
+  console.log("  [OK] 许可文件已随包（Apache-2.0 副署要求）");
+} catch (e) {
+  console.error(`  [FAIL] 内置的 typst.exe 跑不起来：${e.message}`);
+  process.exit(1);
+}
+
+// docx：Word 导出用（纯 JS，无外部依赖）
+const docxPkg = path.join(ROOT, "apps", "desktop", "node_modules", "docx", "package.json");
+if (!fs.existsSync(docxPkg)) {
+  console.error("  [FAIL] 缺 apps/desktop/node_modules/docx —— Word 导出会失效");
+  console.error("         运行：cd apps/desktop && npm install");
+  process.exit(1);
+}
+console.log(`  [OK] 内置 docx（纯 JS 生成 Word，不需要 Python）`);
 
 step("3.5 构建渲染进程（Vite + React）");
 // 渲染进程必须先构建：主进程加载的是 renderer/dist/index.html，

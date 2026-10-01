@@ -27,12 +27,15 @@
     "ui:verify:packaged": "node apps/desktop/verify-packaged.mjs",
     "ui:verify:export": "node apps/desktop/verify-export-ui.mjs",
     "ui:verify:export:packed": "node apps/desktop/verify-packaged-export.mjs",
+    "ui:verify:doc": "node apps/desktop/verify-doc.mjs",
+    "doc:test": "node scripts/doc-extract.test.cjs",
     "export:verify": "node scripts/verify-export.mjs",
     "export:latex:test": "node scripts/latex2typst.test.cjs",
     "export:isolate": "node scripts/_isolate-typst.mjs",
     "installer": "node scripts/build-installer.mjs"
   },
   "devDependencies": {
+    "docx": "^9.8.1",
     "electron-builder": "^26.15.3",
     "playwright": "^1.63.0"
   },
@@ -63,6 +66,10 @@
       {
         "from": "templates/docx",
         "to": "templates/docx"
+      },
+      {
+        "from": "vendor/typst",
+        "to": "typst"
       }
     ],
     "asar": true,

@@ -19,6 +19,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const { registerAIStream, registerAI } = require("./ai.cjs");
 const { registerExport } = require("./export-ipc.cjs");
+const { extractDocText } = require("./lib/doc-extract.cjs");
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -128,6 +129,9 @@ function registerIpc() {
   // 而且 file:// 在 webSecurity 下取二进制会被 CORS 拦。
   // 返回 ArrayBuffer 的 Uint8Array 形式，渲染进程可直接喂给 pdf.js / docx-preview。
   ipcMain.handle("file:readBinary", (_e, filePath) => readBinaryFile(filePath));
+
+  // 旧版 .doc：OLE 二进制格式，必须在主进程解析
+  ipcMain.handle("file:readDoc", (_e, filePath) => readDocFile(filePath));
 
   // 另存为：导出功能用（P5 文档产线会用到）
   ipcMain.handle("file:saveAs", async (_e, { defaultName, data }) => {
@@ -265,4 +269,53 @@ function readBinaryFile(filePath) {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+/**
+ * 读旧版 .doc（Word 97-2003 二进制格式）。
+ *
+ * docx 是 zip+XML，渲染进程能直接处理；
+ * 但 .doc 是 OLE 复合文档，**必须在主进程解析**（渲染进程没有 fs，
+ * 而且解析逻辑是 Node 侧的 Buffer 操作）。
+ * 解析器见 lib/doc-extract.cjs（自己实现，含 OLE 容器 + 分片表 + 编码判定）。
+ */
+function readDocFile(filePath) {
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== ".doc") return { ok: false, error: "只处理 .doc 文件" };
+
+  let st;
+  try {
+    st = fs.statSync(filePath);
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+
+  const t0 = Date.now();
+  let r;
+  try {
+    r = extractDocText(filePath);
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+
+  if (!r.ok) {
+    // 特例：文件其实是 docx 改名 —— 告诉界面改走 docx 路径
+    if (r.error === "__IS_DOCX__") {
+      return { ok: false, isActuallyDocx: true, error: r.hint ?? "这其实是 .docx 文件" };
+    }
+    return { ok: false, error: r.error };
+  }
+
+  return {
+    ok: true,
+    path: filePath,
+    text: r.text,
+    method: r.method,
+    size: st.size,
+    mtime: st.mtime.toISOString(),
+    ms: Date.now() - t0,
+    // .doc 的版式无法还原，界面要如实告知（不能假装和 docx 一样）
+    lossy: true,
+  };
 }
