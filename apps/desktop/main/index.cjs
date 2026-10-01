@@ -21,8 +21,12 @@ const { registerAIStream, registerAI } = require("./ai.cjs");
 const { registerExport } = require("./export-ipc.cjs");
 const { registerVaultFs } = require("./vault-fs.cjs");
 const { registerSearch } = require("./search-ipc.cjs");
+const { registerConvert } = require("./convert-ipc.cjs");
+const { registerCalendar } = require("./calendar-ipc.cjs");
+const { registerAvatar } = require("./avatar-ipc.cjs");
 const { extractDocText, extractPptText } = require("./lib/doc-extract.cjs");
 const { parsePptxFile } = require("./lib/pptx.cjs");
+const { parseSheetFile } = require("./lib/xlsx.cjs");
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -118,6 +122,44 @@ function registerIpc() {
     // ★ 用系统 API 取「文档」目录，不硬编码（见计划 §4.1）
     documentsDir: app.getPath("documents"),
     cwd: process.cwd(),
+    /**
+     * 命令行传入的库路径（试用/开发用，省掉每次选目录）。
+     *
+     * 用法：electron . "D:\某个库"
+     *
+     * ⚠️ 参数解析比看上去麻烦（第一次就踩了）：
+     *   `electron . <dir>` 时 process.argv 是
+     *     [electron.exe, ".", "<dir>"]
+     *   而 `electron <script> <dir>` 时是
+     *     [electron.exe, "<script>", "<dir>"]
+     *   如果只是"取第一个存在的目录"，会先把 "." 解析成 **应用自己的工作目录**
+     *   （实测：窗口里打开的是 apps\desktop，而不是传入的库）。
+     *
+     *   所以规则收紧为：
+     *     1. 必须存在、是目录
+     *     2. 不能是应用自己的目录（__dirname 及其祖先）
+     *     3. 必须**看起来像资料库** —— 有 .gezhi 目录、或至少不是源码目录
+     */
+    vaultFromArgv: (() => {
+      const appDir = path.resolve(__dirname, "..");          // apps/desktop
+      const repoRoot = path.resolve(appDir, "..", "..");     // 仓库根
+      const isAppPath = (p) => {
+        const r = path.resolve(p);
+        return r === appDir || r === repoRoot || appDir.startsWith(r + path.sep) || r.startsWith(appDir + path.sep);
+      };
+      const candidates = process.argv.slice(1).filter((a) => {
+        if (!a || a.startsWith("-")) return false;
+        let st;
+        try { st = fs.statSync(a); } catch { return false; }
+        if (!st.isDirectory()) return false;
+        const abs = path.resolve(a);
+        if (isAppPath(abs)) return false;
+        // 排除应用自身的入口路径
+        if (a.endsWith("index.cjs") || a === ".") return false;
+        return true;
+      });
+      return candidates[0] ? path.resolve(candidates[0]) : null;
+    })(),
   }));
 
   ipcMain.handle("vault:pick", async () => {
@@ -154,6 +196,65 @@ function registerIpc() {
    *   结构化克隆要复制一份、渲染进程还要驻留一份 —— 测试里直接崩了。
    *   而 219 MB 的课件提取出的文字通常只有几百 KB，传输量降三个数量级。
    */
+  /**
+   * 读 PPTX 的**原始字节**，给渲染进程用纯 JS 库（pptxviewjs）画到 canvas 上。
+   *
+   * 为什么不复用 file:readPptx（那个返回提取好的文字）：
+   *   Canvas 渲染需要的是原始 OOXML 字节，不是提好的文字。
+   *
+   * ⚠️ 体积上限单独设，比 MAX_BINARY_BYTES 小得多：
+   *   结构化克隆要把整个 ArrayBuffer 复制一遍，渲染进程还要再驻留一份。
+   *   实测 219 MB 的课件直接走字节 IPC 会把渲染进程搞崩。
+   *   所以这里卡在 64 MB —— 超过的课件退回"文字提取模式"，
+   *   并且在返回值里说明原因，而不是静默失败。
+   */
+  const MAX_PPTX_RENDER_BYTES = 64 * 1024 * 1024;
+  /**
+   * 读电子表格（.xlsx / .xls / .ods）。
+   *
+   * ★ 为什么不像 PPT 那样转 PDF：
+   *   表格数据要的是看单元格、对比数值。转 PDF 只是一张静态图，
+   *   既不能选中也不能排序 —— 那是把表格当图片处理，方向就错了。
+   *
+   * ★ 为什么在主进程解析：
+   *   xlsx 是 zip + XML，渲染进程没有 fs，也没有解压能力。
+   *   主进程解析完只回传**用到的区域**（去掉尾部空行空列），
+   *   避免 13 万单元格的结构化克隆把渲染进程拖死。
+   */
+  ipcMain.handle("file:readSheet", (_e, filePath) => {
+    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+    try {
+      const st = fs.statSync(filePath);
+      if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
+      const r = parseSheetFile(filePath);
+      return r;
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("file:readPptxBytes", (_e, filePath) => {
+    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+    let st;
+    try { st = fs.statSync(filePath); } catch (e) { return { ok: false, error: e.message }; }
+    if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
+    if (st.size > MAX_PPTX_RENDER_BYTES) {
+      return {
+        ok: false,
+        tooLarge: true,
+        size: st.size,
+        limit: MAX_PPTX_RENDER_BYTES,
+        error: `文件 ${(st.size / 1024 / 1024).toFixed(0)} MB 超过渲染上限 ${MAX_PPTX_RENDER_BYTES / 1024 / 1024} MB`,
+      };
+    }
+    try {
+      const bytes = fs.readFileSync(filePath);
+      return { ok: true, bytes, size: bytes.length, ms: 0 };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
   ipcMain.handle("file:readPptx", (_e, filePath) => {
     if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
     const ext = path.extname(filePath).toLowerCase();
@@ -206,6 +307,15 @@ function registerIpc() {
 
   // 全文检索与反向链接（SQLite + FTS5，索引库放 %APPDATA%）
   registerSearch(ipcMain, () => mainWindow, app);
+
+  // 高保真查看：用系统上的 LibreOffice 把 Office 文档转 PDF（可选增强）
+  registerConvert(ipcMain, () => mainWindow, app);
+
+  // 日历 / 计划 / 倒计时（SQLite，库放 %APPDATA%）
+  registerCalendar(ipcMain, () => mainWindow, app);
+
+  // 数字人能力检测（语音凭据 / 口型算法 / 设备）
+  registerAvatar(ipcMain, () => mainWindow, app);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */

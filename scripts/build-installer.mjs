@@ -97,6 +97,47 @@ if (!fs.existsSync(docxPkg)) {
 }
 console.log(`  [OK] 内置 docx（纯 JS 生成 Word，不需要 Python）`);
 
+// LibreOffice：PPT/Word/Excel/旧版 .doc/.ppt 高保真查看用（可选增强的"随包"部分）
+//
+// 检查三件事：
+//   1) soffice.exe 在
+//   2) share/config 在 —— **砍掉它转换会静默失败**（实测报
+//      "source file could not be loaded"，但退出码是 0，很难查）
+//   3) 许可文件在 —— MPL-2.0 随包分发必须副署
+const sofficeExe = path.join(ROOT, "vendor", "soffice", "program", "soffice.exe");
+if (!fs.existsSync(sofficeExe)) {
+  console.error("  [FAIL] 缺 vendor/soffice/program/soffice.exe");
+  console.error("         PPT/Word 会退回纯文字模式（能用，但看不到排版和图片）");
+  console.error("         制备方式见 vendor/soffice/README.md");
+  process.exit(1);
+}
+const sofficeConfig = path.join(ROOT, "vendor", "soffice", "share", "config");
+if (!fs.existsSync(sofficeConfig)) {
+  console.error("  [FAIL] 缺 vendor/soffice/share/config —— 转换会静默失败");
+  console.error("         这个目录放着文件类型识别与导出过滤器的注册信息，不能裁剪");
+  process.exit(1);
+}
+const sofficeLicense = path.join(ROOT, "vendor", "soffice", "license.txt");
+if (!fs.existsSync(sofficeLicense)) {
+  console.error("  [FAIL] 缺 vendor/soffice/license.txt —— MPL-2.0 随包分发必须副署");
+  process.exit(1);
+}
+{
+  let sizeMB = 0;
+  let files = 0;
+  const walk = (d) => {
+    let es; try { es = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of es) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else { try { sizeMB += fs.statSync(p).size; files++; } catch { /* 忽略 */ } }
+    }
+  };
+  walk(path.join(ROOT, "vendor", "soffice"));
+  console.log(`  [OK] 内置 LibreOffice：${(sizeMB / 1024 / 1024).toFixed(0)} MB / ${files} 个文件（压缩后约 200 MB）`);
+  console.log(`       share/config 在位（裁剪时漏删会静默失败）、MPL-2.0 许可已副署`);
+}
+
 step("3.5 构建渲染进程（Vite + React）");
 // 渲染进程必须先构建：主进程加载的是 renderer/dist/index.html，
 // 不构建就会打出一个只有空白窗口的安装包。

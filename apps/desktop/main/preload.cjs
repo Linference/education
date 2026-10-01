@@ -41,6 +41,18 @@ const api = {
     readPpt: (p) => ipcRenderer.invoke("file:readPpt", p),
     /** 读 .pptx：**主进程解析，只回传文字**（219MB 的文件不适合走字节 IPC） */
     readPptx: (p) => ipcRenderer.invoke("file:readPptx", p),
+    /**
+     * 读 .pptx 的**原始字节** —— 给 pptxviewjs 做 canvas 渲染用。
+     * 有 64 MB 上限（结构化克隆要复制一份，超大文件会把渲染进程搞崩），
+     * 超限时返回 { ok:false, tooLarge:true }，界面退回文字模式。
+     */
+    readPptxBytes: (p) => ipcRenderer.invoke("file:readPptxBytes", p),
+    /**
+     * 读电子表格（.xlsx / .xls / .ods）。
+     * 在主进程解析，只回传用到的单元格区域。**不转 PDF** ——
+     * 表格要的是看数据，PDF 里只是静态图。
+     */
+    readSheet: (p) => ipcRenderer.invoke("file:readSheet", p),
     reveal: (p) => ipcRenderer.invoke("file:reveal", p),
     /** 另存为（导出用） */
     saveAs: (payload) => ipcRenderer.invoke("file:saveAs", payload),
@@ -95,6 +107,42 @@ const api = {
       });
       return () => hs.forEach(([c, h]) => ipcRenderer.removeListener(c, h));
     },
+  },
+  // 高保真查看：调用系统上的 LibreOffice 把 Office 文档转 PDF
+  // （可选增强 —— 没装 LibreOffice 时 available=false，界面退回文字模式）
+  convert: {
+    probe: (opts) => ipcRenderer.invoke("convert:probe", opts ?? {}),
+    toPdf: (payload) => ipcRenderer.invoke("convert:toPdf", payload),
+    cacheInfo: () => ipcRenderer.invoke("convert:cacheInfo"),
+    clearCache: () => ipcRenderer.invoke("convert:clearCache"),
+  },
+  // 日历 / 计划 / 倒计时
+  //
+  // ★ 语义上分两类（schema 设计的硬规矩）：
+  //   events 固定日程，**AI 不可重排**；tasks 可调整的学习任务。
+  //   界面上分在两个页签里，不要混用。
+  cal: {
+    /** 一次拿齐（事件 / 待办 / 倒计时） */
+    load: (p) => ipcRenderer.invoke("cal:load", p),
+    addEvent: (p) => ipcRenderer.invoke("cal:addEvent", p),
+    updateEvent: (p) => ipcRenderer.invoke("cal:updateEvent", p),
+    deleteEvent: (p) => ipcRenderer.invoke("cal:deleteEvent", p),
+    addTask: (p) => ipcRenderer.invoke("cal:addTask", p),
+    toggleTask: (p) => ipcRenderer.invoke("cal:toggleTask", p),
+    deleteTask: (p) => ipcRenderer.invoke("cal:deleteTask", p),
+    addCountdown: (p) => ipcRenderer.invoke("cal:addCountdown", p),
+    deleteCountdown: (p) => ipcRenderer.invoke("cal:deleteCountdown", p),
+    info: () => ipcRenderer.invoke("cal:info"),
+  },
+  // 数字人能力检测
+  //
+  // ★ 区分两类能力：本地（口型算法、系统语音）不需要密钥；
+  //   云端（腾讯云 TTS/ASR）需要凭据。
+  //   界面上必须分开说，否则用户以为整个功能都废了。
+  avatar: {
+    probe: () => ipcRenderer.invoke("avatar:probe"),
+    ttsTest: (payload) => ipcRenderer.invoke("avatar:ttsTest", payload ?? {}),
+    paths: () => ipcRenderer.invoke("avatar:paths"),
   },
 };
 

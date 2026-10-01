@@ -165,4 +165,6 @@ function parsePptxFile(filePath) {
   }
 }
 
-module.exports = { parsePptxFile };
+// 除了 PPTX 解析，也导出两个 buffer 版的 zip 读取函数 ——
+// xlsx.cjs（表格读取）复用同一份实现，避免两套 zip 解析逻辑各自出 bug。
+module.exports = { parsePptxFile, listZipInBuffer, readEntryFromBuffer };

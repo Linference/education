@@ -10,7 +10,35 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const SKIP = [/[\\/]node_modules[\\/]/, /[\\/]\.git[\\/]/, /[\\/]dist[\\/]/, /[\\/]产出[\\/]/, /package-lock\.json$/, /\.asar$/];
+/**
+ * 跳过规则。
+ *
+ * ★ 必须包含 vendor/ 与 dist/installer：
+ *   内置 LibreOffice 之后，仓库里多了 9000+ 个第三方文件
+ *   （含 Python 标准库）。它们里面本来就有"看着像乱码"的字符表常量
+ *   （例如 idna 的 uts46data.py 按 Unicode 区段罗列汉字），会误报。
+ *   这不是我们的代码，改了反而错。
+ *
+ *   判断依据：本扫描的目的是发现**我们自己的文本文件**被双重编码损坏。
+ *
+ * ⚠️ 规则写法注意：不要写 `[\\/]vendor[\\/]` ——
+ *    那样要求 vendor 前后都有分隔符，**相对路径开头不匹配**。
+ *    虽然实际扫描传的是绝对路径（能匹配上），但依赖这个前提很脆：
+ *    换个调用方式（传相对路径）就会静默失效。
+ *    所以用 `(^|[\\/])vendor[\\/]` 显式覆盖两种情况。
+ */
+const SEG = (name) => new RegExp(`(^|[\\\\/])${name}[\\\\/]`);
+const SKIP = [
+  SEG("node_modules"),
+  SEG("\\.git"),
+  SEG("dist"),
+  SEG("产出"),
+  SEG("vendor"),
+  new RegExp(`(^|[\\\\/])\\.tmp[^\\\\/]*[\\\\/]`),
+  /package-lock\.json$/,
+  /\.asar$/,
+  /\.min\.(js|css)$/,
+];
 const TEXT_EXT = new Set([".md", ".mjs", ".cjs", ".js", ".json", ".yaml", ".yml", ".txt", ".html", ".css", ".py", ".ps1", ".typ", ".sql", ".svg"]);
 
 /** 常见汉字（在正常中文文本里高频出现）—— 用来判断"这段中文是不是真的中文" */

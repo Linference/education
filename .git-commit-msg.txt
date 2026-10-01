@@ -1,0 +1,42 @@
+格式路由修正 + 表格查看器 + 日历 + 数字人
+
+按用户指出的问题收窄范围：只有幻灯片转 PDF，表格与文档走原生查看器。
+
+格式路由
+- .pptx/.ppt  → LibreOffice 转 PDF（版式复杂，PDF 才对）
+- .docx       → 原生渲染器（不转 PDF）
+- .xlsx/.xls  → 新增原生表格查看器（不转 PDF）
+- .csv        → 表格视图（本来就没转）
+
+表格查看器（新增）
+- main/lib/xlsx.cjs：zip+XML 解析，只回传用到的单元格区域
+- renderer SheetViewer.tsx：虚拟滚动（449 行 × 302 列也不卡）
+- 复用 pptx.cjs 的 zip 读取实现，避免两套解析逻辑各自出 bug
+
+日历 / 计划 / 倒计时（新增）
+- main/lib/calendar.cjs + calendar-ipc.cjs，SQLite 落在 %APPDATA%
+- 严格分离 events（固定日程，AI 不可重排）与 tasks（可调整任务）
+- renderer CalendarPanel.tsx：月历 / 待办 / 倒计时三个页签
+
+数字人（新增）
+- main/avatar-ipc.cjs：能力检测，区分本地能力与云端能力
+- renderer AvatarStage.tsx：SVG 形象，口型由帧序列驱动
+- renderer AvatarPanel.tsx：检测面板 + 说话界面
+- 本地链路（打字 → 系统语音 → 对口型）已跑通，不需要密钥
+- 口型按语音实际时长归一化对齐，语速快慢都不会越说越偏
+
+右栏折叠
+- 加可见的折叠按钮；折叠后保留窄竖条可点回来
+- 页签改为横向可滚动，标签保持完整（不缩写成 AI 两个字）
+
+修复
+- 导出反馈把 32 字节显示成 0 KB，看起来像导出失败（用户反馈"导出没反应"）
+- 面板上腾讯云环境变量名写错（TENCENTCLOUD_* → TENCENT_SECRET_*）
+- pptx.cjs 导出 buffer 版 zip 读取函数，供 xlsx.cjs 复用
+
+测试
+- verify-routing.mjs  11/11  格式路由
+- verify-calendar.mjs  12/12
+- verify-avatar.mjs  11/11  能力检测
+- verify-avatar-stage.mjs  11/11  口型动画
+- verify-export-flow.mjs  9/9

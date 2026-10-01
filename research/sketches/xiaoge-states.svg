@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 284" width="1200" height="284" role="img" aria-label="数字人「小格」五个状态的造型参考">
+  <title>格致 · 数字人「小格」状态造型参考（待机 / 聆听 / 思考 / 不服气 / 顿悟）</title>
+  <desc>几何格子小人：圆角方形身体、头顶悬浮九宫格。九格全空＝什么都不懂；亮起一格朱砂红＝懂了一点；全部变灰＝又糊涂了。本图是造型与状态示意，不是最终美术稿。</desc>
+
+  <defs>
+    <!-- 九宫格：九格全空 -->
+    <g id="grid9" fill="none" stroke="#141414" stroke-opacity="0.30" stroke-width="3">
+      <rect x="97"  y="34" width="12" height="12" rx="3"/>
+      <rect x="114" y="34" width="12" height="12" rx="3"/>
+      <rect x="131" y="34" width="12" height="12" rx="3"/>
+      <rect x="97"  y="51" width="12" height="12" rx="3"/>
+      <rect x="114" y="51" width="12" height="12" rx="3"/>
+      <rect x="131" y="51" width="12" height="12" rx="3"/>
+      <rect x="97"  y="68" width="12" height="12" rx="3"/>
+      <rect x="114" y="68" width="12" height="12" rx="3"/>
+      <rect x="131" y="68" width="12" height="12" rx="3"/>
+    </g>
+
+    <!-- 九宫格：全部变灰（学弟又糊涂了） -->
+    <g id="gridGray" fill="#C9C3B6">
+      <rect x="97"  y="34" width="12" height="12" rx="3"/>
+      <rect x="114" y="34" width="12" height="12" rx="3"/>
+      <rect x="131" y="34" width="12" height="12" rx="3"/>
+      <rect x="97"  y="51" width="12" height="12" rx="3"/>
+      <rect x="114" y="51" width="12" height="12" rx="3"/>
+      <rect x="131" y="51" width="12" height="12" rx="3"/>
+      <rect x="97"  y="68" width="12" height="12" rx="3"/>
+      <rect x="114" y="68" width="12" height="12" rx="3"/>
+      <rect x="131" y="68" width="12" height="12" rx="3"/>
+    </g>
+
+    <!-- 身体 + 双腿（所有状态共用） -->
+    <g id="bodyCore">
+      <rect x="86"  y="196" width="14" height="18" rx="6" fill="#F7F3EC" stroke="#141414" stroke-width="6"/>
+      <rect x="140" y="196" width="14" height="18" rx="6" fill="#F7F3EC" stroke="#141414" stroke-width="6"/>
+      <rect x="58"  y="84"  width="124" height="112" rx="26" fill="#F7F3EC" stroke="#141414" stroke-width="7"/>
+    </g>
+
+    <!-- 手臂：自然下垂 -->
+    <g id="armsRest" fill="#F7F3EC" stroke="#141414" stroke-width="6">
+      <rect x="34"  y="120" width="24" height="16" rx="8"/>
+      <rect x="182" y="120" width="24" height="16" rx="8"/>
+    </g>
+
+    <!-- 眼睛：白底墨边 + 墨瞳（统一风格，便于表达视线与眯眼） -->
+    <g id="eyeOpen">
+      <circle cx="98"  cy="122" r="9.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+      <circle cx="142" cy="122" r="9.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+      <circle cx="98"  cy="122" r="4.2" fill="#141414"/>
+      <circle cx="142" cy="122" r="4.2" fill="#141414"/>
+    </g>
+  </defs>
+
+  <rect width="1200" height="284" fill="#FFFFFF"/>
+
+  <!-- ══════════ 1. 待机 idle ══════════ -->
+  <g transform="translate(0,0)">
+    <use href="#grid9"/>
+    <use href="#bodyCore"/>
+    <use href="#armsRest"/>
+    <use href="#eyeOpen"/>
+    <path d="M106 146 Q120 158 134 146" fill="none" stroke="#141414" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- ══════════ 2. 聆听 listening ══════════ -->
+  <g transform="translate(240,0) rotate(-4 120 140)">
+    <use href="#grid9"/>
+    <use href="#bodyCore"/>
+    <use href="#armsRest"/>
+    <circle cx="98"  cy="120" r="10.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="142" cy="120" r="10.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="98"  cy="120" r="4.6" fill="#141414"/>
+    <circle cx="142" cy="120" r="4.6" fill="#141414"/>
+    <ellipse cx="120" cy="150" rx="8" ry="6" fill="#141414"/>
+  </g>
+
+  <!-- ══════════ 3. 思考 thinking ══════════ -->
+  <g transform="translate(480,0) rotate(-12 120 150)">
+    <use href="#grid9"/>
+    <!-- 头顶有一格在闪（等 LLM 首 token） -->
+    <rect x="114" y="51" width="12" height="12" rx="3" fill="#C8452F" fill-opacity="0.28" stroke="#C8452F" stroke-width="3"/>
+    <use href="#bodyCore"/>
+    <use href="#armsRest"/>
+    <circle cx="98"  cy="122" r="9.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="142" cy="122" r="9.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <!-- 瞳孔上移 = 眼睛往上看 -->
+    <circle cx="98"  cy="117.5" r="4.2" fill="#141414"/>
+    <circle cx="142" cy="117.5" r="4.2" fill="#141414"/>
+    <path d="M108 152 Q120 148 132 152" fill="none" stroke="#141414" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- ══════════ 4. 不服气 skeptical（最重要） ══════════ -->
+  <g transform="translate(720,0)">
+    <use href="#gridGray"/>
+    <use href="#bodyCore"/>
+    <use href="#armsRest"/>
+    <!-- 左眼正常、右眼眯起 -->
+    <circle cx="98" cy="122" r="9.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="98" cy="122" r="4.2" fill="#141414"/>
+    <ellipse cx="142" cy="122" rx="10" ry="4.6" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="142" cy="122" r="3" fill="#141414"/>
+    <!-- 两条眉毛上挑 -->
+    <path d="M87 104 Q98 99 109 103" fill="none" stroke="#141414" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M131 103 Q142 99 153 104" fill="none" stroke="#141414" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- 嘴角微下撇 -->
+    <path d="M108 154 Q120 149 132 154" fill="none" stroke="#141414" stroke-width="5" stroke-linecap="round"/>
+    <!-- 摇头动势线 -->
+    <path d="M44 96 Q36 108 44 120" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.45"/>
+    <path d="M198 96 Q206 108 198 120" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.45"/>
+  </g>
+
+  <!-- ══════════ 5. 顿悟 aha ══════════ -->
+  <g transform="translate(960,0)">
+    <use href="#grid9"/>
+    <!-- ⭐ 亮起一格朱砂红：直接呼应 logo「一格得解」 -->
+    <rect x="114" y="51" width="12" height="12" rx="3" fill="#C8452F"/>
+    <use href="#bodyCore"/>
+    <!-- 双手举起 -->
+    <rect x="32"  y="112" width="26" height="16" rx="8" fill="#F7F3EC" stroke="#141414" stroke-width="6" transform="rotate(45 58 120)"/>
+    <rect x="182" y="112" width="26" height="16" rx="8" fill="#F7F3EC" stroke="#141414" stroke-width="6" transform="rotate(-45 182 120)"/>
+    <!-- 眼睛睁大 -->
+    <circle cx="98"  cy="122" r="11.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="142" cy="122" r="11.5" fill="#FFFFFF" stroke="#141414" stroke-width="4"/>
+    <circle cx="98"  cy="122" r="5" fill="#141414"/>
+    <circle cx="142" cy="122" r="5" fill="#141414"/>
+    <!-- 张嘴大笑 -->
+    <path d="M101 144 Q120 170 139 144 Z" fill="#141414" stroke="#141414" stroke-width="4" stroke-linejoin="round"/>
+    <!-- 欢快动势线 -->
+    <path d="M52 92 Q44 80 52 68" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.45"/>
+    <path d="M188 92 Q196 80 188 68" fill="none" stroke="#141414" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.45"/>
+  </g>
+
+  <!-- ══════════ 标签 ══════════ -->
+  <g font-family="'Microsoft YaHei','PingFang SC','Noto Sans SC',sans-serif" text-anchor="middle">
+    <g fill="#3A3A3A" font-size="16">
+      <text x="120"  y="256">待机</text>
+      <text x="360"  y="256">聆听</text>
+      <text x="600"  y="256">思考</text>
+      <text x="840"  y="256">不服气</text>
+      <text x="1080" y="256">顿悟</text>
+    </g>
+    <g fill="#9A9A9A" font-size="11">
+      <text x="120"  y="274">idle</text>
+      <text x="360"  y="274">listening</text>
+      <text x="600"  y="274">thinking</text>
+      <text x="840"  y="274">skeptical</text>
+      <text x="1080" y="274">aha</text>
+    </g>
+  </g>
+</svg>

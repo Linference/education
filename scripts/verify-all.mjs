@@ -54,6 +54,10 @@ const SUITES = [
   { name: "检索策略（trigram 双字词坑）", cmd: ["apps/desktop/verify-search-strategy.cjs"], heavy: true, electron: true },
   { name: "索引器（切块/反链/增量）", cmd: ["apps/desktop/verify-indexer.cjs"], heavy: true, electron: true },
 
+  // ---- Office 高保真转换（要 Electron 运行时 + 随包 LibreOffice）----
+  { name: "★ 转换全格式（PPT/Word/Excel/旧版）", cmd: ["apps/desktop/verify-soffice-convert.cjs"], heavy: true, electron: true },
+  { name: "★ 转换边界与防误判", cmd: ["apps/desktop/verify-convert-edge.cjs"], heavy: true, electron: true },
+
   // ---- 界面（要启动 Electron 应用）----
   { name: "Markdown 渲染", cmd: ["apps/desktop/verify-markdown.mjs"], heavy: true },
   { name: "界面渲染（公式/PDF）", cmd: ["apps/desktop/verify-render.mjs"], heavy: true },
@@ -62,6 +66,7 @@ const SUITES = [
   { name: "★ 编辑器与模式切换", cmd: ["apps/desktop/verify-editor.mjs"], heavy: true },
   { name: "★ 库内文件操作（含安全边界）", cmd: ["apps/desktop/verify-vault-fs.mjs"], heavy: true },
   { name: "★ 全文检索与反向链接", cmd: ["apps/desktop/verify-search-ui.mjs"], heavy: true },
+  { name: "★ 高保真查看（PPT 转 PDF）", cmd: ["apps/desktop/verify-hifi.mjs"], heavy: true },
   // ⚠️ 这两个 .cjs 测试**已经在上面的「数据库」分组里登记过**（带 electron: true）。
   //    在这里再登记一次会导致同一测试跑两遍：第一遍用 Electron 通过，
   //    第二遍用普通 node 启动 → require("electron") 拿到 undefined →

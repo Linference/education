@@ -1,0 +1,206 @@
+% =====================================================================
+%  Project Introduction  --  Gezhi
+%  2026 AI for SDGs: Global Youth AI Future Innovation Competition
+%  Macau Secondary School Division
+%
+%  Compile:  pdflatex ProjectIntroduction_Gezhi.tex   (run twice)
+%  English-only, as required by the competition rules.
+% =====================================================================
+\documentclass[10pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[margin=1.9cm,top=1.7cm,bottom=1.7cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+% ---- compact section headings -------------------------------------
+\titleformat{\section}{\normalfont\large\bfseries\color{black!85}}{\thesection.}{0.5em}{}
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+\titleformat{\subsection}[runin]{\normalfont\bfseries}{}{0em}{}[\hspace{0.5em}]
+\titlespacing*{\subsection}{0pt}{5pt}{0.5em}
+
+\setlist[itemize]{leftmargin=1.1em,itemsep=1pt,topsep=2pt,parsep=0pt}
+\setlength{\parskip}{2pt}
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+
+\newcommand{\gezhi}{\textsc{Gezhi}}
+\newcommand{\xiaoge}{\textsc{Xiaoge}}
+\newcommand{\fillin}[1]{\textcolor{red}{\textbf{[TO BE COMPLETED:\,#1]}}}
+
+\begin{document}
+
+% ===================== TITLE BLOCK ==================================
+\begin{center}
+{\LARGE\bfseries Gezhi: A Local-First AI Study Companion\\[2pt]
+That Puts the Student in the Teacher's Chair}\\[6pt]
+{\small 2026 AI for SDGs --- Global Youth AI Future Innovation Competition\\
+Macau Secondary School Division \quad$\vert$\quad Theme: AI and Education}\\[4pt]
+{\footnotesize Team \textit{[Team Name]} $\cdot$ \textit{[School Name]} $\cdot$ Macau}
+\end{center}
+\vspace{-2pt}
+\hrule
+\vspace{4pt}
+
+% ===================== 1. PROBLEM ===================================
+\section{The Problem}
+
+Generative AI has been promoted as the technology that will finally give every student a
+personal tutor. The first rigorous evidence says otherwise, and it points in two opposite
+directions at once.
+
+\begin{table}[h]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{2.9cm} p{3.4cm} X@{}}
+\toprule
+\textbf{Study} & \textbf{Design} & \textbf{Finding} \\
+\midrule
+Bastani et al.\ (2024) &
+Randomised controlled trial; $\sim$1{,}000 Turkish high-school students; mathematics &
+With unrestricted ChatGPT: \textbf{+48\%} correct on practice problems, but \textbf{\(-17\%\)}
+on the exam once the AI was removed. With a tutor engineered to give hints but never
+answers: \textbf{+127\%} on practice, yet \textbf{no exam gain} over the no-AI control. \\[2pt]
+Oreopoulos \& Low (2026) &
+Two-year cluster RCT; 18 Tennessee middle schools; AI configured to coach, not answer &
+Effect of \textbf{0.06--0.08 SD} --- comparable to using the same platform \emph{without}
+AI. The binding constraint was behaviour: the median student messaged the tutor on only
+\textbf{one third} of practice days, and in only \textbf{17\%} of sessions in which they
+made a mistake. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\vspace{-4pt}
+Read together, these results describe a narrow gap. \textbf{AI tutors today either harm
+learning or go unused.} Making the AI more careful does not fix the second problem: even a
+deliberately restrained tutor produced no measurable benefit, because students did not
+open it. The only condition that has never been shown to harm learning is the one in which
+\textbf{the student produces the explanation}.
+
+% ===================== 2. USERS =====================================
+\section{Target Users}
+
+\textbf{Primary:} secondary-school students in Macau (Secondary 3--6, roughly ages 14--18)
+preparing for school examinations and university entrance. Our specific target is the
+student who \emph{feels} they understand a topic but cannot explain it. This ``illusion of
+knowing'' is not anecdotal: across 115 studies and 15{,}889 learners, the correlation
+between students' own judgements of what they have learned and their actual performance is
+only \(r = .178\) (Yang et al., 2022).
+
+\textbf{Secondary:} subject teachers who need evidence of what a class genuinely
+understands rather than what it has completed; and parents who want something more
+informative than a study-time counter.
+
+% ===================== 3. FEATURES ==================================
+\section{Main Features}
+
+\gezhi{} is a Windows desktop study companion organised around one loop:
+\textbf{expose the gap, explain it, defend it, master it.}
+
+\begin{itemize}
+  \item \textbf{Knowledge vault.} The student's own course materials --- textbooks,
+  handouts, notes, scanned worksheets --- indexed locally and searchable in both Chinese
+  and English. Nothing is uploaded.
+  \item \textbf{Question bank and exam builder.} Questions tagged by knowledge point and
+  exportable as a properly typeset examination paper, with an \emph{interleaved} mode that
+  mixes topics and deliberately withholds topic labels.
+  \item \textbf{Explain-and-defend (the core).} The student explains a topic aloud to
+  \xiaoge{}, an on-screen companion who is deliberately \emph{a year below them} and who
+  holds a fixed set of misconceptions. \xiaoge{} does not nod along --- it argues back. The
+  student is assessed on a six-dimension rubric and on how many rounds it takes to actually
+  convince it.
+  \item \textbf{Spaced review and planning.} Every knowledge point carries a mastery
+  estimate that schedules both questions \emph{and} explanations.
+  \item \textbf{Progress without scores.} \xiaoge{} carries a three-by-three lattice above
+  its head. Nine empty cells mean it understands nothing yet; each successful explanation
+  lights one cell. Students see progress without reading a number.
+\end{itemize}
+
+% ===================== 4. AI METHODS ================================
+\section{How the AI Works}
+
+\gezhi{} does not implement its own agent loop. The reasoning layer is \textbf{DeepSeek
+Harness (DSH)}, an MIT-licensed agent kernel invoked as a controlled subprocess that emits
+a newline-delimited JSON event stream. This provides session persistence, tool sandboxing,
+context compaction and an approval policy that a student team could not responsibly rebuild.
+Three decisions matter most:
+
+\textbf{1. The vault is the sandbox.} The subprocess working directory is set to the
+student's vault, and the kernel derives its write boundary from that directory. The AI can
+read and write the student's own notes and nothing else --- a security boundary enforced by
+the operating system's process model rather than by prompt instructions.
+
+\textbf{2. Chinese retrieval required a non-obvious fix.} We measured that SQLite's default
+FTS5 tokeniser returns \emph{zero} results for Chinese substring queries, because it treats
+an entire Chinese sentence as a single token. Switching to \texttt{tokenize='trigram'}
+yields correct matches with 1\,ms query latency over 200 documents. Retrieval is therefore
+local, offline and citation-bearing: every claim the system makes is anchored to a page of
+the student's own textbook.
+
+\textbf{3. The companion is engineered to be wrong on purpose.} A misconception library,
+derived from the student's own error statistics, is injected into \xiaoge{}'s system prompt
+together with a hard constraint: it may not concede until the student's explanation actually
+addresses the misconception. This follows CHI 2025 work showing that a teachable agent must
+\emph{play dumb} to be useful, and a controlled study finding that when an AI simply
+supplied correct answers, students' error-correction ability did not improve at all.
+
+% ===================== 5. NOVELTY ===================================
+\section{What Is Novel}
+
+We do not claim to have invented learning by teaching. Teachable agents date back to Chase
+et al.\ (2009), and 2024--2026 has seen active research in this area. Our contribution is
+four specific things:
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=1pt,topsep=2pt]
+  \item That research has overwhelmingly involved \textbf{university} students, largely in
+  computer science. We bring it to \textbf{secondary-school} learners, in a
+  Chinese-language desktop product built for their own curriculum.
+  \item The student teaches \textbf{the knowledge points in their own textbook}, retrieved
+  locally with page-level citations --- not generic exercises.
+  \item We convert ``convincing \xiaoge{}'' into a \textbf{measurable score that feeds a
+  spaced-repetition schedule}, closing a loop rather than producing a one-off conversation.
+  \item The knowledge base and learning record \textbf{never leave the machine}; model calls
+  run through the user's own account and prompts are not retained.
+\end{enumerate}
+
+% ===================== 6. IMPACT ====================================
+\section{Expected Impact}
+
+We measure success on learning outcomes, not engagement. Three instruments: (a) the change
+in Feynman rubric score for a knowledge point before and after a teach-and-defend cycle;
+(b) the \textbf{calibration gap} between a student's self-rating and their rubric score,
+tracked over time; (c) the number of dialogue turns required to resolve a misconception,
+which should fall as understanding deepens.
+
+\gezhi{} addresses \textbf{SDG 4 (Quality Education)} by making explanatory practice ---
+normally available only through one-to-one tutoring --- accessible to any student with a
+laptop, and by treating \textbf{AI literacy} as a learning objective in its own right:
+students who diagnose and correct an AI's misconceptions learn first-hand where such systems
+fail. This maps directly onto the \emph{AI system design} dimension at the \emph{Create}
+level of UNESCO's AI Competency Framework for Students (2024).
+
+% ===================== 7. STATUS ====================================
+\section{Current Status}
+
+A working prototype runs on Windows and demonstrates the full loop described above:
+local indexing of a mixed Chinese-and-English material set, citation-bearing retrieval, a
+spoken explanation session with the \xiaoge{} companion, rubric scoring, and export of a
+typeset examination paper. The misconception library currently holds \fillin{number}
+entries across \fillin{subject areas}. A first round of use with \fillin{number}
+secondary-school students has been completed, and the measured outcomes are reported in the
+accompanying Research Report.
+
+Our immediate next steps are to add a comparison condition without the AI, to validate the
+scoring rubric against human raters, and to run the study over a period long enough for the
+spaced-repetition schedule to matter.
+
+\end{document}

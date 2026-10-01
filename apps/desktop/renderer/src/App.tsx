@@ -12,12 +12,15 @@ import DocxViewer from "./components/DocxViewer";
 import DocViewer from "./components/DocViewer";
 import PptViewer from "./components/PptViewer";
 import CsvViewer from "./components/CsvViewer";
+import SheetViewer from "./components/SheetViewer";
 import CodeView from "./components/CodeView";
 import AiChat from "./components/AiChat";
 import ExportMenu from "./components/ExportMenu";
 import MdEditor from "./components/MdEditor";
 import SearchPanel from "./components/SearchPanel";
 import BacklinksPanel from "./components/BacklinksPanel";
+import CalendarPanel from "./components/CalendarPanel";
+import AvatarPanel from "./components/AvatarPanel";
 import logoMark from "./assets/app-icon-256.png";
 
 // ---------------------------------------------------------------- 类型
@@ -37,8 +40,30 @@ interface Tab {
   docMs?: number;
   /** true 表示版式有损（旧版二进制只能提取文字） */
   lossyText?: boolean;
-  /** .ppt / .pptx 的幻灯片文字（已在主进程解析好） */
+  /** .ppt / .pptx 的幻灯片文字（转 PDF 失败时用这个兜底） */
   pptSlides?: Array<{ index: number; title: string; lines: string[] }>;
+  /**
+   * 电子表格的解析结果（xlsx / xls / ods）。
+   * 表格走**原生查看器**（虚拟滚动），不转 PDF。
+   */
+  sheet?: Array<{
+    name: string;
+    rows: string[][];
+    rowCount: number;
+    colCount: number;
+    truncatedRows?: boolean;
+    truncatedCols?: boolean;
+    error?: string;
+  }>;
+  /** 工作簿里实际有几张表（用于界面提示"只解析了前 N 张"） */
+  sheetTotal?: number;
+  /**
+   * 这份 PDF 是从别的格式转来的（高保真模式）。
+   * 有值说明走了 LibreOffice 转换 —— 界面上要如实告知，
+   * 否则用户会以为原文件就是 PDF。
+   */
+  convertedFrom?: string;
+  convertMs?: number;
 }
 
 // ---------------------------------------------------------------- 图标（内联 SVG，避免引图标库）
@@ -177,13 +202,19 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(260);
   const [showRight, setShowRight] = useState(true);
   const [showLeft, setShowLeft] = useState(true);
-  const [rightTab, setRightTab] = useState<"ai" | "info" | "links">("ai");
+  const [rightTab, setRightTab] = useState<"ai" | "info" | "links" | "cal" | "avatar">("ai");
   /** 左栏视图：文件树 / 全文检索 */
   const [leftView, setLeftView] = useState<"files" | "search">("files");
   /** 索引版本号：索引完成后 +1，用来触发反链面板重新拉取 */
   const [indexVersion, setIndexVersion] = useState(0);
   /** 索引状态（界面上显示"已索引 N 篇"） */
   const [indexStatus, setIndexStatus] = useState<{ docs: number; chunks: number; links: number } | null>(null);
+
+  // ---------- 高保真查看（LibreOffice 转换）----------
+  /** 是否启用高保真查看。默认开 —— 有 LibreOffice 就享受，没有就自动退回文字模式 */
+  const [hiFiEnabled, setHiFiEnabled] = useState(true);
+  /** LibreOffice 能力探测结果（null = 还没探测完） */
+  const [soffice, setSoffice] = useState<SofficeProbe | null>(null);
   /** 文件名过滤（左栏文件树用；与全文检索是两回事） */
   const [filter, setFilter] = useState("");
   const filterRef = useRef<HTMLInputElement>(null);
@@ -236,7 +267,17 @@ export default function App() {
   const activeTab = useMemo(() => tabs.find((t) => t.path === activePath) ?? null, [tabs, activePath]);
 
   useEffect(() => {
-    window.gezhi.info().then(setInfo).catch((e) => setStatus("初始化失败：" + e.message));
+    window.gezhi.info()
+      .then((i) => {
+        setInfo(i);
+        // 从命令行带了库路径就直接打开（试用/开发时省掉选目录这一步）
+        const arg = (i as any).vaultFromArgv as string | null | undefined;
+        if (arg) {
+          window.gezhi.vault.info(arg).then((v) => { void loadVault(v); }).catch(() => { /* 忽略 */ });
+        }
+      })
+      .catch((e) => setStatus("初始化失败：" + e.message));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------------------------------------------------------- 打开库
@@ -271,6 +312,19 @@ export default function App() {
     window.gezhi.search.open(v.path).then((r) => {
       if (r?.stats) setIndexStatus(r.stats);
     }).catch(() => { /* 索引失败不影响基本使用 */ });
+  }, []);
+
+  // 启动时探测 LibreOffice（决定 PPT/Word 走高保真还是文字模式）
+  useEffect(() => {
+    window.gezhi.convert.probe({})
+      .then((p) => {
+        setSoffice(p);
+        if (!p.available) {
+          // 没装也不报错 —— 只是少一个增强功能，文字模式照样能用
+          setStatus("提示：装上 LibreOffice 后，PPT/Word 可以高保真查看（不用额外配置）");
+        }
+      })
+      .catch(() => setSoffice({ available: false, reason: "探测失败", engine: null, version: null }));
   }, []);
 
   // 订阅索引事件：完成后刷新统计并让反链面板重新拉数据
@@ -509,26 +563,90 @@ export default function App() {
   const openFile = useCallback(async (entry: TreeEntry) => {
     if (tabs.some((t) => t.path === entry.path)) { setActivePath(entry.path); return; }
     const kind = kindOf(entry.ext);
+
+    /**
+     * ★ 只有 **幻灯片** 走 LibreOffice 转 PDF。
+     *
+     * 为什么只有 PPT：
+     *   · PPT 是**版式驱动**的 —— 位置、图片、配色、母版决定一切，
+     *     纯 JS 提取文字等于没有内容（实测 15 MB 课件只提出 2 KB 文字）。
+     *     转成 PDF 交给已有的 PDF 查看器，视觉 100% 还原。
+     *
+     * 为什么 Word / Excel **不转**：
+     *   · .docx 本质是"流式文档"，有原生渲染器就能正常看；
+     *     转 PDF 反而慢，而且丢掉了文字可选中、可复制的优势
+     *   · .xlsx / .csv 是**表格数据**，用户要的是排序、筛选、看单元格，
+     *     **转成 PDF 是错的** —— PDF 里只是一张静态图，没法用
+     *
+     * 旧版 .doc / .ppt（97-2003 二进制）没有纯 JS 渲染库，
+     *   .doc 走原生解析出文字，.ppt 也转入 PDF（版式同样重要）。
+     */
+    const needsPdfConversion = kind === "pptx" || kind === "ppt";
+    if (needsPdfConversion && hiFiEnabled) {
+      setLoading(true);
+      setStatus(`正在转换 ${entry.name}（首次约 10~40 秒）…`);
+      try {
+        const c = await window.gezhi.convert.toPdf({ src: entry.path });
+        if (c.ok && c.pdfPath) {
+          // 读出转换后的 PDF 字节，走 PDF 查看器
+          const b = await window.gezhi.file.readBinary(c.pdfPath);
+          if (b.ok && b.bytes) {
+            setTabs((prev) => [...prev, {
+              path: entry.path,
+              name: entry.name,
+              ext: entry.ext,
+              kind: "pdf",
+              size: entry.size,
+              mtime: entry.mtime,
+              bytes: b.bytes!,
+              // 标记来源：界面上要说清楚这是转换来的，不是原始 PDF
+              convertedFrom: entry.ext,
+              convertMs: c.ms,
+            }]);
+            setActivePath(entry.path);
+            setStatus(`已高保真打开 ${entry.name}（转换耗时 ${((c.ms ?? 0) / 1000).toFixed(1)}s）`);
+            return;
+          }
+        }
+        // 转换失败 → 退回文字模式，并把原因告诉用户
+        setStatus(`高保真转换失败，已用文字模式：${c.error ?? "未知原因"}`);
+        if (c.hint) setFsNotice({ ok: false, text: `${c.error}。${c.hint}` });
+      } catch (e: any) {
+        setStatus("高保真转换出错，已用文字模式：" + e.message);
+      }
+    }
+
     setLoading(true);
     try {
       const base = { path: entry.path, name: entry.name, ext: entry.ext, kind, size: entry.size, mtime: entry.mtime };
       let tab: Tab;
 
       if (kind === "pdf" || kind === "docx" || kind === "image") {
+        // docx 走原生渲染器（流式文档，不需要转 PDF）
         const r = await window.gezhi.file.readBinary(entry.path);
         tab = r.ok
           ? { ...base, bytes: r.bytes! }
           : { ...base, error: r.error ?? "读取失败" };
-      } else if (kind === "pptx") {
-        // PPTX 在**主进程**解析，只把文字传回来。
-        // 走字节 IPC 的话，219MB 的课件会直接把渲染进程搞崩（实测）。
-        const r = await window.gezhi.file.readPptx(entry.path);
+      } else if (kind === "xlsx") {
+        // ★ 电子表格走**原生表格查看器**，不转 PDF。
+        //   表格数据要能排序、筛选、看单元格 —— PDF 里只是静态图，没法用。
+        const r = await window.gezhi.file.readSheet(entry.path);
         tab = r.ok
-          ? { ...base, pptSlides: r.slides, docMs: r.ms, lossyText: r.lossy }
+          ? { ...base, sheet: r.sheets, sheetTotal: r.sheetCount, docMs: r.ms }
           : { ...base, error: r.error ?? "读取失败" };
+      } else if (kind === "pptx") {
+        /**
+         * .pptx 高保真模式已在上面处理（转 PDF）。
+         * 走到这里说明开关关了、或引擎不可用 —— 退回文字模式。
+         */
+        const r = await window.gezhi.file.readPptx?.(entry.path);
+        tab = r?.ok
+          ? { ...base, pptSlides: r.slides, docMs: r.ms, lossyText: true }
+          : { ...base, error: r?.error ?? "读取失败" };
       } else if (kind === "doc" || kind === "ppt") {
         // 旧版 Office 二进制（OLE 复合文档）必须走主进程解析器 ——
-        // 渲染进程没有 fs，而且解析是 Node 侧的 Buffer 操作
+        // 渲染进程没有 fs，而且解析是 Node 侧的 Buffer 操作。
+        // 纯 JS 生态**没有**这两个格式的渲染库（连 VS Code 的 Office 插件也不支持）。
         const r = kind === "doc"
           ? await window.gezhi.file.readDoc(entry.path)
           : await window.gezhi.file.readPpt(entry.path);
@@ -949,7 +1067,8 @@ export default function App() {
         return <DocViewer path={activeTab.path} name={activeTab.name} />;
       case "pptx":
       case "ppt":
-        // 幻灯片文字已在主进程解析好（PPTX 尤其是 —— 219MB 的课件不能走字节 IPC）
+        // 幻灯片走 LibreOffice 转 PDF（见 openFile 里的说明），
+        // 转换失败、或用户关掉高保真开关时才到这里 —— 用文字模式兜底。
         return (
           <PptViewer
             slides={activeTab.pptSlides ?? []}
@@ -960,6 +1079,26 @@ export default function App() {
         );
       case "csv":
         return <CsvViewer text={activeTab.text ?? ""} name={activeTab.name} />;
+      case "xlsx":
+        // 电子表格走原生查看器（虚拟滚动），**不转 PDF**
+        if (!activeTab.sheet?.length) {
+          return (
+            <div className="empty-state">
+              <div style={{ fontSize: 15 }}>读不出这个表格</div>
+              <div style={{ color: "var(--text-muted)", maxWidth: 520, textAlign: "center", lineHeight: 1.9 }}>
+                {activeTab.error ?? "文件里没有可显示的工作表"}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <SheetViewer
+            sheets={activeTab.sheet}
+            path={activeTab.path}
+            sheetCount={activeTab.sheetTotal}
+            ms={activeTab.docMs}
+          />
+        );
       case "image": {
         const b64 = activeTab.bytes ? btoa(String.fromCharCode(...activeTab.bytes.slice(0, 0))) : "";
         void b64;
@@ -1089,6 +1228,31 @@ export default function App() {
               <path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z" />
             </svg>
           </button>
+
+          <div className="ribbon-sep" />
+
+          {/* 高保真查看开关。
+              只在**引擎可用**时才显示 —— 没有 LibreOffice 却给个开关，
+              用户打开一看还是文字模式，会以为坏了。
+              说明里写清楚：它是用 LibreOffice 转 PDF，首次要等几秒。 */}
+          {soffice?.available && (
+            <button
+              className={`ribbon-btn${hiFiEnabled ? " active" : ""}`}
+              onClick={() => setHiFiEnabled((v) => !v)}
+              title={
+                (hiFiEnabled
+                  ? "高保真查看：已开启\n打开 PPT/Word/Excel 时先用 LibreOffice 转成 PDF，视觉完全还原（首次约 10~40 秒）"
+                  : "高保真查看：已关闭\n当前只提取文字（快，但图片和排版看不到）")
+                + `\n\n引擎：${soffice.engine ?? ""}`
+              }
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="4" width="20" height="13" rx="2" />
+                <path d="M12 17v4M8 21h8" />
+                {hiFiEnabled && <path d="M7 11l3 3 6-6" />}
+              </svg>
+            </button>
+          )}
 
           <div className="ribbon-sep" />
 
@@ -1367,7 +1531,7 @@ export default function App() {
         </div>
 
         {/* 右侧栏 */}
-        {showRight && (
+        {showRight ? (
           <>
             <div
               style={{ width: 4, cursor: "col-resize", flex: "0 0 auto" }}
@@ -1377,23 +1541,51 @@ export default function App() {
               {/* 右栏顶部三个页签：AI / 信息 / 链接。
                   合成一栏而不是各占一栏，是因为窄屏下三栏已经吃满，
                   再切一栏会把正文挤到不可读。 */}
-              <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-                {(["ai", "info", "links"] as const).map((k) => (
+              {/* 右栏页签。
+                  五个页签在窄栏里会挤，所以：
+                    · 标签保持完整（"AI 助手"不缩成"AI"，缩写会让人一时认不出）
+                    · 容器允许横向滚动，挤的时候能滑
+                    · 每个页签不换行、不压缩
+                  比"把名字改短"更好的做法 —— 改短是在为布局牺牲可读性。 */}
+              <div style={{
+                display: "flex", alignItems: "center",
+                borderBottom: "1px solid var(--bd)", flex: "0 0 auto",
+                overflowX: "auto",
+              }}>
+                {(["ai", "info", "links", "cal", "avatar"] as const).map((k) => (
                   <button
                     key={k}
                     onClick={() => setRightTab(k)}
                     style={{
-                      flex: "1 1 auto",
-                      padding: "7px 0",
+                      flex: "0 0 auto",
+                      padding: "7px 9px",
                       fontSize: 12,
+                      whiteSpace: "nowrap",
                       color: rightTab === k ? "var(--accent)" : "var(--text-muted)",
                       borderBottom: rightTab === k ? "2px solid var(--accent)" : "2px solid transparent",
                       fontWeight: rightTab === k ? 600 : 400,
                     }}
                   >
-                    {k === "ai" ? "AI 助手" : k === "info" ? "信息" : "链接"}
+                    {k === "ai" ? "AI 助手" : k === "info" ? "信息" : k === "links" ? "链接" : k === "cal" ? "日历" : "数字人"}
                   </button>
                 ))}
+                {/* 折叠按钮。
+                    为什么必须有一个**看得见**的按钮：
+                    只留快捷键（Ctrl+B）的话，用户折叠后不知道还能展开。
+                    折叠后还会保留一条窄竖条（见下面的渲染），
+                    保证任何时候都有路回到这里。 */}
+                <button
+                  onClick={() => setShowRight(false)}
+                  title="折叠右栏（Ctrl+B）"
+                  style={{
+                    flex: "0 0 auto", width: 26, alignSelf: "stretch",
+                    color: "var(--text-faint)", fontSize: 13,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-normal)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-faint)"; }}
+                >
+                  ›
+                </button>
               </div>
 
               {/* ★ 两个面板**都必须保持挂载**，只用 CSS 隐藏。
@@ -1445,6 +1637,34 @@ export default function App() {
                 />
               </div>
 
+              {/* 日历 / 计划 / 倒计时。
+                  同样保持挂载：它自己维护"当前月份"与"选中日期"，
+                  卸载后每次切回来都要重新拉库、回到当月。 */}
+              <div
+                style={{
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  display: rightTab === "cal" ? "flex" : "none",
+                  flexDirection: "column",
+                }}
+              >
+                <CalendarPanel vaultPath={vault?.path ?? null} />
+              </div>
+
+              {/* 数字人能力检测。
+                  用户要求"先检测功能" —— 先看清哪些能用、哪些缺凭据，
+                  而不是先画一个数字人，点下去处处报错。 */}
+              <div
+                style={{
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  display: rightTab === "avatar" ? "flex" : "none",
+                  flexDirection: "column",
+                }}
+              >
+                <AvatarPanel vaultPath={vault?.path ?? null} />
+              </div>
+
               <div
                 style={{
                   flex: "1 1 auto",
@@ -1474,6 +1694,16 @@ export default function App() {
                           <span className="v">{new Date(activeTab.mtime).toLocaleString("zh-CN")}</span>
                         </div>
                       )}
+                      {/* 转换来源：让用户知道这份 PDF 是从 PPT 转来的 */}
+                      {activeTab.convertedFrom && (
+                        <div className="info-item">
+                          <span className="k">高保真</span>
+                          <span className="v">
+                            由 {activeTab.convertedFrom} 转换
+                            {activeTab.convertMs ? `（${(activeTab.convertMs / 1000).toFixed(1)}s）` : ""}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className="section-title">反向链接</div>
                     <div className="info-list" style={{ color: "var(--text-faint)", fontSize: 12 }}>
@@ -1486,6 +1716,42 @@ export default function App() {
               </div>
             </div>
           </>
+        ) : (
+          /**
+           * 折叠后的窄竖条。
+           *
+           * ★ 为什么折叠了还要留一条：
+           *   如果整个右栏消失、只留一个工具栏图标，用户折叠后
+           *   很容易找不到"怎么再展开"（尤其是误触快捷键之后）。
+           *   留一条可点的竖条，任何时候都能点回来。
+           *
+           * 竖排文字用 writing-mode；鼠标悬停时给一点颜色反馈。
+           */
+          <button
+            onClick={() => setShowRight(true)}
+            title="展开右栏（Ctrl+B）"
+            style={{
+              flex: "0 0 auto", width: 26, alignSelf: "stretch",
+              display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 8, paddingTop: 10,
+              borderLeft: "1px solid var(--bd)",
+              background: "var(--bg-secondary)",
+              color: "var(--text-faint)", fontSize: 12,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-hover)";
+              e.currentTarget.style.color = "var(--text-normal)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "var(--bg-secondary)";
+              e.currentTarget.style.color = "var(--text-faint)";
+            }}
+          >
+            <span style={{ fontSize: 13 }}>‹</span>
+            <span style={{ writingMode: "vertical-rl", letterSpacing: 1 }}>
+              {rightTab === "ai" ? "AI 助手" : rightTab === "info" ? "信息" : "链接"}
+            </span>
+          </button>
         )}
       </div>
 

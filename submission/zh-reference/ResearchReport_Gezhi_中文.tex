@@ -1,0 +1,726 @@
+% =====================================================================
+%  研究报告（中文参考版）—— 格致
+%  ⚠️ 仅供内部评审与指导老师审阅，切勿提交。
+%     竞赛章程规定所有提交材料只接受英文，正式提交请用
+%     ../ResearchReport_Gezhi.pdf
+%
+%  编译：xelatex ResearchReport_Gezhi_中文.tex   （跑两遍）
+%
+%  !! 提交英文版前请搜索 "待填" ！！
+%  所有需要团队自己实测数据的占位符都以红色显示。
+% =====================================================================
+\documentclass[11pt,a4paper,UTF8,fontset=windows]{ctexart}
+
+\usepackage[margin=2.0cm,top=1.9cm,bottom=1.9cm]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+
+\newcolumntype{R}{>{\raggedright\arraybackslash}X}
+\newcommand{\fillin}[1]{\textcolor{red}{\textbf{【待填：#1】}}}
+\newcommand{\fillc}[1]{\textcolor{red}{\textbf{【#1】}}}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection.}{0.55em}{}
+\titlespacing*{\section}{0pt}{10pt}{4pt}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{0.5em}{}
+\titlespacing*{\subsection}{0pt}{7pt}{2pt}
+\titleformat{\subsubsection}[runin]{\normalfont\bfseries}{}{0em}{}[\hspace{0.5em}]
+\titlespacing*{\subsubsection}{0pt}{5pt}{0.5em}
+
+\setlist[itemize]{leftmargin=2em,itemsep=1.5pt,topsep=2pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=2.4em,itemsep=1.5pt,topsep=2pt,parsep=0pt}
+\setlength{\parindent}{2\ccwd}
+\setlength{\parskip}{0pt}
+\linespread{1.22}
+\captionsetup{font=small,labelfont=bf}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize 格致 —— 研究报告（中文参考版）}
+\fancyhead[R]{\footnotesize \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\begin{document}
+
+% ===================== 标题 =========================================
+\begin{center}
+{\LARGE\bfseries 格致：一款建立在「以教促学」之上的\\[3pt]
+本地优先 AI 学习伙伴}\\[7pt]
+{\small 2026 年全球青少年人工智能未来创新竞赛 · 澳门中学生赛区\\
+主题：AI 与教育}\\[4pt]
+{\footnotesize
+队伍 \textit{[队伍名称]} \quad$\cdot$\quad \textit{[学校名称]}\\[2pt]
+\textit{[学生 1]}、\textit{[学生 2]}、\textit{[学生 3]}\\
+指导老师：\textit{[老师姓名]}\\[2pt]
+\today}
+\end{center}
+\vspace{-4pt}
+\hrule
+\vspace{6pt}
+
+% ===================== 摘要 =========================================
+\section*{摘要}
+
+本项目要回应的问题，由两条证据线共同划定。一项针对约 1000 名中学生的随机对照实验
+发现：无限制使用大语言模型使练习正确率提高 48\%，却让考试成绩\emph{下降} 17\%；而被
+精心设计成"只给提示"的导师版本，对考试完全没有产生收益。另一项覆盖 18 所初中、历时
+两年的整群随机对照实验发现，AI 导师的效应量仅 0.06--0.08 个标准差，与"同一平台不用
+AI"相当——原因是中位数学生只在三分之一的练习日使用它。两项结果合起来说明：今天的
+AI 导师要么损害学习，要么无人使用；而无论是"让模型更聪明"还是"让模型更克制"，都没有
+触及真正的病因。
+
+格致是一款面向澳门中学生的 Windows 桌面学习应用，同时针对这两种失效模式：它要求
+学生\emph{产出}解释而不是消费解释，并通过排程系统主动把这项要求推到学生面前，而不是
+等他来打开。学生把知识点讲给屏幕上的伙伴「小格」听。小格被刻意设定成比他低一个年级，
+并带着一套固定的错误理解——这些误解来自学生自己的错题统计。小格会反驳，只有当解释
+真正命中误解的纠正要点时才会让步。讲解按一张六维评分表打分，由此得到的掌握度估计会
+同时排程题目和未来的讲解。检索完全在本地进行，基于学生自己的教材，使用三元组全文索引
+并提供页码级引用。
+
+\textbf{关键词：}人工智能教育；以教促学；可教代理；提取练习；元认知校准；本地优先
+软件；可持续发展目标 4。
+
+\vspace{4pt}
+\hrule
+
+% ===================== 1. 背景 ======================================
+\section{背景}
+
+\subsection{承诺与第一批证据}
+
+生成式人工智能被广泛寄望为"终于能让每个学习者都拥有一位一对一导师"的技术。但自
+2024 年以来积累的证据要复杂得多，而且值得精确陈述——本项目的每一个设计决定都源自
+它们。
+
+Bastani 等（2024）以约 1000 名土耳其高中生为对象开展随机对照实验，把他们随机分配到
+三种条件：常规练习、可无限制使用通用聊天机器人的练习、以及使用同一模型但被设计成
+"给提示而不给答案"的练习。无限制组的练习正确率高出 48\%，随后在撤掉 AI 的考试中却
+\textbf{低了 17\%}；只给提示的组练习表现提升 127\%，但其考试成绩与\emph{完全不用 AI}
+的对照组在统计上无法区分。研究者还发现，模型给出的分步解法有 42\% 是错的，而学生压倒
+性地把它当作答案来源，而非当作导师。
+
+第二项研究指向另一种失效模式。Oreopoulos 与 Low（2026）报告了一项历时两年的整群随机
+对照实验：一款被刻意配置成"引导而非给答案"的 AI 导师，在 18 所初中投入使用。意向性
+分析的效应量为 0.06--0.08 个标准差；若推算"整年实际参与"的效应，也只有 0.14 个标准差
+——与"同一平台但不使用 AI"处于同一区间。作者对原因说得很直接，而且原因是行为性的、
+不是技术性的：96\% 的学生至少试过一次，但\textbf{中位数学生只在三分之一的练习日使用
+它，在做错题的场次中只有 17\% 会去求助}。他们的结论是：兑现 AI 导师的承诺，需要让
+学生真的去用它，而不只是给他们访问权。
+
+\subsection{两项结果共同指向什么}
+
+把这两项发现放在一起，AI 学习工具能够真正发挥作用的空间其实很窄：
+
+\begin{enumerate}
+  \item \textbf{把模型答得更好不是解法。}无限制条件答对了大多数练习题，考试成绩依然
+  受损。
+  \item \textbf{把模型做得更克制也不够。}只给提示的导师设计良好，却没有产生任何考试
+  收益。
+  \item \textbf{真正的约束是谁在产出内容。}唯一从未被证明会损害学习的条件，是学习者
+  自己生成解释的那一个。
+  \item \textbf{交付方式和教学法同样重要。}一项必须由学生主动打开的干预，经验上就是
+  不会被打开。
+\end{enumerate}
+
+第 3 点和第 4 点就是格致的设计任务书。第 3 点通过"把解释而非消费变成应用的核心动作"
+来回应；第 4 点通过"把讲解本身做成间隔复习队列里可排程的项目，并在应用首屏主动呈现"
+来回应。
+
+\subsection{本地情境}
+
+澳门中学生面对的是中英混合的材料，且大量以扫描件形式存在，同时面临高利害的考试结构。
+由此产生两个实际约束，直接影响了系统设计：全文检索必须在不依赖服务器的前提下正确处理
+中文；扫描材料必须可被摄取。两者分别在 5.2 节与本报告中予以处理。
+
+\subsection{贡献}
+
+本报告描述：(1) 一款面向中学生的可教代理学习伙伴的设计，其中"刻意且\emph{前后一致}
+的错误理解"是一等的系统组件；(2) 一套本地优先的检索架构，使伙伴的质疑锚定在学生自己
+的教材上；(3) 把讲解质量与间隔复习排程耦合起来；(4) 一套评估方案，以及在澳门中学生
+被试上取得的结果。
+
+% ===================== 2. 问题定义 ==================================
+\section{问题定义}
+
+\subsection{研究问题}
+
+\textbf{RQ1 —— 讲解质量。}一个被设计成持有前后一致误解、且拒绝提前让步的可教伙伴，
+能否提升中学生对某个知识点的口头讲解质量（以六维评分表衡量）？
+
+\textbf{RQ2 —— 有据可依的质疑。}一层完全本地的检索，能否在学生自己的教材上生成
+足够具体、同时足够可核查（可引用到页码）的质疑，且不把任何内容发送到服务器？
+
+\textbf{RQ3 —— 主动交付。}把\emph{讲解}（而不只是题目）排进复习队列，能否提高学生
+实际开口讲解的频率（相对于必须手动发起的应用）？
+
+\textbf{RQ4 —— 校准。}反复进行"讲述—答辩"练习，能否缩小学生自评理解程度与实测
+讲解质量之间的差距？
+
+\subsection{目标使用者与范围}
+
+主要使用者是澳门的中学生，年龄约 14--18 岁，正在准备校内考试与大学入学。设计上明确
+瞄准的是那种相信自己懂了、却讲不出来的学生——这是一种有据可查的误判。综合 115 项
+研究、15889 名被试与 502 个效应量，学习者对自身学习程度的判断与实际表现之间的加权
+平均相关只有 \(r = .178\)（Yang 等，2022）。本系统不面向小学儿童，也不面向对该材料
+毫无先前接触的学习者：它依赖的若干技术需要一个已有知识基础才能运作（见 3.3 节）。
+
+\subsection{非目标}
+
+格致不是作业答案工具，不生成可供照抄的解答，也不试图取代课堂教学。它刻意不包含任何
+社交或竞争功能：应用是单用户、本地运行的，学生数据不与其他人比较，也不传出设备。
+
+% ===================== 3. 相关工作 ==================================
+\section{相关工作}
+
+\subsection{以教促学与可教代理}
+
+"为教而学"的教学价值早有定论。Chase、Chin、Oppezzo 与 Schwartz（2009）证明了一种
+\emph{门徒效应}（protégé effect）：相信自己将要教一个虚拟学生的学习者，比为自己而学
+的学习者投入更多努力、取得更好结果。这项工作以及更广泛的可教代理文献，确立了格致所
+依赖的机制——\emph{为另一个人的理解负责}会改变学习者加工材料的方式。
+
+\subsection{2024--2026 年的基于大模型的可教代理}
+
+近期研究把这一想法搬到了大语言模型上，并产生了两项直接塑造我们设计的发现。
+
+Yang、Pujara 与 Li（2025）颠倒了通常的导师关系，让学生充当"讲师"去教模型解题。其
+核心设计装置是\emph{刻意制造的知识缺口}：把问题构造成只有学生才握有作答所需的信息。
+在一门本科课程中，这一方法相比历史队列产生了统计显著的成绩提升。论文明确指出：一个
+答得太准的模型会彻底取消学习机会。
+
+Rogers 等（2025）的工作标题——"Playing Dumb to Get Smart（装笨才能变聪明）"——本身
+就是设计原则的陈述。他们创建并评估了一个基于大模型的可教代理，发现该代理必须表现得
+\emph{确实能力更低}，交互才具有教学价值。另一项把模型用作编程教学可教代理的研究报告
+了知识与自我调节学习的提升，但\textbf{纠错能力没有显著改善}，原因具体且有启发性：
+模型倾向于直接给出正确代码，学生因此从未获得调试的机会。
+
+这个零结果是小格设计中最重要的一条证据。它说明：一个在通常意义上"乐于助人"的可教
+代理，在教学上是惰性的。代理必须\emph{可靠地、前后一致地在特定且可诊断的方式上出错}。
+
+\subsection{已经成熟的技术，以及仍未被回应的问题}
+
+为避免重复造轮子，我们梳理了当前 AI 学习工具的格局。以下能力实际上已经商品化：自适应
+间隔重复排程（开源算法已在大规模基准上超过早期的固定间隔方法）、知识图谱驱动的题目
+推荐、苏格拉底式对话导师、以及把资料一键转成闪卡／测验／音频。这些是入场券，而不是
+差异化。
+
+相比之下，有三件事在消费级产品中基本无人回应：\textbf{角色反转}——学生来教，AI 暴露
+自己的误解；\textbf{刻意设计的预试}——在讲解之前先让学习者尝试；以及\textbf{主动的、
+有证据依据的任务交付}——在该学习任务真正需要的时刻把它推到学生面前。格致定位于其中
+第一和第三项。
+
+我们也采纳了若干证据扎实但有边界条件的技术。交错练习的总体效应为中等（\(g = 0.42\)；
+Brunmair 与 Richter，2019），而且在我们考察过的技术中，它是唯一具备中学课堂直接证据
+的：在一项历时三个月、126 名七年级学生参与的研究中，交错练习在即时测验上产生
+\(d = 0.42\)，在 30 天后的延迟测验上产生 \(d = 0.79\)（Rohrer、Dedrick 与 Stershic，
+2014）。但同一份元分析报告称，交错\emph{损害}了词汇学习（\(g = -0.39\)），因此格致
+把交错模式限制在数学与理科，并对语言类词汇关闭该功能。
+
+% ===================== 4. 系统设计 ==================================
+\section{系统设计}
+
+\subsection{架构}
+
+格致是一款单用户 Windows 桌面应用。它最具定义性的架构属性是：\textbf{AI 可以触碰什么，
+由操作系统强制，而不是由提示词里的嘱咐强制。}
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize,
+  >=latex,
+  b/.style={draw,rounded corners=3pt,align=center,inner sep=4pt,minimum height=9mm},
+  d/.style={draw,dashed,rounded corners=3pt,align=left,inner sep=4pt}
+]
+  \node[b,text width=42mm] (ui)   at (0,0)     {\textbf{渲染进程}\\React 19 + TypeScript\\五个学习面板};
+  \node[b,text width=42mm] (main) at (0,-1.6)  {\textbf{Electron 主进程}\\启动 Agent 子进程，\\\texttt{cwd} 设为学生的知识库};
+  \node[b,text width=42mm] (dsh)  at (0,-3.2)  {\textbf{DSH Agent 内核}\\子进程，NDJSON 事件流\\工具、会话、上下文压缩};
+  \node[b,text width=42mm] (llm)  at (0,-4.8)  {\textbf{模型服务}\\使用用户自己的\\账号凭据调用};
+
+  \node[d,text width=48mm] (data) at (7.0,-2.4)
+    {\textbf{本地数据存储}（从不上传）\\[3pt]
+     $\cdot$ 知识库：Markdown、PDF、扫描件\\
+     $\cdot$ SQLite FTS5 三元组索引\\
+     $\cdot$ 误解库（JSON）\\
+     $\cdot$ 费曼评分表得分\\
+     $\cdot$ FSRS 复习排程};
+
+  \draw[->] (ui)   -- (main);
+  \draw[->] (main) -- (dsh);
+  \draw[->] (dsh)  -- (llm);
+  \draw[<->,dashed] (main.east) -- (data.west);
+  \draw[<->,dashed] (dsh.east)  -- (data.west |- dsh.east);
+\end{tikzpicture}
+\caption{系统架构。Agent 内核以独立进程运行，其工作目录即学生的知识库；写入边界由该
+目录推导得出，因此它无法修改该目录之外的任何内容。全部检索、评分与排程数据都留在
+本机。}
+\label{fig:arch}
+\end{figure}
+
+\subsection{学习闭环}
+
+应用围绕一个反复出现的序列组织，见表~\ref{tab:loop}。顺序是刻意安排的：学生在材料被
+讲解之前先尝试它，在收到反馈之前先给出自评，自己产出解释，然后接受针对该解释的质疑。
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}c p{3.2cm} R@{}}
+\toprule
+\textbf{阶段} & \textbf{名称} & \textbf{发生什么} \\
+\midrule
+0 & 触发 & 复习队列在首屏推出到期的知识点。 \\
+1 & 预试 & 学生尝试一道题，可以选择"我不会"。此时不给反馈。 \\
+2 & 自评 & 学生在 1--5 量表上评估自己的理解程度。 \\
+3 & 讲述 & 学生向小格口头讲解该知识点。小格不打断。 \\
+4 & 质疑 & 小格抛出它持有的一条误解并反驳。学生必须解决它。 \\
+5 & 评分 & 一张六维评分表对照教材原文为讲解打分。 \\
+6 & 修补 & 系统针对识别出的具体缺口生成定向题目。 \\
+7 & 排程 & 题目与未来的讲解都由基于 FSRS 的模型排程。 \\
+8 & 延迟自评 & 在之后的某一天，学生在\emph{尝试提取之后}重新评估自己的理解。 \\
+\bottomrule
+\end{tabularx}
+\caption{格致的学习闭环。第 1、2、8 阶段分别对应预试、即时校准与延迟校准。}
+\label{tab:loop}
+\end{table}
+
+\subsection{小格：一个被工程化成"可靠地出错"的伙伴}
+
+这个伙伴不是助手。它被设定成比用户低一个年级的学生，其功能是让用户的解释成为承重结构。
+
+三个属性是必需的，每一个都需要专门设计：
+
+\begin{itemize}
+  \item \textbf{稳定的人格。}它从不评价、从不说"你错了"、从不拿用户和别人比较。
+  \item \textbf{前后一致的误解。}它的错误来自一个结构化误解库（见 5.5 节），而不是采样
+  噪声。一致性比错误本身更重要：如果伙伴每回合换一种说法，学生学到的是"这个系统不
+  可靠"，而不是"我有一个缺口要补"。
+  \item \textbf{硬性拒绝提前让步。}大语言模型有强烈的附和倾向。因此系统提示词加了一条
+  显式约束：在学生解释满足当前误解所附的纠正要点之前，伙伴不得表示理解。没有这条
+  约束，交互会在两个回合之内退化成"对着录音机口述"。
+\end{itemize}
+
+伙伴头顶有一个九宫格，兼作进度显示：九格全空表示它什么都不懂，每解决一个误解就亮起
+一格朱砂红。这让学生在不看到分数的情况下获得进度反馈，意图是把框架保持在"我在教"而
+不是"我在被评分"。
+
+% ===================== 5. 技术方法 ==================================
+\section{技术方法}
+
+\subsection{Agent 内核：子进程隔离 + 事件流}
+
+格致没有自行实现 Agent 循环，而是把 DeepSeek Harness（DSH）——一个 MIT 许可的 Agent
+内核——作为无头子进程嵌入，并消费按行分隔的 JSON 事件流。每个事件带有类型（session、
+status、thinking、text、tool\_call、tool\_result、final）以及 token 计量。会话持久化、
+工具沙箱、上下文压缩与审批策略由此直接获得，无需一个中学生团队重新实现；同时模型凭据
+保留在用户自己的账号中，而不进入应用。
+
+内核从工作目录推导文件系统写入边界，因此把工作目录设为学生的知识库，就得到了一条由
+进程模型强制的边界。实践中有两个实现细节是必需的。第一，子进程必须通过其命令包装器
+启动，而不能直接调用宿主可执行文件，因为安装路径包含空格。第二，事件流必须显式按
+UTF-8 解码；用不识别 UTF-8 的读取器读取被重定向的字节流会破坏中文内容，而且\emph{破坏
+只发生在读取端}。构建流程中包含一条"写入中文再读回比对"的回归测试。
+
+\subsection{本地检索：一次实测出来的分词器修复}
+
+检索完全在本地完成，使用 SQLite，并通过运行时内置模块访问，因此不引入原生依赖。我们
+实测而非假定，结果发现了一个本会静默地让检索对主要用户群体失效的故障。
+
+在默认的 \texttt{unicode61} 分词器下，全文索引对中文子串查询返回\emph{零}结果，因为
+它把整句中文当成一个词元。把索引改为 \texttt{tokenize='trigram'} 可以解决。在 200 份
+文档的语料上实测：中文查询在 \texttt{unicode61} 下返回 0 条，在 \texttt{trigram} 下
+返回 200 条，耗时约 1\,ms；写入代价约增加 20\%，索引体积略有上升。建立索引本身，200 份
+各 14400 字符的文档分别耗时 61\,ms 与 73\,ms。
+
+由于分词器在\emph{建表时}就固定下来，模式一次性以 \texttt{trigram} 创建，并为早期版本
+误用默认分词器的情况保留了迁移路径。我们刻意没有把向量检索设为前置条件：对于当前
+语料规模，三元组索引上的关键词检索已经足够，而引入嵌入依赖会抬高在普通学生笔记本上
+的安装成本。
+
+\subsection{强制引用}
+
+系统给出的每一条实质性论断都必须能追溯到一段被检索到的文本并附页码。检索层返回
+300--500 字符的片段并带页码元数据，生成步骤被约束为只能引用这些片段。这有两个作用：
+学生可以把伙伴的质疑与自己的教材对照核实；同时误解变得可诊断——学生能看见是哪一段
+原文与对方的说法相矛盾。
+
+\subsection{讲解评分}
+
+讲解由一张六维评分表打分（见表~\ref{tab:rubric}），并以严格结构化 JSON 返回，使分数
+可持久化、可跨会话比较。每个维度 1--5 分。评分基准是检索到的教材原文，而不是模型的
+通用知识，这使分数始终锚定在学生真正要被考核的材料上。
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{2.8cm} R@{}}
+\toprule
+\textbf{维度} & \textbf{衡量什么} \\
+\midrule
+准确性 & 讲解内容相对教材原文是否正确。 \\
+完整性 & 教材视作必要要素的内容是否齐全。 \\
+因果性 & 学生是否解释了\emph{为什么}，而不只是复述\emph{是什么}。 \\
+通俗性 & 是否避免使用未加解释的术语。 \\
+举例质量 & 是否给出具体且选择正确的例子。 \\
+缺口自觉 & 学生是否主动指出自己不确定的地方，而不是含糊带过。 \\
+\bottomrule
+\end{tabularx}
+\caption{六维讲解评分表。分数按知识点存储，并喂给复习排程器。}
+\label{tab:rubric}
+\end{table}
+
+\subsection{误解库}
+
+伙伴的质疑来自一个结构化误解库，而不是自由生成——这正是它们能够前后一致、可被诊断的
+原因。每条记录存储为：
+
+\begin{quote}
+\ttfamily\small
+\{ misconception\_id, surface\_claim, why\_wrong, correct\_point, trigger\_condition \}
+\end{quote}
+
+\texttt{surface\_claim} 是伙伴会说出的、听起来合理但错误的说法；\texttt{correct\_point}
+是学生的解释必须满足、伙伴才会让步的判据；\texttt{trigger\_condition} 决定哪些知识点
+会激活该条记录。一个英语语法上的示例：表面说法是"must 和 may 都表示可能性，可以互换"，
+纠正要点是 must 表达接近确定，而 may 表达大致各半的可能性。
+
+误解条目来自学生在题库中的错题统计，因此伙伴持有的误解，正是学生真正会犯的那些。
+
+\subsection{交错组卷}
+
+试卷生成器包含一个交错模式：在同一份卷子内交替出现不同知识点，并且关键地——\textbf{不
+标注每道题属于哪个知识点}。一旦标注，产生效应的那个"判别"要求就消失了。依据元分析中
+"交错损害词汇学习"的发现，该模式仅对数学与理科题型启用。
+
+\subsection{伙伴的动画与语音}
+
+屏幕上的伙伴由一组预渲染图层在运行时合成——身体、头、眼睛状态、眉毛状态、五个口型以及
+头顶格阵——而不是逐帧动画。眨眼、呼吸与点头由程序驱动。口型帧由语音合成器返回的音素级
+时间戳选取，因此唇形同步不需要任何音频分析。动画格式为动态 WebP 而非 GIF，因为 GIF 的
+一位透明在与应用界面合成时会产生明显的边缘杂边。
+
+两条行为规则反映了教学定位。第一，\textbf{表情滞后于内容而非预告内容}：学生犯错时，
+伙伴先给出鼓励，随后才显示疑惑，使它读起来像一个在一起想办法的同伴，而不是一个考官。
+第二，鼓励状态的触发频率不低于疑惑状态的两倍。
+
+\subsection{试卷排版}
+
+题库通过 XeLaTeX 导出排版规范的试卷，这是正确排版中文的必要条件。系统存在 TeX 发行版时
+直接复用；不存在时回退到通过内嵌浏览器引擎打印，使得缺少 TeX 只会降低输出质量，而不会
+让功能崩溃。
+
+% ===================== 6. 资料来源 ==================================
+\section{资料来源}
+
+格致不随应用分发任何教材内容。知识库由学生用自己已有的材料建立——这既是法律决定，也是
+教学决定：它消除了再分发受版权保护教材的任何疑问，同时确保伙伴的质疑针对的是学生真正
+要被考核的材料。
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{4.2cm} p{3.4cm} R@{}}
+\toprule
+\textbf{来源} & \textbf{类型} & \textbf{状态与用途} \\
+\midrule
+学生课程教材与讲义 & PDF、Word、Markdown & 由用户提供；不再分发。 \\
+扫描的练习卷与历年试题 & 图片型 PDF & 经 OCR 摄取；OCR 是必需路径而非可选项。 \\
+用户自己的课堂笔记 & Markdown & 在应用内创建。 \\
+信息学知识点大纲 & Markdown & 用户自撰；作为知识图谱骨架导入。 \\
+公开授权题库 & 文本 & 仅在许可允许时导入；登记于素材台账。 \\
+\bottomrule
+\end{tabularx}
+\caption{资料来源。全部材料由用户提供或已获明确授权；应用不捆绑任何受版权保护的教材
+内容。}
+\label{tab:data}
+\end{table}
+
+\textbf{许可纪律。}依赖仅限于宽松许可（MIT、BSD、Apache-2.0），以适配闭源分发。选型
+过程中识别出的 AGPL 组件被排除在发布产品之外。每一项外部素材都在素材台账中记录了来源
+URL 与许可原文。
+
+% ===================== 7. 测试与评估 ================================
+\section{测试与评估}
+
+\subsection{被试}
+
+来自 \fillin{学校名称} 的 \fillin{人数} 名中学生，就读年级为 \fillin{年级}，年龄
+\fillin{范围}。参与出于自愿，并取得了学生本人及家长或监护人的书面同意。另有
+\fillin{人数} 名学科教师观察或复核了会话过程。
+
+\subsection{流程}
+
+每位被试完成一次约 \fillin{时长} 分钟的会话，并在次日完成一次延迟会话：
+
+\begin{enumerate}
+  \item \textbf{前测}（针对目标知识点的 5 道题），随后在 1--5 量表上自评理解程度。
+  \item \textbf{讲述—答辩}：被试向小格口头讲解该知识点，并回应其质疑，直到误解被解决
+  或达到 \fillin{回合上限} 的上限。
+  \item \textbf{即时评分}：对讲解按评分表打分。
+  \item \textbf{延迟会话}（次日）：前测的平行卷，随后在\emph{完成提取尝试之后}进行
+  第二次自评。
+  \item \textbf{简短问卷}：关于有用性与难度的主观感受。
+\end{enumerate}
+
+\subsection{测量指标}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{1.2cm} p{4.2cm} R@{}}
+\toprule
+& \textbf{指标} & \textbf{定义} \\
+\midrule
+M1 & 讲解质量 & 六维评分表总分（6--30），对应闭环第 3 与第 6 阶段。 \\
+M2 & 即时校准偏差 & 自评分（折算到 30 分制）与评分表总分之差的绝对值，对应第 2 阶段。 \\
+M3 & 延迟校准偏差 & 在延迟提取尝试之后测得的同一差值（第 8 阶段）。 \\
+M4 & 解决回合数 & 解决目标误解所需的伙伴对话回合数。 \\
+M5 & 延迟回忆 & 次日施测的平行卷得分。 \\
+\bottomrule
+\end{tabularx}
+\caption{评估指标。M2 与 M3 依据的发现是：延迟对学习程度的判断能显著提高其\emph{相对}
+准确性，但对整体乐观程度几乎没有改善。}
+\label{tab:measures}
+\end{table}
+
+\subsection{分析方法}
+
+鉴于预期样本量，配对比较采用 Wilcoxon 符号秩检验，并报告配对秩双列相关作为效应量。
+M5 作为描述性结果报告，而不作为效力宣称；我们同时提醒不要用单臂设计的结果做因果解读
+（见第 9 节）。
+
+% ===================== 8. 结果 ======================================
+\section{结果}
+
+\fillin{本节必须用团队自己实测的数据填满后才可提交。不要估算、不要取整、不要推断任何
+数值。某项指标若未测量，就写明未测量。}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{2.4cm} p{2.0cm} p{2.0cm} p{2.0cm} R@{}}
+\toprule
+\textbf{指标} & \textbf{前} & \textbf{后} & \textbf{变化} & \textbf{检验统计量} \\
+\midrule
+M1 讲解质量 & \fillc{均值 $\pm$ 标准差} & \fillc{均值 $\pm$ 标准差} & \fillc{数值} & \fillc{统计量、$p$、效应量} \\
+M2 即时校准偏差 & --- & \fillc{数值} & --- & --- \\
+M3 延迟校准偏差 & --- & \fillc{数值} & \fillc{与 M2 相比} & \fillc{统计量、$p$} \\
+M4 解决回合数 & --- & \fillc{中位数（四分位距）} & --- & --- \\
+M5 延迟回忆 & \fillc{数值} & \fillc{数值} & \fillc{数值} & \fillc{统计量、$p$} \\
+\bottomrule
+\end{tabularx}
+\caption{结果。\fillin{从应用导出的会话日志中填入。}}
+\label{tab:results}
+\end{table}
+
+\subsection{质性观察}
+
+\fillin{两到三条具体、可引用的观察。有用的例子：某位被试在第三次质疑后改变了自己的
+解释；某位被试起初给自己打了高分，延迟提取失败后主动下调；以及任何"伙伴的误解本身
+有误、而被试正确指出了这一点"的情况——最后这类特别有价值，不要省略。}
+
+\subsection{与方案的偏离}
+
+\fillin{如实记录任何未按流程进行的会话——数据缺失、提前中止、技术故障。报告这些情况
+会增强而不是削弱报告的可信度。}
+
+% ===================== 9. 局限性 ====================================
+\section{局限性}
+
+我们把这些明确列出，因为第 1 节所述的证据基础，恰恰是关于"过度宣称"之危险的。
+
+\begin{itemize}
+  \item \textbf{没有对照组。}评估为单臂设计，因此改善不能被归因于格致本身，而非练习、
+  新鲜感或被观察所带来的注意。结论仅限于可行性以及被试内变化。
+  \item \textbf{样本小、单一场地。}\fillin{n} 名被试、一所学校，不足以推广到澳门中学
+  教育整体。
+  \item \textbf{周期短。}一次会话加一次隔日延迟测验，测的是即时保持，而不是持久的学习。
+  本设计所依赖的间隔重复行为需要数周才能评估。
+  \item \textbf{自评工具。}对理解程度的自评既是 M2 与 M3 的研究对象，又同时是自报数据，
+  这是本设计内无法消除的混淆。
+  \item \textbf{模型非确定性。}即便误解库固定，伙伴质疑的表面措辞仍会在不同运行间变化，
+  这影响交互的可复现性，但不影响底层误解本身。
+  \item \textbf{评分表效度。}六维评分表是我们自行构建的，尚未与外部评分者校验，与真人
+  教师之间的评分者间信度也尚未建立。
+  \item \textbf{新颖性比看上去更窄。}可教代理是一个成熟的研究领域，2024--2026 年已产生
+  若干基于大模型的同类系统。我们的贡献在于受众、把质疑锚定在学生自己的材料上、与排程
+  的耦合，以及本地优先的约束——而不是发明了这一机制。
+\end{itemize}
+
+% ===================== 10. 伦理、安全与隐私 ==========================
+\section{伦理、安全与隐私}
+
+\subsection{数据保护}
+
+知识库、学习记录与全部分数都存放在学生本机。没有任何学生内容上传到团队运营的服务器，
+也不收集任何埋点数据。模型推理通过用户自己的账号完成，应用不留存提问内容。Agent 内核
+的写入边界在进程启动时由工作目录推导，因此 AI 无法修改学生知识库之外的文件；这一点由
+操作系统强制，而不是靠提示词约束。
+
+会话需要联网时会事先说明。当网络不可用时，应用降级为本地检索、本地语音识别与纯文字
+模式，而不是直接失效。
+
+\subsection{涉及人类被试的研究}
+
+参与出于自愿。已取得每位学生及家长或监护人的书面知情同意，涵盖研究目的、所收集的数据，
+以及可随时退出而不承担任何后果的权利。被试以编号标识；任何提交材料中都不出现姓名、
+学号、面部或声音。录音仅用于会话期间转写，事后删除。本研究在参与学校的知情与同意下
+开展。
+
+\subsection{负责任的 AI 使用与学术诚信}
+
+本项目在软件开发、已发表研究的分析与设计素材的制作中使用了生成式 AI 工具。完整披露
+见附录 A。本报告所报告的全部数据均由学生团队通过自己主持的会话产生。本报告中没有任何
+结果由模型生成、估算或推断。外部研究结论均引用原始来源；对于某个广泛流传但无法在原始
+文献中核实的数字，我们选择说明这一点，而不是照抄。
+
+\subsection{版权}
+
+应用不分发任何受版权保护的教材内容。知识库由用户提供的材料建立。第三方库限于宽松许可，
+每一项外部素材都记录了来源与许可。
+
+\subsection{偏见与安全}
+
+我们明确考虑了两类风险。第一，误解库来自学生自己的错误，因此不可能引入学生本不持有的
+误解，这限制了伙伴传播新的错误内容的能力。第二，伙伴被要求绝不评价学生这个人、绝不与
+他人比较、绝不打击。鼓励的触发频率在设计上高于疑惑，使交互读起来是协作而非考核。
+
+% ===================== 11. 结论与未来工作 ===========================
+\section{结论与未来工作}
+
+格致始于两项看起来没有给 AI 学习工具留下任何空间的发现：会回答问题的 AI 损害考试成绩，
+而不回答问题的 AI 无人使用。两种失效有同一个病因——\emph{产出内容的人不是学生}——这
+正是本系统围绕的约束。学生负责讲解；一个被刻意且一致地设计成会出错的屏幕伙伴，让这份
+讲解成为承重结构；而整个交互是被排程的，而不是留给学生自己发起。
+
+近期的下一步是与"不使用 AI"的条件做对照比较，用真人评分者校验评分表，并把评估周期
+延长到间隔复习排程真正能起作用的时间尺度。更远一步，最有希望的扩展是把伙伴的误解以
+班级层面的图景呈现给教师——那是当前以对错为焦点的测评所无法捕捉的信息。
+
+% ===================== 参考文献 =====================================
+\begin{thebibliography}{99}
+\small
+\setlength{\itemsep}{1pt}
+\setlength{\parsep}{0pt}
+
+\bibitem{bastani2024} Bastani, H., Bastani, O., Sungu, A., Ge, H., Kabakci, O., \& Mariman,
+R. (2024). \emph{Generative AI Can Harm Learning.} SSRN Working Paper.
+\url{https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4895486}
+\\ ——无限制使用 AI 使练习 +48\% 而考试 -17\%。
+
+\bibitem{oreopoulos2026} Oreopoulos, P., \& Low, N. (2026). \emph{One Click Away: AI Tutoring
+with Khanmigo in a Two-Year School Experiment.} NBER Working Paper 35620.
+\url{https://doi.org/10.3386/w35620}
+\\ ——两年整群随机对照实验；效应 0.06--0.08 SD；求助率仅 17\%。
+
+\bibitem{chase2009} Chase, C.~C., Chin, D.~B., Oppezzo, M., \& Schwartz, D.~L. (2009).
+Teachable Agents and the Prot\'eg\'e Effect: Increasing the Effort Towards Learning.
+\emph{Journal of Science Education and Technology, 18}(4).
+\url{https://purl.stanford.edu/zm369yx3532}
+\\ ——门徒效应的原始研究。
+
+\bibitem{yang2025} Yang, X., Pujara, H., \& Li, J. (2025). \emph{Learning by Teaching:
+Engaging Students as Instructors of Large Language Models in Computer Science Education.}
+COLM 2025. \url{https://arxiv.org/abs/2508.05979}
+\\ ——"刻意制造的知识缺口"设计。
+
+\bibitem{rogers2025} Rogers, et al. (2025). \emph{Playing Dumb to Get Smart: Creating and
+Evaluating an LLM-based Teachable Agent within University Computer Science Classes.} CHI
+2025. \url{https://doi.org/10.1145/3706598.3713644}
+\\ ——可教代理必须"装笨"。
+
+\bibitem{teachchatgpt2024} \emph{Learning by Teaching with ChatGPT: The Effect of Teachable
+ChatGPT Agent on Programming Education.} arXiv:2412.15226.
+\url{https://arxiv.org/abs/2412.15226}
+\\ ——AI 太准导致学生纠错能力无提升。
+
+\bibitem{dunlosky2013} Dunlosky, J., Rawson, K.~A., Marsh, E.~J., Nathan, M.~J., \&
+Willingham, D.~T. (2013). Improving Students' Learning With Effective Learning Techniques.
+\emph{Psychological Science in the Public Interest, 14}(1), 4--58.
+\url{https://doi.org/10.1177/1529100612453266}
+\\ ——十种学习技巧的效用分档。
+
+\bibitem{brunmair2019} Brunmair, M., \& Richter, T. (2019). Similarity Matters: A
+Meta-Analysis of Interleaved Learning and Its Moderators. \emph{Psychological Bulletin.}
+\url{https://doi.org/10.1037/bul0000209}
+\\ ——交错练习总体 \(g = 0.42\)；数学 0.34；词汇 $-0.39$。
+
+\bibitem{rohrer2014} Rohrer, D., Dedrick, R.~F., \& Stershic, S. (2014). Interleaved
+Practice Improves Mathematics Learning. \emph{Journal of Educational Psychology.}
+\url{https://doi.org/10.1037/edu0000001}
+\\ ——七年级课堂实验；延迟 30 天 \(d = 0.79\)。
+
+\bibitem{richland2009} Richland, L.~E., Kornell, N., \& Kao, L.~S. (2009). The Pretesting
+Effect: Do Unsuccessful Retrieval Attempts Enhance Learning? \emph{Journal of Experimental
+Psychology: Applied.} \url{https://doi.org/10.1037/a0016496}
+\\ ——预试效应。
+
+\bibitem{yang2022} Yang, et al. (2022). Meta-analysis of the accuracy of judgements of
+learning. \emph{Review of Educational Research.}
+\url{https://doi.org/10.3102/00346543221094083}
+\\ ——自评与成绩的相关仅 \(r = .178\)。
+
+\bibitem{rhodes2011} Rhodes, M.~G., \& Tauber, S.~K. (2011). The Influence of Delaying
+Judgments of Learning on Metacognitive Accuracy: A Meta-Analytic Review. \emph{Psychological
+Bulletin.} \url{https://doi.org/10.1037/a0021705}
+\\ ——延迟自评：相对准确性 \(g = 0.93\)，绝对准确性仅 0.08。
+
+\bibitem{bisra2018} Bisra, K., Liu, Q., Nesbit, J.~C., Salimi, F., \& Winne, P.~H. (2018).
+Inducing Self-Explanation: A Meta-Analysis. \emph{Educational Psychology Review, 30}(3).
+\url{https://doi.org/10.1007/s10648-018-9434-x}
+\\ ——自我解释总体 0.55；数学专用 meta 仅 0.27。
+
+\bibitem{fan2024} Fan, Y., Tang, L., et al. (2024). Beware of Metacognitive Laziness: Effects
+of Generative Artificial Intelligence on Learning Motivation, Processes, and Performance.
+\emph{British Journal of Educational Technology.}
+\url{https://doi.org/10.1111/bjet.13544}
+\\ ——"元认知懒惰"。
+
+\bibitem{unesco2024} UNESCO (2024). \emph{AI Competency Framework for Students} (Miao, F.,
+Shiohira, K., \& Lao, N.). \url{https://unesdoc.unesco.org/ark:/48223/pf0000391105_eng}
+\\ ——4 维度 × 3 层级的学生 AI 能力框架。
+
+\bibitem{expertium} Expertium. \emph{SRS Benchmark: FSRS versus SM-2 on a large Anki
+collection.} \url{https://expertium.github.io/Benchmark.html}
+\\ ——FSRS 与 SM-2 的大规模对比。
+
+\end{thebibliography}
+
+% ===================== 附录 =========================================
+\appendix
+\section{生成式 AI 工具使用披露}
+
+竞赛章程要求参赛队伍列明所使用的生成式 AI 工具、版本、用途，以及由学生完成的部分。
+本附录即为该说明。
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{2.8cm} p{1.5cm} p{2.8cm} R@{}}
+\toprule
+\textbf{工具} & \textbf{版本} & \textbf{用途} & \textbf{学生自己完成的部分} \\
+\midrule
+\fillc{工具名} & \fillc{版本} & \fillc{用途} & \fillc{团队自己做的部分} \\
+\fillc{工具名} & \fillc{版本} & \fillc{用途} & \fillc{团队自己做的部分} \\
+\fillc{工具名} & \fillc{版本} & \fillc{用途} & \fillc{团队自己做的部分} \\
+\bottomrule
+\end{tabularx}
+\caption{本项目使用的生成式 AI 工具。\fillin{提交前请填满每一行；本表会与竞赛的学术
+诚信条款对照核查。}}
+\label{tab:ai}
+\end{table}
+
+\textbf{分工说明。}问题的识别、研究设计、软件架构、误解库、评估会话以及结果分析，均由
+学生团队完成。生成式 AI 被用作开发助手（代码生成与审查、文档撰写）与研究辅助（查找并
+概述已发表文献，全部文献在引用前均已阅读原文）。本报告所报告的任何数据都不是由 AI
+系统生成或估算的。
+
+\end{document}

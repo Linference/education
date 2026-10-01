@@ -42,13 +42,27 @@ pkg.build = {
   //   3) typst       —— **Typst 可执行文件（约 50 MB）**。
   //                     目标用户是中学生，让他们自己 `winget install Typst.Typst`
   //                     不现实。内置后导 PDF 开箱即用。
-  //                     代价：安装包从 ~124 MB 涨到 ~170 MB。这是用户明确选择"全内置"。
-  //                     同时带上 LICENSE/NOTICE —— Typst 是 Apache-2.0，随包分发要副署。
+  //   4) soffice     —— **LibreOffice（裁剪后 1014 MB，压缩后 198 MB）**。
+  //                     用途：把 PPT/Word/Excel/旧版 .doc/.ppt 转成 PDF，
+  //                     交给已有的 PDF 查看器显示 —— **视觉 100% 还原**。
+  //
+  //                     为什么值得这个体积：实测 15 MB 的手写课件只提取出
+  //                     2 KB 文字（内容全在图片里），纯文字模式对这类文件没有意义。
+  //
+  //                     裁剪依据（每一刀都验证过转换仍正常）：
+  //                       · 砍掉：help / readmes / gallery / template / autotext
+  //                               / wizards / xslt / palette / share/extensions
+  //                       · **必须保留 share/config** —— 砍掉后转换报
+  //                         "source file could not be loaded"（实测踩过）
+  //                     许可：MPL-2.0。作为**独立进程**调用不传染；
+  //                     随包分发需附 LICENSE（见 vendor/soffice/LICENSE.html）。
   extraResources: [
     { from: "packages/dsh-bridge/src", to: "dsh-bridge" },
     { from: "templates/typst", to: "templates/typst" },
     { from: "templates/docx", to: "templates/docx" },
     { from: "vendor/typst", to: "typst" },
+    // 注意：to 用 "soffice"，代码里按 process.resourcesPath/soffice/program/soffice.exe 找
+    { from: "vendor/soffice", to: "soffice" },
   ],
 
   asar: true,

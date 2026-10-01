@@ -103,34 +103,61 @@ try {
   await page.screenshot({ path: path.join(OUT, "ui-csv.png") });
 
   // ---- PPTX ----
+  //
+  // ★ 注意：内置 LibreOffice 之后，PPT/PPTX **默认走高保真**（转成 PDF 用
+  //   PDF 查看器显示），而不是"文字提取模式"。
+  //   所以这里不能再断言"出现文字提取模式"—— 那条断言写于还没有高保真的时候。
+  //
+  //   两种结果都算通过，但要求**至少**是一种：
+  //     · 高保真：看到 PDF 画布（说明转换成功）
+  //     · 文字模式：看到「文字提取模式」提示（说明没装引擎或开关关了）
+  //   这样测试在两种配置下都有意义，而不是把"当前实现"写死。
   console.log("\n── PPTX 界面 ──");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), linked[1]);
-  await page.waitForTimeout(3500);
-  const pptxDom = await page.evaluate(() => ({
-    hasNotice: document.body.innerText.includes("文字提取模式"),
-    hasList: /共 \d+ 页/.test(document.body.innerText),
-    pageInfo: (document.body.innerText.match(/第 \d+ \/ \d+ 页/) ?? [])[0] ?? "",
-    firstSlide: document.body.innerText.slice(0, 260).replace(/\n/g, " | "),
-  }));
-  check("★ PPTX 界面显示「文字提取模式」提示", pptxDom.hasNotice);
-  check("★ PPTX 界面显示页码列表", pptxDom.hasList, pptxDom.pageInfo);
-  check("PPTX 第一页有内容", pptxDom.firstSlide.length > 60);
+  // 高保真要转换，给足时间
+  await page.waitForTimeout(9000);
+  const pptxDom = await page.evaluate(() => {
+    const text = document.body.innerText;
+    return {
+      hasNotice: text.includes("文字提取模式"),
+      hasPdfCanvas: Boolean(document.querySelector("canvas")),
+      hiFiLabel: text.includes("高保真") || /由 \.pptx 转换/.test(text),
+      hasList: /共 \d+ 页/.test(text),
+      pageInfo: (text.match(/第 \d+ \/ \d+ 页/) ?? [])[0] ?? "",
+      firstSlide: text.slice(0, 260).replace(/\n/g, " | "),
+    };
+  });
+  check("★ PPTX 界面能显示内容（高保真或文字模式皆可）",
+    pptxDom.hasPdfCanvas || pptxDom.hasNotice,
+    `高保真=${pptxDom.hasPdfCanvas} 文字模式=${pptxDom.hasNotice}`);
+  check("★ 高保真时能看到 PDF 画布 / 文字模式时有页码列表",
+    pptxDom.hasPdfCanvas || pptxDom.hasList,
+    pptxDom.pageInfo || (pptxDom.hasPdfCanvas ? "（PDF 画布）" : ""));
+  check("PPTX 第一页有内容", pptxDom.firstSlide.length > 20, pptxDom.firstSlide.slice(0, 60));
   console.log(`       首屏：${pptxDom.firstSlide.slice(0, 130)}`);
   await page.screenshot({ path: path.join(OUT, "ui-pptx.png") });
 
   // ---- PPT ----
   console.log("\n── PPT（旧版）界面 ──");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), linked[2]);
-  await page.waitForTimeout(2500);
-  const pptDom = await page.evaluate(() => ({
-    hasNotice: document.body.innerText.includes("文字提取模式"),
-    hasApprox: document.body.innerText.includes("近似"),
-    hasList: /共 \d+ 页/.test(document.body.innerText),
-    sample: document.body.innerText.slice(0, 260).replace(/\n/g, " | "),
-  }));
-  check("★ 旧版 PPT 界面能打开", pptDom.sample.length > 60);
-  check("PPT 界面说明是近似分页", pptDom.hasApprox, "提示里应写明页码是近似的");
-  check("PPT 有页码列表", pptDom.hasList);
+  await page.waitForTimeout(9000);
+  const pptDom = await page.evaluate(() => {
+    const text = document.body.innerText;
+    return {
+      hasNotice: text.includes("文字提取模式"),
+      hasPdfCanvas: Boolean(document.querySelector("canvas")),
+      hasApprox: text.includes("近似"),
+      hasList: /共 \d+ 页/.test(text),
+      sample: text.slice(0, 260).replace(/\n/g, " | "),
+    };
+  });
+  check("★ 旧版 PPT 界面能打开", pptDom.sample.length > 20);
+  check("旧版 PPT 显示内容（高保真或文字模式皆可）",
+    pptDom.hasPdfCanvas || pptDom.hasNotice,
+    `高保真=${pptDom.hasPdfCanvas} 文字模式=${pptDom.hasNotice}`);
+  check("★ 旧版 .ppt 也能高保真（这是纯文字模式做不到的）",
+    pptDom.hasPdfCanvas,
+    pptDom.hasPdfCanvas ? "转换成功" : "★ 没走高保真 —— 旧版 .ppt 靠文字提取体验很差");
   console.log(`       首屏：${pptDom.sample.slice(0, 130)}`);
   await page.screenshot({ path: path.join(OUT, "ui-ppt.png") });
 

@@ -71,7 +71,10 @@ const ITEMS = [
   ["PPTX 查看器", "P2", () => exists("apps/desktop/renderer/src/components/PptViewer.tsx"), "PptViewer"],
   ["旧版 .ppt 解析器", "P2", () => anyHas(["apps/desktop/main/lib/doc-extract.cjs"], "extractTextFromPpt"), "doc-extract"],
   ["CSV/TSV 表格视图（虚拟滚动）", "P2", () => anyHas(["apps/desktop/renderer/src/components/CsvViewer.tsx"], "OVERSCAN"), "CsvViewer"],
-  ["★ Excel .xlsx 查看", "P2", () => anyHas(["apps/desktop/renderer/src/types.ts"], ".xlsx"), "**只识别未渲染**"],
+  ["★ 高保真查看（PPT/Word/Excel → PDF）", "P2", () => exists("apps/desktop/main/lib/soffice.cjs"), "内置 LibreOffice 26.8"],
+  ["★ 高保真可退（无引擎时退回文字模式）", "P2", () => has("apps/desktop/main/convert-ipc.cjs", "没有找到 LibreOffice"), "可选增强"],
+  ["★ 文档类型识别（防损坏文件误导）", "P2", () => anyHas(["apps/desktop/main/lib/soffice.cjs"], "EXPECTED_DOC_TYPE"), "识别 Writer/Impress/Calc"],
+  ["★ Excel .xlsx 查看", "P2", () => anyHas(["apps/desktop/main/lib/soffice.cjs"], ".xlsx"), "经 LibreOffice 转 PDF"],
 
   // ---------- P3 图谱/反链/搜索 ----------
   ["关系图谱的数据模型（links / kp_edges）", "P3", () => hasTable("links") && hasTable("kp_edges"), "表已建"],

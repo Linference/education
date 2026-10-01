@@ -88,6 +88,21 @@ export interface GezhiApi {
     readDoc(p: string): Promise<DocResult>;
     /** 旧版 .ppt：主进程解析 OLE 二进制，返回近似分页的文本 */
     readPpt(p: string): Promise<PptResult>;
+    /**
+     * 读 .pptx 并**在主进程解析成文字**（超大文件不适合走字节 IPC）。
+     * 只在 canvas 渲染不可用时作为退路。
+     */
+    readPptx?(p: string): Promise<PptResult & { slideCount?: number }>;
+    /**
+     * 读 .pptx 的**原始字节** —— 给 pptxviewjs 做 canvas 渲染。
+     * 超过上限（64 MB）时返回 tooLarge:true，界面应退回文字模式，
+     * 而不是当成"打开失败"。
+     */
+    /**
+     * 读电子表格（.xlsx / .xls / .ods）。
+     * 主进程解析成单元格，**不转 PDF** —— 表格要的是数据不是静态图。
+     */
+    readSheet(p: string): Promise<SheetResult>;
     reveal(p: string): Promise<boolean>;
     saveAs(payload: { defaultName: string; data: Uint8Array }): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
   };
@@ -130,6 +145,138 @@ export interface GezhiApi {
     dbInfo(): Promise<{ ok: boolean; path?: string; size?: number; exists?: boolean }>;
     onEvent(cb: (channel: string, payload: any) => void): () => void;
   };
+
+  // 高保真查看：调用系统/随包的 LibreOffice 把 Office 文档转 PDF
+  // 这是**可选增强** —— 没有 LibreOffice 时 available=false，界面退回文字模式
+  convert: {
+    probe(opts?: { refresh?: boolean }): Promise<SofficeProbe>;
+    toPdf(payload: { src: string }): Promise<ConvertResult>;
+    cacheInfo(): Promise<{ ok: boolean; dir?: string; bytes?: number; count?: number; error?: string }>;
+    clearCache(): Promise<{ ok: boolean; removed?: number; error?: string }>;
+  };
+
+  // 日历 / 计划 / 倒计时
+  //
+  // ★ events 与 tasks 语义不同（schema 设计的硬规矩）：
+  //   events 是固定日程（上课、考试），**不可被 AI 重排**；
+  //   tasks 是可调整的学习任务，允许 AI 参与安排。
+  //   界面上也分两个页签，不要混用。
+  cal: {
+    load(p: { vault: string; from?: string; to?: string }): Promise<CalendarLoad>;
+    addEvent(p: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }>;
+    updateEvent(p: Record<string, unknown>): Promise<{ ok: boolean; unchanged?: boolean; error?: string }>;
+    deleteEvent(p: { id: string; vault: string }): Promise<{ ok: boolean; removed?: number; error?: string }>;
+    addTask(p: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }>;
+    toggleTask(p: { id: string; vault: string }): Promise<{ ok: boolean; done?: boolean; error?: string }>;
+    deleteTask(p: { id: string; vault: string }): Promise<{ ok: boolean; removed?: number; error?: string }>;
+    addCountdown(p: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }>;
+    deleteCountdown(p: { id: string; vault: string }): Promise<{ ok: boolean; removed?: number; error?: string }>;
+    info(): Promise<{ ok: boolean; path?: string; size?: number; exists?: boolean }>;
+  };
+
+  // 数字人能力检测
+  //
+  // ★ available=false 时 reason 说明缺什么；**不要把它当成"整个功能坏了"**：
+  //   口型算法与系统语音是本地能力，不需要密钥。
+  avatar: {
+    probe(): Promise<AvatarProbe>;
+    ttsTest(p: { text?: string }): Promise<{
+      ok: boolean; bytes?: number; base64?: string | null;
+      format?: string; hasTiming?: boolean; timings?: unknown; error?: string;
+    }>;
+    paths(): Promise<{ ok: boolean; credentials?: string; userData?: string }>;
+  };
+}
+
+export interface AvatarCap {
+  available: boolean;
+  reason: string | null;
+  /** 口型检测会带上实测帧数 */
+  frames?: number;
+}
+
+export interface AvatarProbe {
+  ok: boolean;
+  tts: AvatarCap;
+  asr: AvatarCap;
+  viseme: AvatarCap;
+  credentials: {
+    configured: boolean;
+    fromEnv?: boolean;
+    storeExists?: boolean;
+    storeMode?: string | null;
+    storePath?: string | null;
+  };
+  voices?: unknown[];
+  voicesWithTiming?: unknown;
+  defaultVoice?: unknown;
+  limits?: {
+    ttsMaxChars?: number | null;
+    asr?: { maxSeconds?: number; maxBytes?: number } | null;
+  } | null;
+  error?: string;
+}
+
+export interface CalEventRow {
+  id: string; title: string; kind: string;
+  start_at: string; end_at?: string | null; all_day?: number;
+  location?: string | null; repeat?: string | null; note?: string | null;
+}
+export interface CalTaskRow {
+  id: string; title: string; kind: string;
+  due_at?: string | null; est_minutes?: number | null;
+  done_at?: string | null; source?: string; goal?: string | null;
+}
+export interface CountdownRow {
+  id: string; title: string; date?: string | null;
+  lunar_month?: number | null; lunar_day?: number | null; color?: string | null;
+}
+export interface CalendarLoad {
+  ok: boolean;
+  events?: CalEventRow[];
+  tasks?: CalTaskRow[];
+  countdowns?: CountdownRow[];
+  dbPath?: string;
+  error?: string;
+}
+
+export interface SheetResult {
+  ok: boolean;
+  /** 解析出的工作表（最多前 8 张） */
+  sheets?: Array<{
+    name: string;
+    rows: string[][];
+    rowCount: number;
+    colCount: number;
+    truncatedRows?: boolean;
+    truncatedCols?: boolean;
+    error?: string;
+  }>;
+  /** 工作簿里实际有多少张表 */
+  sheetCount?: number;
+  ms?: number;
+  error?: string;
+}
+
+export interface SofficeProbe {
+  available: boolean;
+  /** 找不到时给用户的说明（界面直接显示） */
+  reason: string | null;
+  engine: string | null;
+  version: string | null;
+}
+
+export interface ConvertResult {
+  ok: boolean;
+  /** 转换后的 PDF 路径（在应用缓存目录里，不在用户库目录） */
+  pdfPath?: string;
+  bytes?: number;
+  ms?: number;
+  engine?: string;
+  version?: string | null;
+  error?: string;
+  /** 失败时的建议（例如「装个 LibreOffice」） */
+  hint?: string;
 }
 
 export interface IndexStats {
@@ -253,6 +400,7 @@ export type FileKind =
   | "markdown" | "text" | "csv"
   | "pdf" | "docx" | "doc"
   | "pptx" | "ppt"
+  | "xlsx" | "xls"
   | "image" | "code" | "unsupported";
 
 const MD = new Set([".md", ".markdown"]);
@@ -274,6 +422,8 @@ export function kindOf(ext: string): FileKind {
   if (e === ".doc") return "doc";      // 旧版二进制格式，走主进程解析
   if (e === ".pptx") return "pptx";
   if (e === ".ppt") return "ppt";      // 旧版 OLE 二进制
+  // 电子表格：靠内置 LibreOffice 转 PDF 查看（原来只识别不渲染）
+  if (e === ".xlsx" || e === ".xls" || e === ".ods") return "xlsx";
   if (IMAGE.has(e)) return "image";
   if (TEXT.has(e)) return "text";
   if (CODE.has(e)) return "code";
@@ -291,6 +441,7 @@ export function iconFor(entry: { isDir: boolean; ext: string; name: string }): s
     case "doc": return "W";
     case "pptx": return "P";
     case "ppt": return "P";
+    case "xlsx": return "X";
     case "csv": return "▦";
     case "image": return "▣";
     case "code": return "<>";

@@ -78,6 +78,10 @@
       {
         "from": "vendor/typst",
         "to": "typst"
+      },
+      {
+        "from": "vendor/soffice",
+        "to": "soffice"
       }
     ],
     "asar": true,

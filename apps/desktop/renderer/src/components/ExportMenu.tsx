@@ -23,6 +23,20 @@ interface Props {
 
 type Format = "pdf" | "docx" | "markdown";
 
+/**
+ * 按量级显示文件大小。
+ *
+ * 为什么不能统一用 KB：32 字节的 Markdown 用 KB 显示是 "0 KB"，
+ * 用户会以为导出失败（实测反馈"导出没反应"就是这个原因）。
+ * 小于 1 KB 就显示字节，这样再小也是"32 B"，不会看着像空文件。
+ */
+function fmtBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
 const LABEL: Record<Format, { name: string; desc: string; icon: string }> = {
   pdf: { name: "PDF", desc: "排版好、适合打印与提交", icon: "P" },
   docx: { name: "Word", desc: "可以继续编辑", icon: "W" },
@@ -171,7 +185,18 @@ export default function ExportMenu({ markdown, sourcePath, defaultName }: Props)
             >
               {result.ok ? (
                 <>
-                  <div>已导出 {LABEL[result.format].name}（{((result.size ?? 0) / 1024).toFixed(0)} KB）</div>
+                  {/*
+                    ⚠️ 大小必须按量级显示。
+                    原来写的是 `((size ?? 0)/1024).toFixed(0)` —— 32 字节显示成
+                    **「0 KB」**，用户看到以为导出失败了（实测反馈"导出没反应"就是这个）。
+                    小文件要显示字节，大文件才用 KB/MB。
+                  */}
+                  <div>
+                    已导出 {LABEL[result.format].name}
+                    <span style={{ opacity: 0.75, marginLeft: 4 }}>
+                      （{fmtBytes(result.size ?? 0)}）
+                    </span>
+                  </div>
                   <div style={{ wordBreak: "break-all", fontSize: 11, marginTop: 2, opacity: 0.85 }}>
                     {result.path}
                   </div>
