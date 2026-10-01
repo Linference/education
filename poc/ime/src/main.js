@@ -6,6 +6,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
+import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import katex from "katex";
 
 // ------------------------------------------------------------------ 日志
@@ -33,6 +34,11 @@ const checks = {
   selectionJump: { label: "组合期间光标跳位", detail: "组合输入时 selection 头不应出现在组合起点之前", state: "idle" },
   undoIntegrity: { label: "撤销回到组合前状态", detail: "一次撤销应回到输入该词之前，不应半途而废或回退多步", state: "idle" },
   frameRate: { label: "输入时帧率 ≥ 50fps", detail: "连续输入期间的平均帧间隔应 ≤ 20ms", state: "idle" },
+  // R13 专项：自动补全与中文输入法共存（Monaco 正是栽在这里）
+  autocompleteDuringComposition: { label: "【R13】组合输入期间不弹出补全", detail: "中文输入法正在组词时，补全弹窗不得出现——否则候选词与补全列表会互相抢按键（Monaco #2199 就是这个病）", state: "idle" },
+  completionNotAppliedWhileComposing: { label: "【R13】组合期间不会误插入补全项", detail: "组词途中即使按了回车/空格，也不应把补全建议写进正文", state: "idle" },
+  autocompleteAfterComposition: { label: "【R13】组合结束后补全仍可用", detail: "上屏后继续输入，补全应正常弹出——不能为了避开 IME 就把补全功能废掉", state: "idle" },
+  bracketNotDoubled: { label: "【R13】括号自动闭合不与 IME 打架", detail: "在 [[ 后输入中文，不应被自动补成 ]]]] 或吞掉字符", state: "idle" },
 };
 
 function renderChecks() {
@@ -65,7 +71,111 @@ let frameIntervals = [];
 let lastFrame = performance.now();
 let composing = false;
 
+// ------------------------------------------------------------------ R13 核心：wikilink 自动补全
+//
+// 这是格致最核心的编辑体验，也是 Monaco 至今栽跟头的地方（#2199：中文 IME 与
+// CompletionItemProvider 冲突）。所以这里的补全要做得"像真的"：
+//   - 输入 [[ 触发，按已存在的笔记名过滤
+//   - 输入 # 触发标签补全
+//   - 必须支持中文标题的前缀匹配（这是最容易出问题的地方）
+//
+// 关键设计：**绝不在组合输入期间弹补全**。CodeMirror 提供了 view.composing，
+// 下面两条防线都要有：
+//   ① 触发器里检查 composing（源头拦截）
+//   ② 交互层依赖 CodeMirror 自身的 composing 判断（它有内置保护，但要验证）
+
+// 假装库里有这些笔记（真实产品里来自 vault 索引）
+const FAKE_NOTES = [
+  "情态动词", "虚拟语气", "非谓语动词", "定语从句", "名词性从句",
+  "倒装句", "强调句", "时态综述", "被动语态", "情态动词的推测用法",
+  "modal verbs 笔记", "Feynman:情态动词",
+];
+const FAKE_TAGS = ["语法", "语法/情态动词", "语法/从句", "英语", "复习", "错题"];
+
+let completionPopupOpened = 0;      // 弹出次数（由测试读取）
+let completionPopupOpenedWhileComposing = 0; // 组合期间弹出的次数（必须是 0）
+let completionApplied = 0;
+let completionAppliedWhileComposing = 0;
+
+/** 收集候选：从正文里已出现的 [[链接]] + 预置笔记名 */
+function collectNoteNames(state) {
+  const text = state.doc.toString();
+  const names = new Set(FAKE_NOTES);
+  for (const m of text.matchAll(/\[\[([^\]\n|#]+)/g)) {
+    const n = m[1].trim();
+    if (n) names.add(n);
+  }
+  return [...names];
+}
+
+/** wikilink 补全源：在 [[ 之后触发 */
+function wikilinkSource(context) {
+  // ★ R13 关键：组合输入期间绝不触发补全。
+  //   实测发现：CodeMirror 的 autocompletion 即使开着 activateOnTyping，
+  //   在 view.composing === true 时**仍会**调到这里 —— 所以必须自己拦。
+  //   不拦的后果：中文组词时补全弹窗与输入法候选词同屏，互相抢回车/空格，
+  //   这正是 Monaco #2199 那个开了多年没修的病的形态。
+  if (context.view?.composing) return null;
+
+  const before = context.state.sliceDoc(Math.max(0, context.pos - 120), context.pos);
+  const open = before.lastIndexOf("[[");
+  if (open < 0) return null;
+  const after = before.slice(open + 2);
+  // 已经闭合或换行就不触发
+  if (after.includes("]]") || after.includes("\n")) return null;
+  const from = context.pos - after.length;
+  const word = after;
+  const options = collectNoteNames(context.state)
+    .filter((n) => n.toLowerCase().includes(word.toLowerCase()) || word === "")
+    .slice(0, 20)
+    .map((n) => ({
+      label: n,
+      type: "note",
+      detail: "笔记",
+      apply: (view, completion, fromPos, toPos) => {
+        completionApplied++;
+        if (view.composing) completionAppliedWhileComposing++;
+        view.dispatch({
+          changes: { from: fromPos, to: toPos, insert: completion.label + "]]" },
+          selection: { anchor: fromPos + completion.label.length + 2 },
+        });
+      },
+    }));
+  if (!options.length) return null;
+  return { from, options, validFor: /^[\p{L}\p{N}_\- ]*$/u };
+}
+
+/** 标签补全源：在 # 之后触发 */
+function tagSource(context) {
+  if (context.view?.composing) return null;   // ★ 同上：组合期间不触发
+
+  const before = context.state.sliceDoc(Math.max(0, context.pos - 80), context.pos);
+  const m = before.match(/(?:^|\s)#([\p{L}\p{N}_\/-]*)$/u);
+  if (!m) return null;
+  const word = m[1];
+  const from = context.pos - word.length;
+  const options = FAKE_TAGS.filter((t) => t.includes(word))
+    .slice(0, 20)
+    .map((t) => ({ label: t, type: "tag", detail: "标签" }));
+  if (!options.length) return null;
+  return { from, options };
+}
+
+const autocompleteExt = [
+  autocompletion({
+    override: [wikilinkSource, tagSource],
+    activateOnTyping: true,      // 关键：输入即触发 —— 这正是与 IME 抢事件的那条路径
+    closeOnBlur: true,
+    icons: false,
+  }),
+  closeBrackets(),               // 括号自动闭合，也是容易与 IME 打架的东西
+  keymap.of([...closeBracketsKeymap, ...completionKeymap]),
+];
+
+const autocompleteCompartment = new Compartment();
+
 // ------------------------------------------------------------------ 装饰（模拟 Live Preview 的真实压力面）
+
 function buildDecorations(view) {
   const widgets = [];
   const text = view.state.doc.toString();
@@ -123,6 +233,12 @@ must 表示主观必须；may/might 表示把握不大的推测。
 标点旁：「引号」、(括号)、【方括号】后面打字
 装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里
 连续退格后重打：
+
+## R13 专项：自动补全 × 中文输入法
+把光标放在下面这行末尾，输入两个左方括号，然后**用中文输入法打「情态」**：
+[[
+再把光标放这里，输入井号后用中文打「语」：
+#
 `;
 
 const view = new EditorView({
@@ -136,10 +252,10 @@ const view = new EditorView({
       keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
       markdown({ codeLanguages: languages }),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      // 关掉自动补全：格致要自己接管 [[ 补全；此 PoC 先测"纯净"IME 行为
       EditorView.lineWrapping,
       themeExt,
       livePreviewCompartment.of(livePreviewExt),
+      autocompleteCompartment.of(autocompleteExt),   // R13 专项：补全默认开启
       EditorView.updateListener.of((u) => {
         const now = performance.now();
         frameIntervals.push(now - lastFrame);
@@ -261,6 +377,9 @@ document.getElementById("chk-live").onchange = (e) => {
   view.dispatch({ effects: livePreviewCompartment.reconfigure(e.target.checked ? livePreviewExt : []) });
   log("key", `Live Preview 装饰 ${e.target.checked ? "已开启" : "已关闭"}`);
 };
+document.getElementById("chk-ac").onchange = (e) => {
+  window.__gezhi.setAutocompleteEnabled(e.target.checked);
+};
 
 // 一键自检：查全文里的重复字符与可疑片段
 document.getElementById("btn-dupe").onclick = () => {
@@ -299,4 +418,55 @@ window.__gezhi = {
   docLen() { return view.state.doc.length; },
   docText() { return view.state.doc.toString(); },
   selection() { return view.state.selection.main; },
+
+  // ---- R13 专项观察点 ----
+  /** 编辑器是否认为"正在组合输入"（这是 CodeMirror 自己的判断，必须准确） */
+  composing() { return view.composing; },
+  /** 补全弹窗此刻是否在 DOM 里 */
+  completionOpen() { return Boolean(document.querySelector(".cm-tooltip-autocomplete")); },
+  /** 补全弹窗里当前选中的项 */
+  completionSelected() {
+    const el = document.querySelector(".cm-tooltip-autocomplete li[aria-selected='true']");
+    return el ? el.textContent : null;
+  },
+  /** 补全统计（测试断言用） */
+  completionStats() {
+    return {
+      popupOpened: completionPopupOpened,
+      popupOpenedWhileComposing: completionPopupOpenedWhileComposing,
+      applied: completionApplied,
+      appliedWhileComposing: completionAppliedWhileComposing,
+      openNow: Boolean(document.querySelector(".cm-tooltip-autocomplete")),
+      composingNow: view.composing,
+    };
+  },
+  resetCompletionStats() {
+    completionPopupOpened = 0;
+    completionPopupOpenedWhileComposing = 0;
+    completionApplied = 0;
+    completionAppliedWhileComposing = 0;
+  },
+  setAutocompleteEnabled(on) {
+    view.dispatch({ effects: autocompleteCompartment.reconfigure(on ? autocompleteExt : []) });
+    log("key", `自动补全 ${on ? "已开启" : "已关闭"}`);
+  },
+  autocompleteEnabled(on) { return on; },
 };
+
+// 监视补全弹窗的出现：每次出现都记一笔，并判断当时是否在组合输入
+const acObserver = new MutationObserver(() => {
+  const open = Boolean(document.querySelector(".cm-tooltip-autocomplete"));
+  if (open && !acObserver._wasOpen) {
+    completionPopupOpened++;
+    const isComposing = view.composing;
+    if (isComposing) {
+      completionPopupOpenedWhileComposing++;
+      log("key", "⚠ 补全弹窗在【组合输入期间】出现了 —— R13 风险");
+      setCheck("autocompleteDuringComposition", "fail", "组合输入时补全弹窗弹出");
+    }
+    log("key", `补全弹窗出现（第 ${completionPopupOpened} 次，组合中=${isComposing}）`);
+  }
+  acObserver._wasOpen = open;
+});
+acObserver._wasOpen = false;
+acObserver.observe(document.body, { childList: true, subtree: true });

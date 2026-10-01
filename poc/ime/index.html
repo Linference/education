@@ -44,11 +44,13 @@
       <button id="btn-clear">清空日志</button>
       <button id="btn-reset">重置文档</button>
       <label><input type="checkbox" id="chk-live" checked /> Live Preview 装饰（wikilink + 公式 + 标签）</label>
+      <label><input type="checkbox" id="chk-ac" checked /> <b>自动补全（R13 专项）</b></label>
       <label><input type="checkbox" id="chk-stats" /> 性能计时</label>
     </div>
     <div class="hint">
-      请用你的中文输入法在这里打字。<b>关键是要多打</b>：中英混排、行首行尾、标点旁边、<code>[[ ]]</code> 和 <code>$ $</code> 里面、
-      以及撤销重做。日志区会实时记录每一次组合输入事件。
+      <b>R13 专项测法</b>：输入 <code>[[</code> 后，用中文输入法打字，观察旁边日志区——
+      <b>组词期间补全弹窗不该出现</b>；上屏后它应该正常弹出。<br />
+      其余照旧：中英混排、行首行尾、标点旁、<code>[[ ]]</code> 与 <code>$ $</code> 内部、撤销重做。
     </div>
     <div id="editor"></div>
   </div>
