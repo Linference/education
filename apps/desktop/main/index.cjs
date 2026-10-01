@@ -34,11 +34,29 @@ const ROOT = path.resolve(HERE, "..");
 let mainWindow = null;
 
 function createWindow() {
+  /**
+   * 窗口尺寸**按屏幕自适应**，不写死。
+   *
+   * ★ 为什么必须这样：
+   *   原来写死 width:1440, height:900。实测用户屏幕 1440×900，
+   *   扣掉任务栏后工作区只有 **1440×852** —— 窗口比工作区高 48px，
+   *   底部被切；宽度也顶到边，右侧栏（AI 助手/日历/数字人）容易被推到屏幕外。
+   *
+   *   写死尺寸在任何一台分辨率不同的机器上都会出问题，
+   *   所以改成：优先用"工作区大小"，再按理想尺寸取小。
+   */
+  const { screen } = require("electron");
+  const wa = screen.getPrimaryDisplay().workAreaSize;   // 已扣掉任务栏
+  const width = Math.min(1440, wa.width);
+  const height = Math.min(900, wa.height);
+
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 900,
-    minHeight: 600,
+    width,
+    height,
+    minWidth: Math.min(900, wa.width),
+    minHeight: Math.min(600, wa.height),
+    // 居中：避免窗口跑出屏幕外（多显示器/小屏时尤其明显）
+    center: true,
     title: "格致",
     backgroundColor: "#ffffff",
     show: false,                    // 等 ready-to-show，避免白屏闪烁
@@ -50,6 +68,9 @@ function createWindow() {
       spellcheck: false,
     },
   });
+
+  // 记一下实际生效的尺寸，排查"界面被切"这类问题时能一眼看到
+  console.log(`[格致] 窗口 ${width}×${height}（屏幕工作区 ${wa.width}×${wa.height}）`);
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
 

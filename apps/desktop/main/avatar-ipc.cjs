@@ -152,6 +152,71 @@ function registerAvatar(ipcMain, getWindow, app) {
   });
 
   /**
+   * 语音识别（把录音变成文字）。
+   *
+   * ★ 音频格式走 WAV：
+   *   腾讯云一句话识别支持 wav/mp3/m4a 等；选 wav 是因为渲染进程能
+   *   **自己从麦克风采到 PCM 直接包 WAV**（不需要引入任何编码器）。
+   *   用 MediaRecorder 录 webm/opus 反而有兼容风险（不是所有 ASR 接口都吃）。
+   *
+   * ★ 上限 60 秒 / 3 MB（平台的硬限制）：
+   *   16 kHz 16 bit 单声道 ≈ 32 KB/秒 → 60 秒约 1.9 MB，在 3 MB 以内。
+   *   渲染进程会在录到 55 秒时自动停，避免用户录超了才发现失败。
+   */
+  ipcMain.handle("avatar:asr", async (_e, { audioBase64, format = "wav", sampleRate = 16000 } = {}) => {
+    const voice = await loadVoice();
+    if (!voice) return { ok: false, error: "找不到语音模块" };
+    if (!audioBase64) return { ok: false, error: "没有收到音频数据" };
+
+    const st = voice.credentialsStatus();
+    if (!st.ready) {
+      return { ok: false, error: "还没有配置腾讯云凭据（语音识别需要）" };
+    }
+
+    let buf;
+    try {
+      buf = Buffer.from(audioBase64, "base64");
+    } catch {
+      return { ok: false, error: "音频数据解码失败" };
+    }
+    if (!buf.length) return { ok: false, error: "音频为空" };
+
+    const limit = voice.ASR_ONE_SHOT_LIMITS ?? { maxBytes: 3 * 1024 * 1024, maxSeconds: 60 };
+    if (buf.length > limit.maxBytes) {
+      return {
+        ok: false,
+        error: `录音 ${(buf.length / 1024 / 1024).toFixed(2)} MB 超过上限 ` +
+               `${(limit.maxBytes / 1024 / 1024).toFixed(0)} MB，请说短一点`,
+      };
+    }
+
+    try {
+      const t0 = Date.now();
+      const r = await voice.recognizeOnce(buf, { voiceFormat: format, sampleRate });
+      // 识别不出内容时 text 是空串 —— 这不是错误，是"没听清"，要说清楚
+      const text = String(r.text ?? "").trim();
+      return {
+        ok: true,
+        text,
+        empty: !text,
+        requestId: r.requestId,
+        audioDurationMs: r.audioDurationMs,
+        wordCount: r.wordCount,
+        words: r.words ?? [],
+        ms: Date.now() - t0,
+        audioBytes: buf.length,
+      };
+    } catch (e) {
+      const msg = String(e?.message ?? e);
+      let hint = null;
+      if (/AuthFailure|Signature|Unauthorized/i.test(msg)) hint = "密钥可能不正确或已被禁用。";
+      else if (/FailedOperation|Silent|无法识别|no valid/i.test(msg)) hint = "可能是没录到声音，或者环境太吵。";
+      else if (/ResourceInsufficient|Insufficient|欠费/i.test(msg)) hint = "账户余额不足，或语音识别服务未开通。";
+      return { ok: false, error: msg, hint };
+    }
+  });
+
+  /**
    * 合成一段语音（共享实现）。
    *
    * ⚠️ 不要用 ipcMain._invokeHandlers 去"转发"到另一个处理器 ——

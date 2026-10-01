@@ -149,6 +149,12 @@ const api = {
     tts: (payload) => ipcRenderer.invoke("avatar:tts", payload ?? {}),
     /** 旧名字，内部走同一个实现（保留是为了不破坏已有调用） */
     ttsTest: (payload) => ipcRenderer.invoke("avatar:ttsTest", payload ?? {}),
+    /**
+     * 语音识别（录音 → 文字）。
+     * 传 WAV 的 base64 —— 渲染进程自己从麦克风采 PCM 包 WAV，
+     * 这样不需要引入任何音频编码器。上限 60 秒 / 3 MB。
+     */
+    asr: (payload) => ipcRenderer.invoke("avatar:asr", payload ?? {}),
     paths: () => ipcRenderer.invoke("avatar:paths"),
   },
 };

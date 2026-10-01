@@ -1662,7 +1662,11 @@ export default function App() {
                   flexDirection: "column",
                 }}
               >
-                <AvatarPanel vaultPath={vault?.path ?? null} />
+                <AvatarPanel
+                  vaultPath={vault?.path ?? null}
+                  currentFileName={activeTab?.name ?? null}
+                  currentFileText={activeTab?.text ?? null}
+                />
               </div>
 
               <div

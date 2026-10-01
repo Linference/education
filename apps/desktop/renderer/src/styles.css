@@ -86,6 +86,9 @@ button {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* 防止子元素把根容器顶宽（横向溢出会把侧栏推出屏幕） */
+  width: 100%;
+  overflow: hidden;
 }
 
 .titlebar {
@@ -147,6 +150,21 @@ button {
   flex: 1 1 auto;
   display: flex;
   min-height: 0;
+  /*
+   * ★★ min-width: 0 是这行布局的关键 ★★
+   *
+   * flex 子项的默认 min-width 是 **auto** —— 意思是"不能小于内容的固有宽度"。
+   * 少了这一条，编辑器区里一出现宽内容（宽表格、PDF、长代码行），
+   * 整个 .main 就会被撑得比窗口还宽，右侧栏被推到屏幕外。
+   *
+   * 实测症状：窗口明明 1440×852 完全在屏幕内，
+   * 但界面里看不到 AI 助手 / 日历 / 数字人 —— 它们被挤到 x=1440 之外了。
+   * 用户会以为"功能没了"，其实是布局溢出。
+   *
+   * min-height: 0 同理（纵向），两条要成对写。
+   */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .sidebar {
@@ -283,7 +301,9 @@ button {
 
 /* ================================================================ 查看区 */
 
-.viewer { flex: 1 1 auto; overflow: auto; min-height: 0; position: relative; }
+/* 内容查看区。min-width: 0 同样必须有 —— 否则宽表格/长代码行
+   会把整个 .main 顶宽（与 .main 那条是同一个坑，两层都要治）。 */
+.viewer { flex: 1 1 auto; overflow: auto; min-height: 0; min-width: 0; position: relative; }
 
 .empty-state {
   height: 100%;

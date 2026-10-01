@@ -3,7 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self'; worker-src 'self' blob:; connect-src 'self' data: blob:" />
+        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; script-src 'self'; media-src 'self' blob: data:; worker-src 'self' blob:; connect-src 'self' data: blob:" />
+  <!--
+    ⚠️ media-src 'self' blob: 这一条**必须留着**。
+
+    漏了它的时候，CSP 会回退到 default-src 'self'，于是 blob: 音频被拦：
+
+      Loading media from 'blob:file:///...' violates the following
+      Content Security Policy directive: "default-src 'self'"
+
+    症状极具迷惑性：数字人合成成功、音频字节也拿到了、代码没报错，
+    但**既听不到声、嘴也不动** —— 因为 <audio> 根本没加载成功。
+
+    合成语音走的是 `new Blob([wav])` + `URL.createObjectURL`，
+    所以 blob: 必须放行。img-src 早就放行了 blob（图片能用），
+    音频这条当时漏掉了。
+  -->
   <title>格致</title>
 </head>
 <body>

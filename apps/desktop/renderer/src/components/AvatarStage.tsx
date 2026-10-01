@@ -17,14 +17,10 @@ import * as React from "react";
 //   做法是：发声开始时记下时刻，用 requestAnimationFrame 计真实流逝时间，
 //   再按 `真实事件时间 / 语音实际总时长` 归一化去检索帧。
 //   这样**无论语音比估算快还是慢，口型都会自动伸缩对齐**。
-export interface VisemeFrame {
-  /** 毫秒 */
-  t: number;
-  /** 张嘴程度 0..1 */
-  open: number;
-  /** 这个时刻在发的字（可为空） */
-  ch: string;
-}
+// 口型类型与两套帧生成器都在 ./viseme，那里只有一份公式，
+// 语音 hook 与形象组件共用（避免两边公式漂移，口型观感不一致）。
+import { type VisemeFrame, trackDuration, sampleOpen } from "./viseme";
+export type { VisemeFrame };
 
 interface Props {
   /** 口型帧；为空则闭嘴静止 */
@@ -39,36 +35,6 @@ interface Props {
   status?: string;
 }
 
-/** 帧序列的估算总时长 */
-export function trackDuration(frames: VisemeFrame[]): number {
-  return frames.length ? frames[frames.length - 1].t : 0;
-}
-
-/**
- * 按归一化进度取某一刻的嘴型。
- *
- * 用一个很小的线性插值，帧率不够高时嘴动也不会一跳一跳。
- */
-export function sampleOpen(frames: VisemeFrame[], progress: number): number {
-  if (!frames.length) return 0;
-  const total = trackDuration(frames);
-  if (total <= 0) return frames[0]?.open ?? 0;
-  const t = Math.max(0, Math.min(1, progress)) * total;
-
-  // 帧是按固定步长生成的，可以直接算下标，再对相邻两帧插值
-  let lo = 0;
-  let hi = frames.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (frames[mid].t < t) lo = mid + 1;
-    else hi = mid;
-  }
-  const b = frames[lo];
-  const a = frames[Math.max(0, lo - 1)];
-  if (!a || !b || b.t === a.t) return b?.open ?? 0;
-  const k = (t - a.t) / (b.t - a.t);
-  return a.open + (b.open - a.open) * k;
-}
 
 export default function AvatarStage({ frames, speaking, actualMs, size = 200, status }: Props) {
   const [open, setOpen] = React.useState(0);
