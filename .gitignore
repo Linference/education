@@ -42,3 +42,7 @@ desktop.ini
 # 生成物（可从模板重新编译）
 产出/
 
+
+# 提交信息临时文件
+.commit-msg-tmp.txt
+
