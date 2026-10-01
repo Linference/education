@@ -4,3 +4,7 @@ packages:
 
 nodeLinker: hoisted
 autoInstallPeers: false
+minimumReleaseAgeExclude:
+  - katex@0.18.10
+allowBuilds:
+  esbuild: set this to true or false

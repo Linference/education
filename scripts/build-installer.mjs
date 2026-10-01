@@ -66,6 +66,27 @@ for (const f of ["apps/desktop/main/index.cjs", "apps/desktop/main/preload.cjs"]
 }
 console.log("  [OK] 主进程与 preload 存在且无 BOM");
 
+step("3.5 构建渲染进程（Vite + React）");
+// 渲染进程必须先构建：主进程加载的是 renderer/dist/index.html，
+// 不构建就会打出一个只有空白窗口的安装包。
+// 注意 vite 装在 apps/desktop/node_modules 下，不是仓库根。
+const viteBin = path.join(ROOT, "apps", "desktop", "node_modules", "vite", "bin", "vite.js");
+if (!fs.existsSync(viteBin)) {
+  console.error(`  [FAIL] 找不到 vite：${viteBin}`);
+  console.error("         先在 apps/desktop 下跑 npm install");
+  process.exit(1);
+}
+if (run(process.execPath, [viteBin, "build"], { cwd: path.join(ROOT, "apps", "desktop") }) !== 0) {
+  console.error("  [FAIL] 渲染进程构建失败");
+  process.exit(1);
+}
+const distIndex = path.join(ROOT, "apps", "desktop", "renderer", "dist", "index.html");
+if (!fs.existsSync(distIndex)) {
+  console.error(`  [FAIL] 没有生成 ${distIndex}`);
+  process.exit(1);
+}
+console.log("  [OK] 渲染进程构建完成");
+
 // ---------------------------------------------------------------- 构建
 
 step("4. 打包（electron-builder → NSIS 单文件安装包）");

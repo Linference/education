@@ -20,7 +20,29 @@ const api = {
 
   file: {
     read: (p) => ipcRenderer.invoke("file:read", p),
+    /** 读二进制（PDF / Word / 图片），返回 Uint8Array */
+    readBinary: (p) => ipcRenderer.invoke("file:readBinary", p),
     reveal: (p) => ipcRenderer.invoke("file:reveal", p),
+    /** 另存为（导出用） */
+    saveAs: (payload) => ipcRenderer.invoke("file:saveAs", payload),
+  },
+  ai: {
+    /** DSH 是否可用、版本 */
+    health: () => ipcRenderer.invoke("ai:health"),
+    /** 跑一个任务；事件通过 onEvent 流式推送 */
+    run: (payload) => ipcRenderer.invoke("ai:run", payload),
+    ask: (payload) => ipcRenderer.invoke("ai:ask", payload),
+    stop: () => ipcRenderer.invoke("ai:stop"),
+    /**
+     * 订阅事件流。返回取消订阅函数。
+     * 注意：只把 event 对象传出去，不把 ipcEvent 传出去 —— 否则渲染进程
+     * 能拿到 sender 之类的东西，等于绕开 contextIsolation 的初衷。
+     */
+    onEvent: (cb) => {
+      const h = (_e, payload) => cb(payload);
+      ipcRenderer.on("ai:event", h);
+      return () => ipcRenderer.removeListener("ai:event", h);
+    },
   },
 };
 

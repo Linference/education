@@ -34,6 +34,14 @@ pkg.build = {
   // 相对于 directories.app（即 apps/desktop）
   files: ["main/**/*", "renderer/**/*", "package.json", "!**/*.map"],
 
+  // ★ AI 内核要随包走：main/ai.cjs 会在运行时 import packages/dsh-bridge。
+  //   不 extraResources 的话，打包版里找不到它，AI 面板会显示"DSH 不可用"
+  //   —— 而开发模式一切正常，属于最容易漏掉的那类问题。
+  //   放到 resources/dsh-bridge 下，ai.cjs 里有对应的查找路径。
+  extraResources: [
+    { from: "packages/dsh-bridge/src", to: "dsh-bridge" },
+  ],
+
   asar: true,
   compression: "maximum",
   artifactName: "${productName}-${version}-安装包.${ext}",

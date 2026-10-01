@@ -13,11 +13,19 @@
     "check:license:test": "node scripts/check-licenses.test.mjs",
     "check:secrets": "node scripts/scan-secrets.mjs",
     "check:secrets:test": "node scripts/scan-secrets.test.mjs",
+    "check:mojibake": "node scripts/scan-mojibake.mjs .",
     "db:assert": "node packages/db/src/assert-schema.mjs",
     "db:init": "node packages/db/src/cli.mjs",
     "db:where": "node packages/db/src/cli.mjs where",
     "dsh:smoke": "node packages/dsh-bridge/smoke.mjs",
-    "p0": "node scripts/p0.mjs"
+    "p0": "node scripts/p0.mjs",
+    "ui:smoke": "node apps/desktop/smoke-electron.mjs",
+    "ui:verify": "node apps/desktop/verify-markdown.mjs",
+    "ui:verify:render": "node apps/desktop/verify-render.mjs",
+    "ui:verify:docx": "node apps/desktop/verify-docx.mjs",
+    "ui:verify:ai": "node apps/desktop/verify-ai.mjs",
+    "ui:verify:packaged": "node apps/desktop/verify-packaged.mjs",
+    "installer": "node scripts/build-installer.mjs"
   },
   "devDependencies": {
     "electron-builder": "^26.15.3",
@@ -37,6 +45,12 @@
       "renderer/**/*",
       "package.json",
       "!**/*.map"
+    ],
+    "extraResources": [
+      {
+        "from": "packages/dsh-bridge/src",
+        "to": "dsh-bridge"
+      }
     ],
     "asar": true,
     "compression": "maximum",

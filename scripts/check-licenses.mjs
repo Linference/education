@@ -38,7 +38,11 @@ const WARN_PATTERNS = [
 
 const OK_PATTERNS = [
   /^MIT$/i, /^MIT-0$/i, /Apache-2\.0/i, /^BSD/i, /^ISC$/i, /^MPL-2\.0/i,
-  /^0BSD$/i, /Unlicense/i, /^CC0/i, /^Zlib$/i, /^Python-2\.0$/i,
+  /^0BSD$/i, /Unlicense/i, /^CC0/i, /^Zlib$/i,
+  /^Python-2\.0$/i,
+  // PSF-2.0 是 Python-2.0 许可的正式 SPDX 标识符（同一个许可的两种写法）。
+  // 实测 argparse@3 用的就是 PSF-2.0 —— 它比 MIT 还宽松，允许闭源商用。
+  /^PSF-2\.0$/i,
   /^BlueOak/i, /^Artistic/i, /BSD-3-Clause OR MIT/i,
   /^WTFPL$/i,          // 比 MIT 还宽松，只是名字不严肃
   /^CC-BY-4\.0$/i,     // 署名即可，非 copyleft

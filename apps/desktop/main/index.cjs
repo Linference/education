@@ -17,6 +17,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { registerAIStream, registerAI } = require("./ai.cjs");
 
 const HERE = __dirname;
 const ROOT = path.resolve(HERE, "..");
@@ -50,8 +51,21 @@ function createWindow() {
   });
 
   const devUrl = process.env.GEZHI_DEV_URL;
-  if (devUrl) mainWindow.loadURL(devUrl);
-  else mainWindow.loadFile(path.join(ROOT, "renderer", "index.html"));
+  if (devUrl) {
+    // 开发模式：连 Vite dev server（有 HMR）
+    mainWindow.loadURL(devUrl);
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  } else {
+    // 生产模式：加载 Vite 构建产物
+    // 注意产物在 renderer/dist/ —— 第一版直接 loadFile(renderer/index.html)
+    // 加载的是源文件，所以只有纯静态页能跑，编辑器/PDF 全都上不了。
+    const built = path.join(ROOT, "renderer", "dist", "index.html");
+    const fallback = path.join(ROOT, "renderer", "index.html");
+    const target = fs.existsSync(built) ? built : fallback;
+    // GEZHI_TEST=1 时带 ?test=1，启用界面里的自动化测试钩子（详见 renderer/src/App.tsx）
+    const query = process.env.GEZHI_TEST === "1" ? { search: "test=1" } : undefined;
+    mainWindow.loadFile(target, query);
+  }
 
   mainWindow.on("closed", () => { mainWindow = null; });
 }
@@ -107,6 +121,31 @@ function registerIpc() {
   ipcMain.handle("vault:list", (_e, dir) => listTree(dir));
   ipcMain.handle("file:read", (_e, filePath) => readTextFile(filePath));
   ipcMain.handle("file:reveal", (_e, p) => { shell.showItemInFolder(p); return true; });
+
+  // 二进制读取：PDF / Word / Excel / 图片走这条。
+  // 为什么不让渲染进程直接读：渲染进程没有 fs（contextIsolation 已开），
+  // 而且 file:// 在 webSecurity 下取二进制会被 CORS 拦。
+  // 返回 ArrayBuffer 的 Uint8Array 形式，渲染进程可直接喂给 pdf.js / docx-preview。
+  ipcMain.handle("file:readBinary", (_e, filePath) => readBinaryFile(filePath));
+
+  // 另存为：导出功能用（P5 文档产线会用到）
+  ipcMain.handle("file:saveAs", async (_e, { defaultName, data }) => {
+    const r = await dialog.showSaveDialog(mainWindow, {
+      title: "另存为",
+      defaultPath: defaultName,
+    });
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+    try {
+      fs.writeFileSync(r.filePath, Buffer.from(data));
+      return { ok: true, path: r.filePath };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // AI 助手：把 DeepSeek Harness 接进来（这是"融合 DSH"落地的地方）
+  registerAI(ipcMain, () => mainWindow);
+  registerAIStream(ipcMain, () => mainWindow);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */
@@ -182,6 +221,43 @@ function readTextFile(filePath) {
   }
   try {
     return { ok: true, path: filePath, text: fs.readFileSync(filePath, "utf8"), size: st.size, mtime: st.mtime.toISOString() };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/** 二进制文件读取上限：PDF/Word 可能很大，放宽到 200MB */
+const MAX_BINARY_BYTES = 200 * 1024 * 1024;
+
+const BINARY_EXT = new Set([".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".zip"]);
+
+/** 读二进制文件，返回 Uint8Array（结构化克隆可直接传 Uint8Array） */
+function readBinaryFile(filePath) {
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  const ext = path.extname(filePath).toLowerCase();
+  if (!BINARY_EXT.has(ext)) {
+    return { ok: false, error: `不是支持的二进制类型：${ext || "(无扩展名)"}`, unsupported: true };
+  }
+  let st;
+  try {
+    st = fs.statSync(filePath);
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+  if (st.size > MAX_BINARY_BYTES) {
+    return { ok: false, error: `文件 ${(st.size / 1024 / 1024).toFixed(0)}MB 过大` };
+  }
+  try {
+    const buf = fs.readFileSync(filePath);
+    // 转成 Uint8Array 而不是 Node Buffer：跨 IPC 后 Buffer 会变成普通对象
+    return {
+      ok: true,
+      path: filePath,
+      bytes: new Uint8Array(buf),
+      size: st.size,
+      mtime: st.mtime.toISOString(),
+      ext,
+    };
   } catch (e) {
     return { ok: false, error: e.message };
   }
