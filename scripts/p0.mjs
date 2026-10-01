@@ -44,14 +44,23 @@ const required = [
   "packages/db/src/assert-schema.mjs",
   "packages/db/src/cli.mjs",
   "packages/core/src/vault.mjs",
+  "packages/core/src/credentials.mjs",
   "packages/dsh-bridge/src/index.mjs",
   "packages/dsh-bridge/smoke.mjs",
+  ".githooks/pre-commit",
   "scripts/check-licenses.mjs",
   "scripts/check-licenses.test.mjs",
+  "scripts/scan-secrets.mjs",
+  "scripts/scan-secrets.test.mjs",
+  "scripts/credentials.test.mjs",
+  "scripts/p0.mjs",
   "docs/00-环境勘察报告.md",
   "docs/01-智能层选型-DSH作为Agent内核.md",
   "docs/02-存储与检索实测.md",
   "docs/03-DSH集成实测-写作助手.md",
+  "docs/04-凭据与安全.md",
+  "templates/typst/handout.typ",
+  "poc/ime/R13结论-补全与输入法.md",
   "格致-开发计划.md",
 ];
 const missing = required.filter((f) => !fs.existsSync(path.join(root, f)));
@@ -70,6 +79,11 @@ run("2. 数据库结构断言（含中文双 FTS 索引）", process.execPath, [
 // 3) 许可门禁自测 + 真实扫描
 run("3a. 许可门禁自测（证明它真的会拦）", process.execPath, ["scripts/check-licenses.test.mjs"]);
 run("3b. 许可门禁扫描全仓", process.execPath, ["scripts/check-licenses.mjs"]);
+
+// 3c/3d/3e) 密钥防线：扫描器自测 + 全仓扫描 + 加密存储自测
+run("3c. 密钥扫描自测（证明它真的会拦）", process.execPath, ["scripts/scan-secrets.test.mjs"]);
+run("3d. 密钥扫描全仓", process.execPath, ["scripts/scan-secrets.mjs"]);
+run("3e. 密钥存储自测（明文/篡改/ACL）", process.execPath, ["scripts/credentials.test.mjs"]);
 
 // 4) 建库（临时目录，不碰用户文档）
 process.stdout.write("\n──────── 4. 建库冒烟 ────────\n");
