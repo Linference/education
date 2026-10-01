@@ -1,0 +1,76 @@
+[
+  {
+    "case": "1 行尾输入「情态动词」",
+    "verdict": "PASS",
+    "notes": [],
+    "compositionstart": 1,
+    "compositionupdate": 3,
+    "compositionend": 1,
+    "input_events": 3,
+    "delta_len": 4,
+    "duplicates": [],
+    "got": "词\\n标点旁：「引号」、(括号)、【方括号】后面打字\\n装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n情态动词"
+  },
+  {
+    "case": "2 中英混排「modal 动词」",
+    "verdict": "PASS",
+    "notes": [],
+    "compositionstart": 1,
+    "compositionupdate": 3,
+    "compositionend": 1,
+    "input_events": 9,
+    "delta_len": 2,
+    "duplicates": [],
+    "got": "旁：「引号」、(括号)、【方括号】后面打字\\n装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\nmodal 动词"
+  },
+  {
+    "case": "3 在 [[ ]] 内部输入「语气」",
+    "verdict": "PASS",
+    "notes": [],
+    "compositionstart": 1,
+    "compositionupdate": 3,
+    "compositionend": 1,
+    "input_events": 3,
+    "delta_len": 2,
+    "duplicates": [],
+    "got": "示情态动词\\n标点旁：「引号」、(括号)、【方括号】后面打字\\n装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+  },
+  {
+    "case": "4 在 $ 公式内部输入「概率」",
+    "verdict": "PASS",
+    "notes": [],
+    "compositionstart": 1,
+    "compositionupdate": 3,
+    "compositionend": 1,
+    "input_events": 3,
+    "delta_len": 2,
+    "duplicates": [],
+    "got": "示情态动词\\n标点旁：「引号」、(括号)、【方括号】后面打字\\n装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+  },
+  {
+    "case": "5 连续三次组合输入",
+    "verdict": "PASS",
+    "notes": [],
+    "compositionstart": 3,
+    "compositionupdate": 9,
+    "compositionend": 3,
+    "input_events": 9,
+    "delta_len": null,
+    "duplicates": [],
+    "got": "标点旁：「引号」、(括号)、【方括号】后面打字\\n装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n物理数学化学"
+  },
+  {
+    "case": "6 组合中途取消",
+    "verdict": "PASS",
+    "notes": [],
+    "duplicates": []
+  },
+  {
+    "case": "7 撤销整体撤掉上屏词",
+    "verdict": "FAIL",
+    "notes": [
+      "撤销后仍然残留「测试」"
+    ],
+    "duplicates": []
+  }
+]

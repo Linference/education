@@ -1,0 +1,19 @@
+{
+  "name": "gezhi",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "格致 —— 本地优先的个人学习操作系统（知识库 / AI 陪练 / 题库组卷 / 日历计划）",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "check:license": "node scripts/check-licenses.mjs",
+    "db:assert": "node packages/db/src/assert-schema.mjs",
+    "db:init": "node packages/db/src/cli.mjs",
+    "dsh:smoke": "node packages/dsh-bridge/smoke.mjs",
+    "p0": "node scripts/p0.mjs"
+  },
+  "devDependencies": {}
+}

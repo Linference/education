@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="方向3 格中生木：基线尺上的几何树，枝头节点同时构成知识图谱">
+  <title>格致 · 方向3「格中生木」</title>
+  <desc>构图示意：带刻度的细基线、短树干、三根直枝与三个节点；节点之间以虚线相连，使树冠同时读作知识图谱。</desc>
+  <rect width="240" height="240" fill="#F7F3EC"/>
+
+  <!-- 基线（尺子）：细横线 + 刻度 -->
+  <line x1="36" y1="180" x2="204" y2="180" stroke="#14202B" stroke-width="4" stroke-linecap="round"/>
+  <g stroke="#14202B" stroke-width="2.5" opacity="0.65">
+    <line x1="36" y1="180" x2="36" y2="187"/>
+    <line x1="52" y1="180" x2="52" y2="187"/>
+    <line x1="68" y1="180" x2="68" y2="187"/>
+    <line x1="84" y1="180" x2="84" y2="187"/>
+    <line x1="100" y1="180" x2="100" y2="187"/>
+    <line x1="116" y1="180" x2="116" y2="187"/>
+    <line x1="132" y1="180" x2="132" y2="187"/>
+    <line x1="148" y1="180" x2="148" y2="187"/>
+    <line x1="164" y1="180" x2="164" y2="187"/>
+    <line x1="180" y1="180" x2="180" y2="187"/>
+    <line x1="196" y1="180" x2="196" y2="187"/>
+  </g>
+
+  <!-- 节点之间的连线：让树冠读作图谱 -->
+  <g fill="none" stroke="#14202B" stroke-width="2.5" stroke-dasharray="7 7" opacity="0.5">
+    <path d="M74 80 L120 64 L166 80 Z"/>
+  </g>
+
+  <!-- 树干与三根直枝 -->
+  <g fill="none" stroke="#14202B" stroke-width="7" stroke-linecap="round">
+    <line x1="120" y1="180" x2="120" y2="116"/>
+    <line x1="120" y1="116" x2="74" y2="80"/>
+    <line x1="120" y1="116" x2="120" y2="64"/>
+    <line x1="120" y1="116" x2="166" y2="80"/>
+  </g>
+
+  <!-- 三个节点：一个用暖黄强调 -->
+  <circle cx="74" cy="80" r="10" fill="#14202B"/>
+  <circle cx="166" cy="80" r="10" fill="#14202B"/>
+  <circle cx="120" cy="64" r="10" fill="#F2B33D"/>
+</svg>

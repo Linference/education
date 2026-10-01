@@ -1,0 +1,25 @@
+{
+  "name": "gezhi-poc-ime",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "格致 P1 前置 PoC：验证 CodeMirror 6 在中文输入法下的真实行为",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5188 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5188 --strictPort"
+  },
+  "dependencies": {
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.11.0",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language-data": "^6.5.2",
+    "@lezer/markdown": "^1.7.2",
+    "katex": "^0.18.10"
+  },
+  "devDependencies": {
+    "vite": "^8.3.1"
+  }
+}

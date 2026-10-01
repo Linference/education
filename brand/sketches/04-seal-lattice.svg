@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="方向4 朱印：朱砂方印中的格致二字">
+  <title>格致 · 方向4「朱印」</title>
+  <desc>构图示意：朱砂红方印，内为白文「格致」。此处用系统楷体示意；最终字形必须由学生按几何网格手绘，或改用汇文明朝体等字体后重新调整字距。</desc>
+  <rect width="240" height="240" fill="#F7F3EC"/>
+
+  <!-- 印面 -->
+  <rect x="30" y="30" width="180" height="180" rx="10" fill="#C8452F"/>
+
+  <!-- 白文「格致」：示意用，字形需最终重绘 -->
+  <text x="120" y="121" fill="#F7F3EC" text-anchor="middle" dominant-baseline="central"
+        font-family="KaiTi, STKaiti, 'Songti SC', SimSun, 'Noto Serif CJK SC', serif"
+        font-size="82" letter-spacing="2">格致</text>
+</svg>

@@ -1,0 +1,23 @@
+# 统一换行符：仓库内一律 LF，避免 Windows 上反复出现 CRLF 警告与假 diff
+* text=auto eol=lf
+
+# 二进制文件不要做换行转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.pdf  binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.db   binary
+*.ico  binary
+*.exe  binary
+*.node binary
+*.asar binary
+
+# 这些是生成物，不要在 diff 里展开
+package-lock.json  -diff linguist-generated
+pnpm-lock.yaml     -diff linguist-generated
+*.ndjson           -diff

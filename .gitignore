@@ -1,0 +1,40 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物
+dist/
+out/
+build/
+*.tsbuildinfo
+
+# 格致的数据（绝不入库）
+*.db
+*.db-wal
+*.db-shm
+.gezhi/
+%APPDATA%/
+
+# PoC 的可再生部分
+poc/*/node_modules/
+poc/*/dist/
+
+# 临时与探针产物
+*.tmp
+*.tmpdir/
+.selfcheck.*
+_probe_*
+
+# 密钥：任何形式的凭据都不许提交
+.env
+.env.*
+*.key
+credentials*.yaml
+credentials*.json
+
+# 编辑器与系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+Thumbs.db
+desktop.ini

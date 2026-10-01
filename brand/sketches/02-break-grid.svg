@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="方向2 破格：九宫格右侧开口，一笔越出并收于圆点">
+  <title>格致 · 方向2「破格」</title>
+  <desc>构图示意：九宫格右侧中格的外框线断开，一笔约三倍线宽的笔画从缺口穿出，末端收成实心圆点。</desc>
+  <rect width="240" height="240" fill="#F7F3EC"/>
+
+  <!-- 九宫格：右侧外框线在中格处断开 -->
+  <g fill="none" stroke="#141414" stroke-width="4" stroke-linecap="round">
+    <line x1="40" y1="40" x2="200" y2="40"/>
+    <line x1="40" y1="200" x2="200" y2="200"/>
+    <line x1="40" y1="40" x2="40" y2="200"/>
+    <line x1="200" y1="40" x2="200" y2="93.33"/>
+    <line x1="200" y1="146.67" x2="200" y2="200"/>
+    <line x1="93.33" y1="40" x2="93.33" y2="200"/>
+    <line x1="146.67" y1="40" x2="146.67" y2="200"/>
+    <line x1="40" y1="93.33" x2="200" y2="93.33"/>
+    <line x1="40" y1="146.67" x2="200" y2="146.67"/>
+  </g>
+
+  <!-- 穿出缺口的那一笔（线宽约为网格线的三倍） -->
+  <line x1="150" y1="120" x2="208" y2="120" stroke="#C8452F" stroke-width="12" stroke-linecap="butt"/>
+  <circle cx="208" cy="120" r="8" fill="#C8452F"/>
+</svg>

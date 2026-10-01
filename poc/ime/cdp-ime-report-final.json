@@ -1,0 +1,101 @@
+{
+  "results": [
+    {
+      "case": "1 行尾组合输入「情态动词龘」",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 5,
+      "compositionend": 1,
+      "input_events": 5,
+      "delta_len": 5,
+      "duplicates": [],
+      "tail": "[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n情态动词龘"
+    },
+    {
+      "case": "2 中英混排「modal 靐」",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 3,
+      "compositionend": 1,
+      "input_events": 4,
+      "delta_len": 1,
+      "duplicates": [],
+      "tail": "这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\nmodal 靐"
+    },
+    {
+      "case": "3 在 [[ ]] 内部输入「龘」",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 3,
+      "compositionend": 1,
+      "input_events": 3,
+      "delta_len": 1,
+      "duplicates": [],
+      "tail": "装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+    },
+    {
+      "case": "4 在 $ 公式内部输入「靐」",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 3,
+      "compositionend": 1,
+      "input_events": 3,
+      "delta_len": 1,
+      "duplicates": [],
+      "tail": "装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+    },
+    {
+      "case": "5 在 # 标签内部输入「齉」",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 3,
+      "compositionend": 1,
+      "input_events": 3,
+      "delta_len": 1,
+      "duplicates": [],
+      "tail": "装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+    },
+    {
+      "case": "6 连续三次组合输入",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 3,
+      "compositionupdate": 9,
+      "compositionend": 3,
+      "input_events": 9,
+      "delta_len": null,
+      "duplicates": [],
+      "tail": "：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n龘靐齉"
+    },
+    {
+      "case": "7 组合中途取消",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 1,
+      "compositionend": 0,
+      "input_events": 0,
+      "delta_len": 0,
+      "duplicates": [],
+      "tail": "装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+    },
+    {
+      "case": "8 一次撤销完整撤掉上屏词",
+      "verdict": "PASS",
+      "notes": [],
+      "compositionstart": 1,
+      "compositionupdate": 2,
+      "compositionend": 1,
+      "input_events": 2,
+      "delta_len": 0,
+      "duplicates": [],
+      "tail": "装饰内：[[在这里打字]] 、$在这里打分$ 、#标签在这里\\n连续退格后重打：\\n"
+    }
+  ],
+  "page_errors": []
+}

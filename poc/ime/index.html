@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>格致 PoC · CodeMirror 6 中文输入法验证</title>
+<style>
+  :root { --bd: #d8dbe0; --bg: #fafbfc; --fg: #1f2328; --mut: #656d76; --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 "Segoe UI", "Microsoft YaHei", sans-serif; color: var(--fg); background: #fff; }
+  header { padding: 12px 18px; border-bottom: 1px solid var(--bd); background: var(--bg); position: sticky; top: 0; z-index: 5; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { color: var(--mut); font-size: 12.5px; }
+  .wrap { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(380px, 460px); gap: 0; height: calc(100vh - 62px); }
+  .left { border-right: 1px solid var(--bd); display: flex; flex-direction: column; min-width: 0; }
+  .toolbar { padding: 8px 12px; border-bottom: 1px solid var(--bd); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; background: var(--bg); }
+  .toolbar button { font: inherit; font-size: 12.5px; padding: 4px 10px; border: 1px solid var(--bd); background: #fff; border-radius: 6px; cursor: pointer; }
+  .toolbar button:hover { background: #f0f2f5; }
+  .toolbar label { font-size: 12.5px; color: var(--mut); display: flex; gap: 4px; align-items: center; }
+  #editor { flex: 1; overflow: auto; min-height: 0; }
+  .cm-editor { height: 100%; }
+  .cm-scroller { font: 15px/1.85 "Cascadia Code", Consolas, "Microsoft YaHei", monospace; }
+  .right { display: flex; flex-direction: column; min-width: 0; background: #fff; }
+  .right h2 { font-size: 13px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--bd); background: var(--bg); }
+  #log { flex: 1 1 auto; overflow: auto; margin: 0; padding: 6px 10px; font: 12px/1.65 Consolas, monospace; white-space: pre-wrap; word-break: break-all; min-height: 120px; }
+  #checks { flex: 0 0 auto; max-height: 44%; overflow: auto; padding: 6px 12px; border-top: 1px solid var(--bd); }
+  .chk { padding: 5px 0; border-bottom: 1px dashed #eee; font-size: 12.5px; }
+  .chk b { font-weight: 600; }
+  .pass { color: var(--ok); } .fail { color: var(--bad); font-weight: 600; } .idle { color: var(--mut); }
+  .ev-cs { color: #8250df; } .ev-cu { color: #0969da; } .ev-ce { color: #1a7f37; }
+  .ev-in { color: #953800; } .ev-doc { color: #cf222e; } .ev-key { color: #656d76; }
+  kbd { border: 1px solid var(--bd); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; font: 11px Consolas, monospace; background: #fff; }
+  .hint { padding: 8px 12px; font-size: 12.5px; background: #fff8c5; border-bottom: 1px solid #d4a72c; color: #4d2d00; }
+</style>
+</head>
+<body>
+<header>
+  <h1>格致 PoC · CodeMirror 6 中文输入法验证</h1>
+  <div class="sub" id="envline">正在检测环境…</div>
+</header>
+<div class="wrap">
+  <div class="left">
+    <div class="toolbar">
+      <button id="btn-dupe">一键自检：重复字 / 丢字</button>
+      <button id="btn-clear">清空日志</button>
+      <button id="btn-reset">重置文档</button>
+      <label><input type="checkbox" id="chk-live" checked /> Live Preview 装饰（wikilink + 公式 + 标签）</label>
+      <label><input type="checkbox" id="chk-stats" /> 性能计时</label>
+    </div>
+    <div class="hint">
+      请用你的中文输入法在这里打字。<b>关键是要多打</b>：中英混排、行首行尾、标点旁边、<code>[[ ]]</code> 和 <code>$ $</code> 里面、
+      以及撤销重做。日志区会实时记录每一次组合输入事件。
+    </div>
+    <div id="editor"></div>
+  </div>
+  <div class="right">
+    <h2>事件日志（组合输入 / 文档变化 / 按键）</h2>
+    <pre id="log"></pre>
+    <h2>自动检查</h2>
+    <div id="checks"></div>
+  </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

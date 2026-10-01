@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="方向1 一格得解：九宫格中一格填实">
+  <title>格致 · 方向1「一格得解」九宫格</title>
+  <desc>构图示意：3×3 等分网格，仅右下角一格填实为朱砂红。另可试「正中」与「左上」两种填色位置。</desc>
+  <rect width="240" height="240" fill="#F7F3EC"/>
+
+  <!-- 九宫格：外框 + 四条内线（三行三列） -->
+  <g fill="none" stroke="#141414" stroke-width="4" stroke-linecap="round">
+    <rect x="40" y="40" width="160" height="160"/>
+    <line x1="93.33" y1="40" x2="93.33" y2="200"/>
+    <line x1="146.67" y1="40" x2="146.67" y2="200"/>
+    <line x1="40" y1="93.33" x2="200" y2="93.33"/>
+    <line x1="40" y1="146.67" x2="200" y2="146.67"/>
+  </g>
+
+  <!-- 唯一被点亮的一格 -->
+  <rect x="146.67" y="146.67" width="53.33" height="53.33" fill="#C8452F"/>
+</svg>

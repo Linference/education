@@ -1,0 +1,86 @@
+{
+  "probe_word": "龘靐齉",
+  "cases": [
+    {
+      "label": "1 CDP 组合输入一个词后撤销",
+      "insert_ok": true,
+      "delta_len": 3,
+      "before_len": 235,
+      "presses": 1,
+      "history": [
+        {
+          "press": 1,
+          "len": 235,
+          "len_back_to_before": true,
+          "word_still_present": false
+        }
+      ],
+      "pass": true
+    },
+    {
+      "label": "2 多步组合输入后撤销",
+      "insert_ok": true,
+      "delta_len": 3,
+      "before_len": 235,
+      "presses": 1,
+      "history": [
+        {
+          "press": 1,
+          "len": 235,
+          "len_back_to_before": true,
+          "word_still_present": false
+        }
+      ],
+      "pass": true
+    },
+    {
+      "label": "3 普通插入文本后撤销（CodeMirror 基线）",
+      "insert_ok": true,
+      "delta_len": 3,
+      "before_len": 235,
+      "presses": 1,
+      "history": [
+        {
+          "press": 1,
+          "len": 235,
+          "len_back_to_before": true,
+          "word_still_present": false
+        }
+      ],
+      "pass": true
+    },
+    {
+      "label": "4 组合输入后立刻撤销（间隔 <500ms）",
+      "insert_ok": true,
+      "delta_len": 3,
+      "before_len": 235,
+      "presses": 1,
+      "history": [
+        {
+          "press": 1,
+          "len": 235,
+          "len_back_to_before": true,
+          "word_still_present": false
+        }
+      ],
+      "pass": true
+    },
+    {
+      "label": "5 组合输入后等 1.5 秒再撤销",
+      "insert_ok": true,
+      "delta_len": 3,
+      "before_len": 235,
+      "presses": 1,
+      "history": [
+        {
+          "press": 1,
+          "len": 235,
+          "len_back_to_before": true,
+          "word_still_present": false
+        }
+      ],
+      "pass": true
+    }
+  ],
+  "page_errors": []
+}

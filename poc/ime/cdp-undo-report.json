@@ -1,0 +1,246 @@
+{
+  "A_codemirror_single_word": {
+    "presses_needed": 12,
+    "detail": [
+      {
+        "press": 1,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 2,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 3,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 4,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 5,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 6,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 7,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 8,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 9,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 10,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 11,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 12,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      }
+    ]
+  },
+  "B_native_textarea": {
+    "presses_needed": 1,
+    "detail": [
+      {
+        "press": 1,
+        "len": 0,
+        "still_present": false,
+        "tail": ""
+      }
+    ]
+  },
+  "C_codemirror_multistep": {
+    "presses_needed": 12,
+    "detail": [
+      {
+        "press": 1,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 2,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 3,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 4,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 5,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 6,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 7,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 8,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 9,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 10,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 11,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 12,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      }
+    ]
+  },
+  "D_codemirror_plain_insert": {
+    "presses_needed": 12,
+    "detail": [
+      {
+        "press": 1,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 2,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 3,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 4,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 5,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 6,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 7,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 8,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 9,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 10,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 11,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      },
+      {
+        "press": 12,
+        "len": 235,
+        "still_present": true,
+        "tail": "在这里打分$ 、#标签在这里\n连续退格后重打：\n"
+      }
+    ]
+  },
+  "conclusion": "CodeMirror 与原生控件行为不一致，需进一步排查",
+  "page_errors": []
+}
