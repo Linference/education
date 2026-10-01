@@ -1,0 +1,16 @@
+{
+  "name": "@gezhi/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "格致 · 本地优先的个人学习操作系统",
+  "main": "main/index.cjs",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "node smoke-electron.mjs"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
+  },
+  "author": "Linference <linjie20091027@gmail.com>",
+  "license": "MIT"
+}

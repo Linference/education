@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+<title>格致</title>
+<link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="titlebar">
+      <div class="brand">格致</div>
+      <button id="btn-open-vault" class="tb-btn">打开库…</button>
+      <div id="vault-name" class="vault-name">（未打开库）</div>
+      <div class="spacer"></div>
+      <div id="env-info" class="env-info"></div>
+    </header>
+
+    <main id="layout">
+      <!-- 左：文件树 -->
+      <aside id="sidebar">
+        <div class="panel-head">文件</div>
+        <div id="tree" class="tree"><div class="empty">打开一个库后在这里浏览文件</div></div>
+      </aside>
+
+      <div class="splitter" id="split-a"></div>
+
+      <!-- 中：标签页 + 编辑器 -->
+      <section id="center">
+        <div id="tabs" class="tabs"></div>
+        <div id="editor-host" class="editor-host">
+          <div class="empty">
+            <p>还没有打开任何文件。</p>
+            <p class="hint">从左边选一个 Markdown 文件，或先点「打开库…」。</p>
+          </div>
+        </div>
+      </section>
+
+      <div class="splitter" id="split-b"></div>
+
+      <!-- 右：信息栏（P3 起放反链与大纲） -->
+      <aside id="rightbar">
+        <div class="panel-head">信息</div>
+        <div id="info-panel" class="info-panel">
+          <div class="empty">这里将来显示反向链接、大纲与知识点关联</div>
+        </div>
+      </aside>
+    </main>
+
+    <footer id="statusbar">
+      <span id="status-left">就绪</span>
+      <div class="spacer"></div>
+      <span id="status-right"></span>
+    </footer>
+  </div>
+
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>

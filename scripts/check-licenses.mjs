@@ -40,7 +40,45 @@ const OK_PATTERNS = [
   /^MIT$/i, /^MIT-0$/i, /Apache-2\.0/i, /^BSD/i, /^ISC$/i, /^MPL-2\.0/i,
   /^0BSD$/i, /Unlicense/i, /^CC0/i, /^Zlib$/i, /^Python-2\.0$/i,
   /^BlueOak/i, /^Artistic/i, /BSD-3-Clause OR MIT/i,
+  /^WTFPL$/i,          // 比 MIT 还宽松，只是名字不严肃
+  /^CC-BY-4\.0$/i,     // 署名即可，非 copyleft
 ];
+
+/**
+ * 求值 SPDX 表达式。
+ *
+ * npm 的 license 字段经常是**表达式**而不是单一标识符：
+ *   "WTFPL OR ISC"       → 二选一，有一个宽松就整体可用
+ *   "(MIT OR CC0-1.0)"   → 同上，带括号
+ *   "MIT AND CC0-1.0"    → 两者都要满足
+ *
+ * 为什么必须支持：第一版只做整串正则匹配，于是把
+ * "WTFPL OR ISC" / "(MIT OR CC0-1.0)" 这类**明显可用**的许可也拦下来了。
+ * 门禁太笨的真实后果是：没人愿意用它，最后被 --no-verify 绕过 —— 等于没有门禁。
+ * 所以"宁可误报"要有度：**误报要能被快速消化**，否则规则会被整体抛弃。
+ */
+function evalSpdx(expr) {
+  const s = String(expr ?? "").trim();
+  if (!s || s === "(未声明)") return "block";
+
+  const flat = s.replace(/[()]/g, " ").trim();
+
+  // AND：最严格成分决定整体
+  if (/\sAND\s/i.test(flat)) {
+    const parts = flat.split(/\s+AND\s+/i).map(evalSpdx);
+    return parts.includes("block") ? "block" : parts.includes("warn") ? "warn" : "ok";
+  }
+  // OR：最宽松成分决定整体（任一可用即可）
+  if (/\sOR\s/i.test(flat)) {
+    const parts = flat.split(/\s+OR\s+/i).map(evalSpdx);
+    return parts.includes("ok") ? "ok" : parts.includes("warn") ? "warn" : "block";
+  }
+
+  for (const o of OK_PATTERNS) if (o.test(s)) return "ok";
+  for (const b of BLOCK_PATTERNS) if (b.re.test(s)) return "block";
+  for (const w of WARN_PATTERNS) if (w.re.test(s)) return "warn";
+  return "block";
+}
 
 // 已知且已确认过的库（有据可查的例外，写清理由）
 const KNOWN_EXCEPTIONS = [
@@ -121,10 +159,18 @@ function classify(name, license) {
     const re = new RegExp("^" + ex.name.replace(/\*/g, ".*") + "$");
     if (re.test(name)) return { level: "ok", why: ex.why };
   }
-  for (const b of BLOCK_PATTERNS) if (b.re.test(license)) return { level: "block", why: b.why };
-  for (const w of WARN_PATTERNS) if (w.re.test(license)) return { level: "warn", why: w.why };
-  for (const o of OK_PATTERNS) if (o.test(license)) return { level: "ok", why: "" };
-  return { level: "block", why: "许可无法识别，默认按阻止处理（需人工加入白名单）" };
+  // 交给 SPDX 表达式求值（支持 "A OR B" / "A AND B"）
+  const level = evalSpdx(license);
+  if (level === "ok") return { level: "ok", why: "" };
+  if (level === "warn") {
+    const w = WARN_PATTERNS.find((p) => p.re.test(license));
+    return { level: "warn", why: w ? w.why : "弱 copyleft，需人工确认" };
+  }
+  const b = BLOCK_PATTERNS.find((p) => p.re.test(license));
+  return {
+    level: "block",
+    why: b ? b.why : "许可无法识别，默认按阻止处理（请确认后加入 OK_PATTERNS 并写明理由）",
+  };
 }
 
 // ------------------------------------------------------------------ 主流程

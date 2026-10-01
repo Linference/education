@@ -1,0 +1,157 @@
+[
+  {
+    "name": "窗口启动且渲染进程就绪",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "窗口标题正确",
+    "pass": true,
+    "detail": "title=\"格致\""
+  },
+  {
+    "name": "preload 暴露了受控 API（window.gezhi）",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "IPC app:info 返回 Electron 版本",
+    "pass": true,
+    "detail": "electron=44.5.1"
+  },
+  {
+    "name": "IPC 返回真实的「文档」目录（不是硬编码）",
+    "pass": true,
+    "detail": "documentsDir=D:\\Users\\LINKIT\\Documents"
+  },
+  {
+    "name": "★ 渲染进程没有 Node require（contextIsolation 生效）",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "★ 渲染进程没有 process 全局",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "★ window.gezhi 上没有 ipcRenderer 本体",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "★ window.gezhi 上没有暴露 fs / child_process",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：标题栏",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：左侧栏",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：中间区",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：右侧栏",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：标签页条",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：状态栏",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "界面元素存在：打开库按钮",
+    "pass": true,
+    "detail": ""
+  },
+  {
+    "name": "状态栏显示了「文档」目录",
+    "pass": true,
+    "detail": "文档目录：D:\\Users\\LINKIT\\Documents"
+  },
+  {
+    "name": "IPC vault:list 能列真实目录",
+    "pass": true,
+    "detail": "21 项"
+  },
+  {
+    "name": "IPC file:read 能读真实 Markdown",
+    "pass": true,
+    "detail": "3938 字"
+  },
+  {
+    "name": "读到的内容确实是 README 开头",
+    "pass": true,
+    "detail": "\"# 格致\\n\\n> 本地优先的个人学\""
+  },
+  {
+    "name": "非法路径返回错误对象而不是抛异常",
+    "pass": true,
+    "detail": "目录不存在：ENOENT: no such file or directory,"
+  },
+  {
+    "name": "不支持的文件类型给出明确提示",
+    "pass": true,
+    "detail": "暂不支持预览 .bin 文件"
+  },
+  {
+    "name": "能识别格致库（读到 .gezhi/vault.json）",
+    "pass": true,
+    "detail": "name=gezhi-e2e-qVadhT"
+  },
+  {
+    "name": "文件树渲染出了条目",
+    "pass": true,
+    "detail": "2 行"
+  },
+  {
+    "name": "点击文件后产生标签页",
+    "pass": true,
+    "detail": "1 个"
+  },
+  {
+    "name": "编辑器区显示了文件内容",
+    "pass": true,
+    "detail": "\"# 情态动词\\n\\nmust 表示必须。\\n\""
+  },
+  {
+    "name": "活动标签指向被点的文件",
+    "pass": true,
+    "detail": "情态动词.md"
+  },
+  {
+    "name": "刷新后能看到新增的文件（验证缓存不会返回陈旧结果）",
+    "pass": true,
+    "detail": "匹配 1 个"
+  },
+  {
+    "name": "能同时打开多个文件（多标签）",
+    "pass": true,
+    "detail": "2 个：[\"情态动词.md\",\"虚拟语气.md\"]"
+  },
+  {
+    "name": "能关闭标签页",
+    "pass": true,
+    "detail": "1 个"
+  },
+  {
+    "name": "渲染进程无 JS 报错",
+    "pass": true,
+    "detail": ""
+  }
+]

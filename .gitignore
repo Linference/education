@@ -50,3 +50,7 @@ desktop.ini
 # 语音测试产物
 packages/voice/out/
 
+
+# 构建产物
+dist/
+

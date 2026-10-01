@@ -19,5 +19,62 @@
     "dsh:smoke": "node packages/dsh-bridge/smoke.mjs",
     "p0": "node scripts/p0.mjs"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "electron-builder": "^26.15.3",
+    "playwright": "^1.63.0"
+  },
+  "build": {
+    "appId": "mo.gezhi.app",
+    "productName": "格致",
+    "copyright": "Copyright 2026 Linference",
+    "directories": {
+      "app": "apps/desktop",
+      "output": "dist/installer",
+      "buildResources": "brand/assets"
+    },
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "asar": true,
+    "compression": "maximum",
+    "artifactName": "${productName}-${version}-安装包.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "brand/assets/app.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "格致",
+      "installerLanguages": [
+        "zh_TW",
+        "zh_CN",
+        "en_US"
+      ],
+      "multiLanguageInstaller": true,
+      "displayLanguageSelector": true,
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "installerIcon": "brand/assets/app.ico",
+      "uninstallerIcon": "brand/assets/app.ico",
+      "installerHeaderIcon": "brand/assets/app.ico",
+      "include": "build/installer.nsh"
+    }
+  },
+  "author": "Linference <linjie20091027@gmail.com>",
+  "license": "MIT"
 }
