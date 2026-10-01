@@ -10,8 +10,12 @@
   },
   "scripts": {
     "check:license": "node scripts/check-licenses.mjs",
+    "check:license:test": "node scripts/check-licenses.test.mjs",
+    "check:secrets": "node scripts/scan-secrets.mjs",
+    "check:secrets:test": "node scripts/scan-secrets.test.mjs",
     "db:assert": "node packages/db/src/assert-schema.mjs",
     "db:init": "node packages/db/src/cli.mjs",
+    "db:where": "node packages/db/src/cli.mjs where",
     "dsh:smoke": "node packages/dsh-bridge/smoke.mjs",
     "p0": "node scripts/p0.mjs"
   },

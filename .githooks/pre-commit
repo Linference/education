@@ -1,0 +1,63 @@
+#!/bin/sh
+# 格致 · 提交前检查
+#
+# 为什么用 .githooks/ 而不是 .git/hooks/：
+#   .git/ 不纳入版本控制 —— 放在那儿的钩子 clone 到别的机器就没了，
+#   等于"只有我这台机器安全"。用 core.hooksPath 指向 .githooks/ 才能真正共享。
+#
+# 安装（只需一次）：
+#   git config core.hooksPath .githooks
+#
+# 两道闸：
+#   ① 密钥泄露扫描（最重要：这个项目已经踩过两次）
+#   ② 许可白名单（AGPL / 非商业 / 禁止生产使用 一律不许进依赖树）
+
+set -e
+
+echo "── 提交前检查 ──"
+
+# ---------- ① 密钥扫描：只看本次要提交的内容 ----------
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+if [ -n "$STAGED" ]; then
+  echo "[1/2] 扫描暂存区文件的密钥…"
+  # 用 git show :file 取出暂存版本（而不是工作区版本），确保检查的就是将要提交的内容
+  TMPDIR_SEC=$(mktemp -d)
+  trap 'rm -rf "$TMPDIR_SEC"' EXIT
+  COUNT=0
+  for f in $STAGED; do
+    # 跳过已删除的、二进制的、以及扫描器自己声明的例外
+    case "$f" in
+      *.png|*.jpg|*.jpeg|*.gif|*.webp|*.ico|*.pdf|*.zip|*.gz|*.woff|*.woff2|*.ttf|*.otf|*.mp3|*.mp4|*.db|*.asar) continue ;;
+    esac
+    mkdir -p "$TMPDIR_SEC/$(dirname "$f")"
+    git show ":$f" > "$TMPDIR_SEC/$f" 2>/dev/null || continue
+    COUNT=$((COUNT + 1))
+  done
+
+  if [ "$COUNT" -gt 0 ]; then
+    if ! node scripts/scan-secrets.mjs "$TMPDIR_SEC" > "$TMPDIR_SEC/out.txt" 2>&1; then
+      cat "$TMPDIR_SEC/out.txt"
+      echo ""
+      echo "✖ 提交被拒绝：疑似密钥泄露。"
+      echo "  处理：① 吊销并重发该密钥  ② 新密钥存到 %APPDATA%\\gezhi\\credentials.enc"
+      echo "        ③ 确属误报就在 scripts/scan-secrets.mjs 里加例外并写清理由"
+      echo "  临时绕过（不推荐）：git commit --no-verify"
+      exit 1
+    fi
+    tail -2 "$TMPDIR_SEC/out.txt"
+  fi
+else
+  echo "[1/2] 暂存区为空，跳过密钥扫描"
+fi
+
+# ---------- ② 许可门禁 ----------
+echo "[2/2] 检查依赖许可…"
+if ! node scripts/check-licenses.mjs > /tmp/gezhi-lic.txt 2>&1; then
+  cat /tmp/gezhi-lic.txt
+  echo ""
+  echo "✖ 提交被拒绝：依赖树里有许可风险。"
+  exit 1
+fi
+tail -2 /tmp/gezhi-lic.txt
+
+echo "── 检查通过 ──"
