@@ -76,3 +76,4 @@ vendor/soffice/*
 # 调试用的临时目录（vscode-office 源码、ACL 诊断报告）
 .tmp-vscode-office/
 _acl-report/
+.git-commit-msg.txt
