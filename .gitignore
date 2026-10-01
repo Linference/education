@@ -38,3 +38,7 @@ credentials*.json
 .idea/
 Thumbs.db
 desktop.ini
+
+# 生成物（可从模板重新编译）
+产出/
+
