@@ -6,7 +6,8 @@
 //   Markdown → MD    ：原样另存
 const path = require("node:path");
 const fs = require("node:fs");
-const { dialog } = require("electron");
+// app 用来取系统"下载"文件夹的真实路径（用户可能改过位置，也可能被组策略重定向）
+const { dialog, app } = require("electron");
 const { exportPdf, exportDocx, probeExportCapabilities } = require("./lib/export.cjs");
 
 function registerExport(ipcMain, getWindow) {
@@ -62,9 +63,10 @@ function registerExport(ipcMain, getWindow) {
    * @param payload.defaultName 默认文件名（不含扩展名）
    * @param payload.author 可选署名（默认不写 —— 产出物要干净）
    * @param payload.saveAs 是否弹"另存为"对话框
+   * @param payload.toDownloads 导出到系统"下载"文件夹，而不是源文件所在目录
    */
   ipcMain.handle("export:run", async (_e, payload) => {
-    const { format, markdown, sourcePath, defaultName, author, saveAs } = payload ?? {};
+    const { format, markdown, sourcePath, defaultName, author, saveAs, toDownloads } = payload ?? {};
     if (!markdown || typeof markdown !== "string") {
       return { ok: false, error: "没有可导出的内容" };
     }
@@ -73,7 +75,27 @@ function registerExport(ipcMain, getWindow) {
     }
 
     const stem = defaultName || path.basename(sourcePath, path.extname(sourcePath));
-    const dir = path.dirname(sourcePath);
+    /*
+     * 输出目录。
+     *
+     * 默认与源文件同目录（在库里的笔记导出后就近放着，好找）。
+     * 但**组卷导出试卷时要走"下载"文件夹** —— 用户要的是"拿到一份卷子",
+     * 那是文件交付，不是往知识库里加东西；混进库里还会被索引、
+     * 出现在文件树里，反而乱。
+     *
+     * 用 Electron 的 app.getPath("downloads") 而不是拼 "C:\Users\x\Downloads" ——
+     * 用户可能改过下载位置，也可能被组策略重定向（本机的"文档"就是重定向过的）。
+     */
+    let dir = path.dirname(sourcePath);
+    if (toDownloads) {
+      try {
+        dir = app.getPath("downloads");
+      } catch {
+        // 拿不到就退回原位，不因为这点事让导出失败
+      }
+    }
+    // 目标目录可能不存在（用户删过），补建一下
+    try { fs.mkdirSync(dir, { recursive: true }); } catch { /* 忽略，写的时候会再报 */ }
 
     // 目标路径：默认与源文件同目录（用户能找到），也可以弹对话框
     let target;

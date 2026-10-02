@@ -244,22 +244,44 @@ try {
   check("有导出按钮且可点", (await exportBtn.count()) > 0 && !(await exportBtn.isDisabled()));
 
   await exportBtn.click();
-  // PDF 生成要时间
+  /*
+   * PDF 应该落在**系统"下载"文件夹**，不是库目录。
+   *
+   * ⚠️ 本机的下载目录是 D:\Users\LINKIT\Downloads（被重定向到 D 盘），
+   *    不是默认的 C:\Users\x\Downloads —— 所以**绝不能硬编码**，
+   *    主进程用的是 app.getPath("downloads")。
+   *    测试这边同理：从界面上读回真实路径，别自己拼。
+   */
   let pdfPath = null;
+  let announcedPath = null;
   for (let i = 0; i < 40; i++) {
     await page.waitForTimeout(1000);
-    const found = fs.readdirSync(vault).filter((f) => f.endsWith(".pdf"));
-    if (found.length) { pdfPath = path.join(vault, found[0]); break; }
+    const t = await page.evaluate(() => document.body.innerText);
+    const m = t.match(/已导出到下载文件夹：([^\n（]+)/);
+    if (m) {
+      announcedPath = m[1].trim();
+      if (fs.existsSync(announcedPath)) { pdfPath = announcedPath; break; }
+    }
   }
   check("★ 试卷 PDF 生成了", Boolean(pdfPath), pdfPath ? path.basename(pdfPath) : "40 秒内没生成");
+  check("★ 落盘位置是下载文件夹（不是库目录）",
+    Boolean(pdfPath) && path.dirname(pdfPath).toLowerCase().includes("download"),
+    pdfPath ? path.dirname(pdfPath) : "未知");
+  check("★ PDF 没有混进资料库（库目录里不该出现 pdf）",
+    fs.readdirSync(vault).filter((f) => f.endsWith(".pdf")).length === 0,
+    fs.readdirSync(vault).filter((f) => f.endsWith(".pdf")).join(",") || "库目录干净");
+
   if (pdfPath) {
     const buf = fs.readFileSync(pdfPath);
-    console.log(`  PDF ${(buf.length / 1024).toFixed(0)} KB`);
+    console.log(`  PDF ${(buf.length / 1024).toFixed(0)} KB → ${pdfPath}`);
     check("产出确实是 PDF（%PDF- 文件头）", buf.subarray(0, 5).toString("latin1") === "%PDF-");
     // ★ 产品硬规矩：试卷不能带产品署名
     const raw = buf.toString("latin1");
     check("★ 试卷 PDF 不含产品署名（产品硬规矩）", !raw.includes("格致"), "");
+    // 清理：别在用户的下载文件夹里留测试垃圾
+    try { fs.rmSync(pdfPath); console.log("  （已清理测试产生的 PDF）"); } catch { /* 忽略 */ }
   }
+  void announcedPath;
 
   await page.screenshot({ path: path.join(OUT, "ui-bank.png") });
   check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));

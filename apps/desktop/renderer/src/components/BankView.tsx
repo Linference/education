@@ -143,17 +143,24 @@ export default function BankView({ vaultPath }: Props) {
       const title = paperTitle.trim() || "试卷";
       const md = buildPaperMarkdown(title, basket, { withAnswers });
 
-      // 输出到库目录下，文件名带时间避免覆盖
-      const now = new Date();
-      const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
-      const outPath = `${vaultPath}\\${title}-${stamp}.pdf`;
-
+      /*
+       * 试卷导出到**系统"下载"文件夹**，不是库目录。
+       *
+       * 用户的诉求就是"拿到一份卷子"（要打印/发给学生），
+       * 那是**文件交付**，不是往知识库里加东西。
+       * 而且混进库里会被索引、出现在文件树里，反而把库弄乱。
+       *
+       * 路径由主进程用 app.getPath("downloads") 解析 ——
+       * 不在这里拼 "C:\Users\x\Downloads"，因为用户可能改过下载位置，
+       * 也可能被组策略重定向（本机的"文档"目录就是重定向过的）。
+       */
       const r = await window.gezhi.exporter.run({
         format: "pdf",
         markdown: md,
         sourcePath: `${vaultPath}\\${title}.md`,
         defaultName: title,
         title,
+        toDownloads: true,
       });
       if (!r.ok) {
         setErr(`导出失败：${r.error ?? "未知原因"}`);
@@ -167,8 +174,7 @@ export default function BankView({ vaultPath }: Props) {
         config: { type, source, kp, diffMin },
       }).catch(() => null);
 
-      setNotice(`已导出：${r.path ?? outPath}（${basket.length} 题）`);
-      void outPath;
+      setNotice(`已导出到下载文件夹：${r.path ?? "（路径未知）"}（${basket.length} 题）`);
     } catch (e: any) {
       setErr(e?.message ?? String(e));
     } finally {

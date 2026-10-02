@@ -129,6 +129,8 @@ export interface GezhiApi {
       defaultName?: string;
       author?: string;
       saveAs?: boolean;
+      /** 导出到系统"下载"文件夹（组卷出卷走这条），而不是源文件所在目录 */
+      toDownloads?: boolean;
     }): Promise<ExportResult>;
     reveal(p: string): Promise<{ ok: boolean; error?: string }>;
   };
