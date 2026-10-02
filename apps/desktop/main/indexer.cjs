@@ -410,7 +410,142 @@ function indexStats(db, { vault }) {
   return { ok: true, docs, chunks, links, lastIndexed: last };
 }
 
+/**
+ * 关系图谱：一次取出整张图（节点 + 边）。
+ *
+ * ★ 为什么单独一个查询而不是逐个文件调 backlinks/outlinks：
+ *   那样是 N+1 次查询，几百篇笔记就要查几百次；
+ *   图谱要的是全貌，直接一次读表才对。
+ *
+ * ★ 两类节点要分开：
+ *   · 已存在的笔记（docs 表里有）—— 正常节点
+ *   · 被引用但**不存在**的目标（[[某某]] 但没这个文件）—— 悬空节点
+ *   悬空节点必须画出来且用不同样式：它是"还没写的笔记"，
+ *   在 Obsidian 里这正是最有价值的提示（知道自己缺什么）。
+ */
+/**
+ * 把绝对路径转成相对于库的路径。
+ *
+ * 前端按"顶层文件夹"给节点着色与分组时要用它 ——
+ * 绝对路径的第一段永远是盘符（"C:"），拿它当文件夹名毫无意义。
+ */
+function relOf(absPath, vault) {
+  if (!absPath || !vault) return absPath;
+  const a = String(absPath).replace(/\//g, "\\");
+  const v = String(vault).replace(/\//g, "\\").replace(/\\+$/, "");
+  if (a.toLowerCase().startsWith(v.toLowerCase() + "\\")) {
+    return a.slice(v.length + 1);
+  }
+  return a;
+}
+
+function graph(db, { vault, maxNodes = 400, maxEdges = 2000 } = {}) {
+  const docs = db.prepare(
+    "select path, name, ext from docs where vault = ? order by path limit ?"
+  ).all(vault, maxNodes);
+
+  // 边的数量单独统计：超出 maxNodes 时要如实告诉用户"图被截断了"
+  const totalDocs = db.prepare("select count(*) as n from docs where vault = ?").get(vault)?.n ?? 0;
+
+  const edges = db.prepare(
+    "select source, target, label, line from links where vault = ? limit ?"
+  ).all(vault, maxEdges);
+  const totalEdges = db.prepare("select count(*) as n from links where vault = ?").get(vault)?.n ?? 0;
+
+  /*
+   * ★★ 关键：把 [[裸标题]] 解析成真实文件路径 ★★
+   *
+   * links 表里存的 target 是**链接里写的字**（如「顶点式」），
+   * 而 docs 表的键是**路径**（如「顶点式.md」）。
+   * 直接拿 target 去比 path 永远不相等 —— 于是每一篇存在的笔记
+   * 都被画成"悬空链接"。
+   * （实测踩到：库里 3 篇笔记 + 1 条真悬空，结果 4 个全被标成悬空。）
+   *
+   * Obsidian 的规则是按**文件名（去掉扩展名）**匹配，同名取任意一个。
+   * 所以建两张索引：
+   *   byStem —— 去扩展名的文件名 → 路径（[[顶点式]] 走这条）
+   *   byPath —— 完整路径 → 路径（写全路径或带扩展名时走这条）
+   */
+  const byStem = new Map();
+  const byPath = new Map();
+  for (const d of docs) {
+    byPath.set(d.path, d.path);
+    const stem = d.name.replace(/\.[^.]+$/, "");
+    if (!byStem.has(stem)) byStem.set(stem, d.path);
+  }
+
+  /** 解析链接目标 → 实际存在的路径；解析不到返回 null（真悬空） */
+  function resolveTarget(target) {
+    if (!target) return null;
+    const t = String(target).trim();
+    if (byPath.has(t)) return t;
+
+    const stem = t.replace(/\.[^.]+$/, "");
+    // 带目录的写法（数学/顶点式）：按"路径结尾"匹配
+    if (/[\\/]/.test(stem)) {
+      const norm = stem.replace(/\//g, "\\");
+      for (const p of byPath.keys()) {
+        if (p.replace(/\.[^.]+$/, "").endsWith(norm)) return p;
+      }
+    }
+    return byStem.get(stem) ?? null;
+  }
+
+  const nodes = new Map();
+  for (const d of docs) {
+    nodes.set(d.path, {
+      id: d.path,
+      /*
+       * ★ 必须给出**相对于库的路径**，不能只给绝对路径。
+       *
+       * 前端要按"顶层文件夹"给节点着色，而绝对路径形如
+       *   C:\Users\...\Temp\gezhi-forest-xxx\数学\二次函数.md
+       * 取第一段只会得到 "C:" —— 实测就是这个现象：
+       * 图例显示成「C.（12）」，所有节点同一个颜色，分组完全失效。
+       *
+       * 所以这里顺手算好相对路径（rel），前端直接按它取文件夹。
+       */
+      rel: relOf(d.path, vault),
+      // 显示名去掉扩展名：图上是「顶点式」而不是「顶点式.md」，更干净
+      name: d.name.replace(/\.[^.]+$/, ""),
+      ext: d.ext, exists: true, degree: 0,
+    });
+  }
+
+  const kept = [];
+  for (const e of edges) {
+    const a = nodes.has(e.source) ? e.source : resolveTarget(e.source);
+    const b = resolveTarget(e.target);
+    if (!a || !nodes.has(a)) continue;      // 源文件不在图里（被截断）
+
+    if (!b) {
+      // 真·悬空：指向的笔记确实不存在 → 单独建一个空心节点
+      const key = `dangling:${e.target}`;
+      if (!nodes.has(key)) {
+        if (nodes.size >= maxNodes) continue;
+        nodes.set(key, { id: key, rel: "", name: String(e.target), ext: "", exists: false, degree: 0 });
+      }
+      nodes.get(key).degree += 1;
+      kept.push({ source: a, target: key, label: e.label ?? null, line: e.line ?? null });
+      continue;
+    }
+    if (!nodes.has(b)) continue;
+    nodes.get(a).degree += 1;
+    nodes.get(b).degree += 1;
+    kept.push({ source: a, target: b, label: e.label ?? null, line: e.line ?? null });
+  }
+
+  return {
+    ok: true,
+    nodes: [...nodes.values()],
+    edges: kept,
+    truncated: totalDocs > maxNodes || totalEdges > maxEdges,
+    totalDocs,
+    totalEdges,
+  };
+}
+
 module.exports = {
-  openIndex, indexVault, search, backlinks, outlinks, indexStats,
+  graph,openIndex, indexVault, search, backlinks, outlinks, indexStats,
   chunkText, extractLinks, INDEXABLE, MAX_INDEX_BYTES,
 };

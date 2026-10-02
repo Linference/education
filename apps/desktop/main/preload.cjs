@@ -93,6 +93,8 @@ const api = {
     /** 等后台索引跑完（测试与"保存后立刻检索"用） */
     waitIdle: () => ipcRenderer.invoke("search:waitIdle"),
     query: (payload) => ipcRenderer.invoke("search:query", payload),
+    /** 关系图谱：一次取整张图（节点 + 边），不逐个文件查 */
+    graph: (payload) => ipcRenderer.invoke("search:graph", payload),
     backlinks: (payload) => ipcRenderer.invoke("search:backlinks", payload),
     outlinks: (payload) => ipcRenderer.invoke("search:outlinks", payload),
     stats: (vault) => ipcRenderer.invoke("search:stats", vault),
@@ -156,6 +158,44 @@ const api = {
      */
     asr: (payload) => ipcRenderer.invoke("avatar:asr", payload ?? {}),
     paths: () => ipcRenderer.invoke("avatar:paths"),
+  },
+
+  // 设置：凭据管理 + 应用选项
+  //
+  // ★ 密钥**只进不出**：credStatus 只回传"配没配、什么模式、存在哪、尾号 4 位"，
+  //   完整密钥永远不回到渲染进程。
+  // ★ 安装包里也绝不放密钥 —— 那等于把账号借给所有装格致的人用。
+  settings: {
+    get: () => ipcRenderer.invoke("settings:get"),
+    set: (patch) => ipcRenderer.invoke("settings:set", patch ?? {}),
+    credStatus: () => ipcRenderer.invoke("settings:credStatus"),
+    credSave: (payload) => ipcRenderer.invoke("settings:credSave", payload ?? {}),
+    credDelete: (payload) => ipcRenderer.invoke("settings:credDelete", payload ?? {}),
+    /** DSH（AI 大脑）是否就绪 —— 没装它 AI 就用不了 */
+    dshStatus: () => ipcRenderer.invoke("settings:dshStatus"),
+  },
+
+  // 题库与组卷
+  //
+  // ★ 为什么单独建库（SQLite）而不只用 Markdown：
+  //   组卷是"按条件抽题"（来源 + 知识点 + 难度 + 题型叠加），
+  //   那是查询不是浏览；几百道题全量读盘再过滤会卡。
+  //   题目仍可导出成 Markdown 编辑，这里存的是可检索副本。
+  bank: {
+    list: (p) => ipcRenderer.invoke("bank:list", p),
+    stats: (p) => ipcRenderer.invoke("bank:stats", p),
+    byIds: (p) => ipcRenderer.invoke("bank:byIds", p),
+    add: (p) => ipcRenderer.invoke("bank:add", p),
+    addMany: (p) => ipcRenderer.invoke("bank:addMany", p),
+    update: (p) => ipcRenderer.invoke("bank:update", p),
+    delete: (p) => ipcRenderer.invoke("bank:delete", p),
+    /** 解析 Markdown 文件，先给用户看结果再决定导不导 */
+    parseFile: (p) => ipcRenderer.invoke("bank:parseFile", p),
+    toMarkdown: (p) => ipcRenderer.invoke("bank:toMarkdown", p),
+    savePaper: (p) => ipcRenderer.invoke("bank:savePaper", p),
+    papers: (p) => ipcRenderer.invoke("bank:papers", p),
+    deletePaper: (p) => ipcRenderer.invoke("bank:deletePaper", p),
+    info: () => ipcRenderer.invoke("bank:info"),
   },
 };
 

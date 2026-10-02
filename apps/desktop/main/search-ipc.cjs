@@ -116,6 +116,25 @@ function registerSearch(ipcMain, getWindow, app) {
     }
   });
 
+  /**
+   * 关系图谱：一次取整张图。
+   *
+   * 不逐个文件调 backlinks/outlinks —— 那是 N+1 次查询，
+   * 几百篇笔记要查几百次。图谱看的是全貌，直接读表。
+   */
+  ipcMain.handle("search:graph", async (_e, { vault, maxNodes, maxEdges } = {}) => {
+    try {
+      const database = open();
+      return idx.graph(database, {
+        vault: vault ?? currentVault,
+        ...(maxNodes ? { maxNodes } : {}),
+        ...(maxEdges ? { maxEdges } : {}),
+      });
+    } catch (e) {
+      return { ok: false, error: e.message, nodes: [], edges: [] };
+    }
+  });
+
   /** 反向链接 */
   ipcMain.handle("search:backlinks", async (_e, { vault, path: filePath }) => {
     try {

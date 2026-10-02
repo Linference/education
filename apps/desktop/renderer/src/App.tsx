@@ -21,6 +21,9 @@ import SearchPanel from "./components/SearchPanel";
 import BacklinksPanel from "./components/BacklinksPanel";
 import CalendarPanel from "./components/CalendarPanel";
 import AvatarPanel from "./components/AvatarPanel";
+import SettingsPanel from "./components/SettingsPanel";
+import GraphView from "./components/GraphView";
+import BankView from "./components/BankView";
 import logoMark from "./assets/app-icon-256.png";
 
 // ---------------------------------------------------------------- 类型
@@ -127,6 +130,14 @@ const Icon = {
       <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" />
     </svg>
   ),
+  /** 数字人：用"人 + 声波"表示，比一个星形更能说明它是干什么的 */
+  sparkle: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="7.5" r="3.6" />
+      <path d="M2.6 19.5c0-3.4 2.9-5.9 6.4-5.9s6.4 2.5 6.4 5.9" />
+      <path d="M18.6 5v9M21.6 7.5v4" />
+    </svg>
+  ),
   calendar: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" />
@@ -202,9 +213,26 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(260);
   const [showRight, setShowRight] = useState(true);
   const [showLeft, setShowLeft] = useState(true);
-  const [rightTab, setRightTab] = useState<"ai" | "info" | "links" | "cal" | "avatar">("ai");
+  const [rightTab, setRightTab] = useState<"ai" | "info" | "links" | "cal" | "avatar" | "settings">("ai");
+  /**
+   * 中间栏显示什么。
+   *   files —— 平常的文件标签页
+   *   graph —— 关系图谱（链接关系可视化）
+   *   bank  —— 题库组卷
+   * 图谱与题库做成"换视图"而不是弹窗：它们要看的内容量大，弹窗挤不下。
+   */
+  const [mainView, setMainView] = useState<"files" | "graph" | "bank">("files");
   /** 左栏视图：文件树 / 全文检索 */
-  const [leftView, setLeftView] = useState<"files" | "search">("files");
+  /**
+   * 左栏视图。
+   *
+   * ★ 归类原则（照 Obsidian 的分法）：
+   *   左栏 = 导航与工具（文件、检索、日历、数字人）
+   *   右栏 = 当前文件的上下文（AI 助手、信息、反向链接、设置）
+   *   日历与数字人原来在右栏，和"当前文件"没关系，
+   *   还把那边的页签挤到 6 个 —— 归类错了，挪到左栏。
+   */
+  const [leftView, setLeftView] = useState<"files" | "search" | "cal" | "avatar">("files");
   /** 索引版本号：索引完成后 +1，用来触发反链面板重新拉取 */
   const [indexVersion, setIndexVersion] = useState(0);
   /** 索引状态（界面上显示"已索引 N 篇"） */
@@ -382,6 +410,30 @@ export default function App() {
    * 硬挪顺序容易踩到 TDZ（这个项目已经被 TDZ 坑过一次）。
    */
   const openFileRef = useRef<((entry: TreeEntry) => Promise<void>) | null>(null);
+
+  /**
+   * 按完整路径打开文件。
+   *
+   * 图谱点节点、题库点题目都要用它 —— 那两处手里只有路径，
+   * 没有 TreeEntry（它得先列目录才知道）。
+   * 所以这里"由路径反查 entry 再交给 openFile"，
+   * 保证和图树上点开走的是**同一条**打开逻辑（格式路由、查看器选择都不重复实现）。
+   */
+  const openFileByPath = useCallback(async (fullPath: string) => {
+    try {
+      const sep = fullPath.includes("\\") ? "\\" : "/";
+      const dir = fullPath.slice(0, fullPath.lastIndexOf(sep));
+      const name = fullPath.slice(fullPath.lastIndexOf(sep) + 1);
+      const r = await window.gezhi.vault.list(dir);
+      if (r?.ok === false) { setStatus("打开失败：" + (r.error ?? "目录读不到")); return; }
+      const entry = r.entries.find((e) => e.name === name);
+      if (!entry) { setStatus(`打开失败：找不到 ${name}`); return; }
+      // openFile 是通过 ref 拿的，避开"定义在后面"的循环依赖
+      await openFileRef.current?.(entry);
+    } catch (e: any) {
+      setStatus("打开失败：" + (e?.message ?? e));
+    }
+  }, []);
 
   /** 统一的失败提示 */
   const fsFail = (e: any) => setFsNotice({ ok: false, text: e?.message ?? String(e) });
@@ -1256,25 +1308,53 @@ export default function App() {
 
           <div className="ribbon-sep" />
 
-          {/* 未启用的功能：明确做成禁用态 */}
-          {[
-            { k: "graph", label: "关系图谱", icon: <Icon.graph /> },
-            { k: "bank", label: "题库组卷", icon: <Icon.book /> },
-            { k: "plan", label: "日历计划", icon: <Icon.calendar /> },
-          ].map((it) => (
-            <button
-              key={it.k}
-              className="ribbon-btn disabled"
-              disabled
-              title={`${it.label}（未启用 —— 见开发计划 P3/P6/P7）`}
-            >
-              {it.icon}
-            </button>
-          ))}
+          {/* 主视图切换：关系图谱 / 题库组卷 / 日历计划。
+              图谱与题库是**中间栏换视图**（不是弹窗）——
+              它们要看的内容量大，弹窗会挤得没法用。 */}
+          <button
+            className={`ribbon-btn${mainView === "graph" ? " active" : ""}`}
+            onClick={() => setMainView((v) => (v === "graph" ? "files" : "graph"))}
+            title={mainView === "graph" ? "返回文件视图" : "关系图谱（把笔记间的链接画成图）"}
+          >
+            <Icon.graph />
+          </button>
+          <button
+            className={`ribbon-btn${mainView === "bank" ? " active" : ""}`}
+            onClick={() => setMainView((v) => (v === "bank" ? "files" : "bank"))}
+            title={mainView === "bank" ? "返回文件视图" : "题库组卷（抽题 → 导出试卷）"}
+          >
+            <Icon.book />
+          </button>
+          {/* 日历与数字人在**左栏**（它们是工具，不是"当前文件的上下文"）。
+              点一下切到该面板，再点一下回文件列表。 */}
+          <button
+            className={`ribbon-btn${leftView === "cal" && showLeft ? " active" : ""}`}
+            onClick={() => {
+              setShowLeft(true);
+              setLeftView((v) => (v === "cal" ? "files" : "cal"));
+            }}
+            title={leftView === "cal" ? "回到文件列表" : "日历计划（月历 / 待办 / 倒计时）"}
+          >
+            <Icon.calendar />
+          </button>
+          <button
+            className={`ribbon-btn${leftView === "avatar" && showLeft ? " active" : ""}`}
+            onClick={() => {
+              setShowLeft(true);
+              setLeftView((v) => (v === "avatar" ? "files" : "avatar"));
+            }}
+            title={leftView === "avatar" ? "回到文件列表" : "数字人（费曼讲解 / 对话 / 能力检测）"}
+          >
+            <Icon.sparkle />
+          </button>
 
           <div className="ribbon-spacer" />
 
-          <button className="ribbon-btn disabled" disabled title="设置（未启用）">
+          <button
+            className={`ribbon-btn${rightTab === "settings" && showRight ? " active" : ""}`}
+            onClick={() => { setRightTab("settings"); setShowRight(true); }}
+            title="设置（密钥 / AI 大脑 / 选项）"
+          >
             <Icon.settings />
           </button>
         </div>
@@ -1283,16 +1363,21 @@ export default function App() {
         {showLeft && (
           <>
             <div className="sidebar" style={{ width: leftWidth }}>
-              {/* 两个视图：文件列表 / 全文检索。
-                  检索作为独立视图而不是"筛选文件名"的增强 ——
-                  两者是不同的事：一个找文件，一个找内容。 */}
+              {/* 左栏视图：文件 / 检索 / 日历 / 数字人。
+                  
+                  ★ 为什么改到这里（原来日历与数字人在右栏）：
+                    右栏是"关于当前文件的上下文"（AI 助手、信息、反向链接），
+                    左栏是"导航与工具"。日历、数字人是**工具**，
+                    塞进右栏后那边挤了 6 个页签，340px 宽根本展开不了，
+                    而且和"当前文件"毫无关系 —— 归类是错的。
+                    参照 Obsidian 的分法：左侧放插件面板，右侧放上下文。 */}
               <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-                {([["files", "文件"], ["search", "检索"]] as const).map(([k, label]) => (
+                {([["files", "文件"], ["search", "检索"], ["cal", "日历"], ["avatar", "数字人"]] as const).map(([k, label]) => (
                   <button
                     key={k}
                     onClick={() => setLeftView(k)}
                     style={{
-                      flex: "1 1 auto", padding: "6px 0", fontSize: 12,
+                      flex: "1 1 auto", padding: "6px 0", fontSize: 12, whiteSpace: "nowrap",
                       color: leftView === k ? "var(--accent)" : "var(--text-muted)",
                       borderBottom: leftView === k ? "2px solid var(--accent)" : "2px solid transparent",
                       fontWeight: leftView === k ? 600 : 400,
@@ -1307,6 +1392,16 @@ export default function App() {
                   </button>
                 ))}
               </div>
+
+              {/* 日历与数字人放左栏：它们是工具，与"当前文件"无关 */}
+              {leftView === "cal" && <CalendarPanel vaultPath={vault?.path ?? null} />}
+              {leftView === "avatar" && (
+                <AvatarPanel
+                  vaultPath={vault?.path ?? null}
+                  currentFileName={activeTab?.name ?? null}
+                  currentFileText={activeTab?.text ?? null}
+                />
+              )}
 
               {leftView === "search" ? (
                 <SearchPanel
@@ -1330,7 +1425,7 @@ export default function App() {
                     await refreshTree();
                   }}
                 />
-              ) : (
+              ) : leftView === "files" ? (
               <>
               {/* 面板头：标题 + 新建按钮。新建入口必须**一眼可见** ——
                   藏进右键菜单的话，很多人根本不知道能新建。 */}
@@ -1442,7 +1537,7 @@ export default function App() {
                 </div>
               )}
               </>
-              )}
+              ) : null}
             </div>
             <div
               style={{ width: 4, cursor: "col-resize", flex: "0 0 auto" }}
@@ -1451,8 +1546,22 @@ export default function App() {
           </>
         )}
 
-        {/* 中央 */}
+        {/* 中央。
+            图谱与题库是**换视图**而不是弹窗 —— 它们要看的内容量大，
+            弹窗挤不下；换视图还能保留标签页不动，切回来原来的文件还开着。 */}
         <div className="center">
+          {mainView === "graph" ? (
+            <GraphView
+              vaultPath={vault?.path ?? null}
+              onOpen={(p) => { void openFileByPath(p); }}
+            />
+          ) : mainView === "bank" ? (
+            <BankView
+              vaultPath={vault?.path ?? null}
+              onOpen={(p) => { void openFileByPath(p); }}
+            />
+          ) : (
+          <>
           <div className="tabs">
             {tabs.map((t) => (
               <div
@@ -1528,6 +1637,8 @@ export default function App() {
             )}
           </div>
           <div className="viewer">{renderViewer()}</div>
+          </>
+          )}
         </div>
 
         {/* 右侧栏 */}
@@ -1552,7 +1663,7 @@ export default function App() {
                 borderBottom: "1px solid var(--bd)", flex: "0 0 auto",
                 overflowX: "auto",
               }}>
-                {(["ai", "info", "links", "cal", "avatar"] as const).map((k) => (
+                {(["ai", "info", "links", "settings"] as const).map((k) => (
                   <button
                     key={k}
                     onClick={() => setRightTab(k)}
@@ -1566,7 +1677,10 @@ export default function App() {
                       fontWeight: rightTab === k ? 600 : 400,
                     }}
                   >
-                    {k === "ai" ? "AI 助手" : k === "info" ? "信息" : k === "links" ? "链接" : k === "cal" ? "日历" : "数字人"}
+                    {k === "ai" ? "AI 助手"
+                      : k === "info" ? "信息"
+                      : k === "links" ? "链接"
+                      : "设置"}
                   </button>
                 ))}
                 {/* 折叠按钮。
@@ -1637,35 +1751,29 @@ export default function App() {
                 />
               </div>
 
-              {/* 日历 / 计划 / 倒计时。
-                  同样保持挂载：它自己维护"当前月份"与"选中日期"，
-                  卸载后每次切回来都要重新拉库、回到当月。 */}
-              <div
-                style={{
-                  flex: "1 1 auto",
-                  minHeight: 0,
-                  display: rightTab === "cal" ? "flex" : "none",
-                  flexDirection: "column",
-                }}
-              >
-                <CalendarPanel vaultPath={vault?.path ?? null} />
-              </div>
 
-              {/* 数字人能力检测。
-                  用户要求"先检测功能" —— 先看清哪些能用、哪些缺凭据，
-                  而不是先画一个数字人，点下去处处报错。 */}
+
+              {/* 设置：密钥 / AI 大脑 / 选项。
+                  密钥为什么不放进安装包：见 SettingsPanel 顶部说明。 */}
               <div
                 style={{
                   flex: "1 1 auto",
                   minHeight: 0,
-                  display: rightTab === "avatar" ? "flex" : "none",
+                  display: rightTab === "settings" ? "flex" : "none",
                   flexDirection: "column",
                 }}
               >
-                <AvatarPanel
-                  vaultPath={vault?.path ?? null}
-                  currentFileName={activeTab?.name ?? null}
-                  currentFileText={activeTab?.text ?? null}
+                <SettingsPanel
+                  onChanged={() => {
+                    // 设置里改了高保真开关后，要和界面上的状态同步：
+                    // 读回设置并刷新引擎探测结果
+                    void window.gezhi.settings.get()
+                      .then((s) => {
+                        if (typeof s?.settings?.hiFi === "boolean") setHiFiEnabled(s.settings.hiFi as boolean);
+                      })
+                      .catch(() => { /* 读不到就保持现状 */ });
+                    void window.gezhi.avatar.probe().catch(() => { /* 语音凭据状态变了，重探一次 */ });
+                  }}
                 />
               </div>
 

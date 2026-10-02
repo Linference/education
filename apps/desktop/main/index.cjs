@@ -24,6 +24,8 @@ const { registerSearch } = require("./search-ipc.cjs");
 const { registerConvert } = require("./convert-ipc.cjs");
 const { registerCalendar } = require("./calendar-ipc.cjs");
 const { registerAvatar } = require("./avatar-ipc.cjs");
+const { registerSettings } = require("./settings-ipc.cjs");
+const { registerBank } = require("./bank-ipc.cjs");
 const { extractDocText, extractPptText } = require("./lib/doc-extract.cjs");
 const { parsePptxFile } = require("./lib/pptx.cjs");
 const { parseSheetFile } = require("./lib/xlsx.cjs");
@@ -337,6 +339,12 @@ function registerIpc() {
 
   // 数字人能力检测（语音凭据 / 口型算法 / 设备）
   registerAvatar(ipcMain, () => mainWindow, app);
+
+  // 设置：凭据管理 + 应用选项
+  registerSettings(ipcMain, () => mainWindow, app);
+
+  // 题库与组卷（SQLite，库放 %APPDATA%）
+  registerBank(ipcMain, () => mainWindow, app);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */

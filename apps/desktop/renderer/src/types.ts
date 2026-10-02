@@ -139,6 +139,8 @@ export interface GezhiApi {
     reindexFile(payload: { vault: string; filePath: string }): Promise<{ ok: boolean; error?: string }>;
     waitIdle(): Promise<{ ok: boolean }>;
     query(payload: { vault: string; query: string; limit?: number }): Promise<SearchResult>;
+    /** 关系图谱：一次取整张图（节点 + 边） */
+    graph(payload: { vault: string; maxNodes?: number; maxEdges?: number }): Promise<GraphResult>;
     backlinks(payload: { vault: string; path: string }): Promise<BacklinksResult>;
     outlinks(payload: { vault: string; path: string }): Promise<{ ok: boolean; links: Array<{ target: string; label: string; line: number }> }>;
     stats(vault: string): Promise<IndexStats>;
@@ -188,6 +190,91 @@ export interface GezhiApi {
     ttsTest(p: { text?: string }): Promise<AvatarTtsResult>;
     paths(): Promise<{ ok: boolean; credentials?: string; userData?: string }>;
   };
+
+  // 设置：凭据管理 + 应用选项
+  //
+  // ★ 密钥只进不出：credStatus 只回传状态与尾号 4 位，完整密钥不回渲染进程。
+  // ★ 安装包里也不放密钥 —— 那等于把账号借给所有装格致的人用。
+  settings: {
+    get(): Promise<{
+      ok: boolean;
+      settings?: Record<string, unknown>;
+      paths?: { settings: string; credentials: string };
+      error?: string;
+    }>;
+    set(patch: Record<string, unknown>): Promise<{ ok: boolean; settings?: Record<string, unknown>; error?: string }>;
+    credStatus(): Promise<{
+      ok: boolean; path?: string; exists?: boolean; mode?: string | null;
+      bytes?: number; updatedAt?: string | null; locked?: boolean;
+      tencent?: { configured: boolean; secretIdTail: string | null };
+      deepseek?: { configured: boolean; apiKeyTail: string | null };
+      error?: string;
+    }>;
+    credSave(p: {
+      tencent?: { secretId: string; secretKey: string };
+      deepseek?: { apiKey: string };
+      passphrase?: string;
+    }): Promise<{ ok: boolean; mode?: string; path?: string; error?: string }>;
+    credDelete(p: { which: string }): Promise<{ ok: boolean; removed?: string; error?: string }>;
+    dshStatus(): Promise<{
+      ok: boolean; available?: boolean; version?: string | null; bin?: string | null;
+      error?: string | null; custom?: string; hint?: string | null;
+    }>;
+  };
+
+  // 题库与组卷
+  bank: {
+    list(p: { vault: string; type?: string; source?: string; kp?: string; keyword?: string;
+              difficultyMin?: number; difficultyMax?: number; limit?: number; offset?: number }):
+      Promise<{ ok: boolean; questions?: BankQuestion[]; total?: number; error?: string }>;
+    stats(p: { vault: string }): Promise<BankStats>;
+    byIds(p: { vault: string; ids: number[] }): Promise<{ ok: boolean; questions?: BankQuestion[]; error?: string }>;
+    add(p: Record<string, unknown>): Promise<{ ok: boolean; id?: number; error?: string }>;
+    addMany(p: { vault: string; questions: Array<Record<string, unknown>> }):
+      Promise<{ ok: boolean; added?: number; failed?: Array<{ index: number; reason: string }>; error?: string }>;
+    update(p: Record<string, unknown>): Promise<{ ok: boolean; error?: string }>;
+    delete(p: { vault: string; id: number }): Promise<{ ok: boolean; removed?: number; error?: string }>;
+    /** 解析 Markdown，**先看结果再决定导不导**（避免一次导进几百道错题） */
+    parseFile(p: { filePath: string }): Promise<{
+      ok: boolean; questions?: Array<Record<string, unknown>>; warnings?: string[]; count?: number; error?: string;
+    }>;
+    toMarkdown(p: { vault: string; ids: number[] }): Promise<{ ok: boolean; markdown?: string; count?: number; error?: string }>;
+    savePaper(p: { vault: string; title: string; qids: number[]; config?: unknown }):
+      Promise<{ ok: boolean; id?: number; error?: string }>;
+    papers(p: { vault: string }): Promise<{
+      ok: boolean;
+      papers?: Array<{ id: number; title: string; qids: number[]; config: unknown; createdAt: string }>;
+      error?: string;
+    }>;
+    deletePaper(p: { vault: string; id: number }): Promise<{ ok: boolean; removed?: number; error?: string }>;
+    info(): Promise<{ ok: boolean; path?: string; size?: number; exists?: boolean }>;
+  };
+}
+
+export interface BankQuestion {
+  id: number;
+  type: string;
+  typeLabel: string;
+  stem: string;
+  options: Array<{ label: string; text: string }>;
+  answer: string;
+  solution: string;
+  kps: string[];
+  difficulty: number;
+  source: string;
+  year: number | null;
+  subject: string;
+}
+
+export interface BankStats {
+  ok: boolean;
+  total?: number;
+  byType?: Array<{ type: string; n: number }>;
+  bySource?: Array<{ source: string; n: number }>;
+  byDiff?: Array<{ difficulty: number; n: number }>;
+  bySubject?: Array<{ subject: string; n: number }>;
+  byKp?: Array<{ kp: string; n: number }>;
+  error?: string;
 }
 
 export interface AvatarTtsResult {
@@ -259,6 +346,18 @@ export interface CalendarLoad {
   tasks?: CalTaskRow[];
   countdowns?: CountdownRow[];
   dbPath?: string;
+  error?: string;
+}
+
+export interface GraphResult {
+  ok: boolean;
+  /** exists=false 表示"被引用但文件不存在"的悬空链接 */
+  nodes?: Array<{ id: string; name: string; ext: string; exists: boolean; degree: number }>;
+  edges?: Array<{ source: string; target: string; label: string | null; line: number | null }>;
+  /** 图被截断了（库里节点/边超过上限） */
+  truncated?: boolean;
+  totalDocs?: number;
+  totalEdges?: number;
   error?: string;
 }
 
