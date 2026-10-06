@@ -9,6 +9,26 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const api = {
+  dshSetup: {
+    status: () => ipcRenderer.invoke('dsh:setupStatus'),
+    install: () => ipcRenderer.invoke('dsh:install'),
+    login: () => ipcRenderer.invoke('dsh:login'),
+    complete: () => ipcRenderer.invoke('dsh:completeSetup'),
+  },
+  companions: {
+    roles: () => ipcRenderer.invoke('companions:roles'),
+    evaluate: p => ipcRenderer.invoke('companions:evaluate', p),
+    history: p => ipcRenderer.invoke('companions:history', p),
+    stop: () => ipcRenderer.invoke('companions:stop'),
+  },
+  learning: {
+    catalog: p => ipcRenderer.invoke('learning:catalog', p),
+    summary: p => ipcRenderer.invoke('learning:summary', p),
+    submit: p => ipcRenderer.invoke('learning:submit', p),
+    annotate: p => ipcRenderer.invoke('learning:annotate', p),
+    lab: p => ipcRenderer.invoke('learning:lab', p),
+    schedule: p => ipcRenderer.invoke('learning:schedule', p),
+  },
   /** 应用与运行环境信息（含「文档」目录的真实位置） */
   info: () => ipcRenderer.invoke("app:info"),
 
@@ -191,6 +211,8 @@ const api = {
     delete: (p) => ipcRenderer.invoke("bank:delete", p),
     /** 解析 Markdown 文件，先给用户看结果再决定导不导 */
     parseFile: (p) => ipcRenderer.invoke("bank:parseFile", p),
+    parseText: (p) => ipcRenderer.invoke("bank:parseText", p),
+    parseDocument: (p) => ipcRenderer.invoke('bank:parseDocument', p),
     toMarkdown: (p) => ipcRenderer.invoke("bank:toMarkdown", p),
     savePaper: (p) => ipcRenderer.invoke("bank:savePaper", p),
     papers: (p) => ipcRenderer.invoke("bank:papers", p),

@@ -21,6 +21,7 @@ async function loadVoice() {
   if (voiceMod) return voiceMod;
   // packages/voice 是纯 ESM，主进程是 CJS，用动态 import
   const candidates = [
+    path.join(process.resourcesPath ?? "", "packages", "voice", "src", "index.mjs"),
     path.resolve(__dirname, "..", "..", "..", "packages", "voice", "src", "index.mjs"),
     path.join(process.resourcesPath ?? "", "voice", "index.mjs"),
   ];

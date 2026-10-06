@@ -1,0 +1,56 @@
+/* Short, interruptible motion. Reading surfaces settle and stay still. */
+:root { --motion-ease: cubic-bezier(.22,1,.36,1); --motion-medium: 280ms; }
+.motion-surface { animation: none !important; }
+.center.motion-surface > .bank-view,
+.center.motion-surface > .graph-view,
+.sidebar.motion-surface > .calendar-panel { animation: none; }
+.ribbon-btn { position: relative; transition: background 160ms, color 160ms, transform 220ms var(--motion-ease); }
+.ribbon-btn:active { transform: scale(.92); }
+.ribbon-btn::after { content: ''; position: absolute; left: -6px; top: 28%; height: 44%; width: 3px; border-radius: 3px; background: var(--accent); opacity: 0; transform: scaleY(.3); transition: opacity 160ms, transform 260ms var(--motion-ease); }
+.ribbon-btn[aria-current=page]::after { opacity: 1; transform: scaleY(1); }
+.workspace-panel-tabs button,
+.learning-tabs button { transition: color 160ms, background 180ms, box-shadow 220ms, border-color 220ms; }
+.learning-tabs button > span { transition: transform 260ms var(--motion-ease); }
+.learning-tabs button[aria-selected=true] > span { transform: scale(1.12); }
+.welcome-action { transition: transform 260ms var(--motion-ease), border-color 180ms, box-shadow 260ms; }
+.welcome-action:hover { transform: translateY(-3px); box-shadow: var(--shadow-sm); }
+.companion-card {
+  animation: card-arrive 420ms var(--motion-ease) both;
+  animation-delay: calc(var(--motion-order, 0) * 45ms);
+  transition: transform 320ms var(--motion-ease), box-shadow 320ms, border-color 220ms;
+}
+.companion-card::before { content: ''; position: absolute; z-index: 1; inset: 0; pointer-events: none; border-radius: inherit; background: linear-gradient(130deg,color-mix(in srgb,var(--role-color) 12%,transparent),transparent 55%); opacity: 0; transition: opacity 320ms; }
+.companion-card:is(:hover,:focus-visible)::before { opacity: 1; }
+.companion-card:active { transform: translateY(-2px) scale(.988); }
+.room-enter { display: inline-flex; gap: 8px; align-items: center; }
+.room-enter > span { transition: transform 280ms var(--motion-ease); }
+.companion-card:is(:hover,:focus-visible) .room-enter > span { transform: translate(3px,-3px); }
+.room-avatar, .room-input-card, .room-history { animation: card-arrive 360ms var(--motion-ease) both; }
+.room-input-card { animation-delay: 45ms; }
+.room-history { animation-delay: 90ms; }
+.room-status::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--role-color); margin-right: 8px; vertical-align: middle; }
+.room-status[data-busy=true]::before { width: 9px; height: 9px; background: transparent; border: 2px solid color-mix(in srgb,var(--role-color) 25%,transparent); border-top-color: var(--role-color); animation: status-turn 900ms linear infinite; }
+.room-report .assessment-dimensions > section { animation: card-arrive 380ms var(--motion-ease) both; animation-delay: calc(100ms + var(--motion-order,0) * 45ms); }
+.radar-area { transform-origin: 200px 166px; animation: radar-arrive 650ms var(--motion-ease) both; }
+.radar-dot { transform-box: fill-box; transform-origin: center; animation: radar-dot-arrive 380ms var(--motion-ease) both; animation-delay: calc(130ms + var(--motion-order,0) * 45ms); }
+.learning-coach-heading { display: flex; flex-direction: column; gap: 6px; padding-bottom: 14px; border-bottom: 1px solid var(--bd); }
+.learning-coach-heading strong { font-size: 14px; }
+.learning-coach-heading small { color: var(--text-muted); font-size: 11px; }
+@container (max-width: 1050px) {
+  .learning-coach { display: block; }
+  .learning-coach-text { margin-top: 14px; }
+}
+.dsh-onboarding-backdrop, .bank-import-backdrop { animation: veil-arrive 180ms ease-out; }
+.dsh-onboarding, .bank-import-preview { animation: dialog-arrive 300ms var(--motion-ease); }
+.learning-error, .learning-callout { animation: card-arrive 220ms var(--motion-ease); }
+@keyframes card-arrive { from { opacity: 0; translate: 0 12px; } to { opacity: 1; translate: 0 0; } }
+@keyframes dialog-arrive { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes veil-arrive { from { opacity: 0; } to { opacity: 1; } }
+@keyframes radar-arrive { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes radar-dot-arrive { from { opacity: 0; transform: scale(.35); } to { opacity: 1; transform: scale(1); } }
+@keyframes status-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .welcome-action:hover, .companion-card:hover, .companion-card:active, .ribbon-btn:active { transform: none; }
+  .learning-tabs button[aria-selected=true] > span, .companion-card:is(:hover,:focus-visible) .room-enter > span { transform: none; }
+}

@@ -37,6 +37,7 @@ interface ProbeResult {
 }
 
 interface Props {
+  onOpenRooms?: () => void;
   vaultPath: string | null;
   /** 当前打开的文件名 —— 给费曼台的"讲什么"当默认值 */
   currentFileName?: string | null;
@@ -82,7 +83,7 @@ function CapRow({ label, cap, hint }: { label: string; cap: Cap; hint?: string }
   );
 }
 
-export default function AvatarPanel({ vaultPath, currentFileName, currentFileText }: Props) {
+export default function AvatarPanel({ vaultPath, currentFileName, currentFileText, onOpenRooms }: Props) {
   /**
    * 默认开在「费曼」页 —— 那才是数字人的主要用途：
    * **用户当老师讲一遍，AI 查缺补漏**。
@@ -160,14 +161,15 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
   const cloudReady = Boolean(probe?.tts.available);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="companion-panel" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* 子页签。
           顺序上把「费曼」放第一个 —— 它是主用途（你讲、AI 查缺补漏），
           「对话」是普通问答，「检测」是排查工具。 */}
-      <div style={{ flex: "0 0 auto", display: "flex", borderBottom: "1px solid var(--bd)" }}>
+      <div className="companion-tabs" style={{ flex: "0 0 auto", display: "flex", borderBottom: "1px solid var(--bd)" }}>
         {([["feynman", "费曼"], ["chat", "对话"], ["probe", "检测"]] as const).map(([k, label]) => (
           <button
             key={k}
+            aria-selected={tab === k}
             onClick={() => setTab(k)}
             style={{
               flex: "1 1 auto", padding: "5px 0", fontSize: 12,
@@ -185,6 +187,7 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
       {tab === "feynman" && (
         <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
           <FeynmanPanel
+            onOpenRooms={onOpenRooms}
             vaultPath={vaultPath}
             cloudReady={cloudReady}
             currentFileName={currentFileName}

@@ -72,8 +72,13 @@ function inline(text, ctx) {
 
   // 3) 图片 ![alt](src) → Typst figure/image
   //    Typst 的 image() 需要文件真实存在，导出 PDF 时图片路径要能被 --root 解析到
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, (_m, alt, src) => {
-    return protect(ctx, `#figure(image("${escapeTypstString(src)}", width: 70%), caption: [${escapeTypst(alt)}])`);
+  s = s.replace(/!\[([^\]]*)\]\((<[^>]+>|(?:[^()\n]|\([^()\n]*\))+?)\)/g, (original, alt) => {
+    const parsed = new (require('markdown-it'))().parseInline(original, {})[0]?.children?.find(t => t.type === 'image');
+    if (!parsed) return original;
+    const src = parsed.attrGet('src');
+    const resolved = ctx.imageResolver ? ctx.imageResolver(src) : src;
+    if (!resolved) return protect(ctx, escapeTypst('[图片未能嵌入：' + (alt || src) + ']'));
+    return protect(ctx, `#figure(image("${escapeTypstString(resolved)}", width: 70%), caption: [${escapeTypst(alt)}])`);
   });
 
   // 4) 链接 [text](url) → Typst 的 link
@@ -122,10 +127,10 @@ function inline(text, ctx) {
  * 用**逐行状态机**而不是整体正则：代码块必须整体跳过（里面的内容是原样的），
  * 用正则会很容易把代码块里的 ``` 和外面的搞混。
  */
-function markdownToTypst(md) {
+function markdownToTypst(md, { imageResolver } = {}) {
   const lines = md.replace(/\r\n/g, "\n").split("\n");
   const out = [];
-  const ctx = { store: [] };
+  const ctx = { store: [], imageResolver };
   let title = "";
 
   let inFence = false;
@@ -142,7 +147,7 @@ function markdownToTypst(md) {
   const flushTable = () => {
     if (tableBuf.length === 0) return;
     const rows = tableBuf.map((r) =>
-      r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim())
+      r.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))
     );
     // 第二行是 |---|---| 分隔行，丢掉
     const dataRows = rows.filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c)));

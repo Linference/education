@@ -258,7 +258,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="ai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* 顶部：DSH 状态 */}
       <div
         style={{
@@ -291,7 +291,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
       {/* 消息区 */}
       <div ref={scrollerRef} style={{ flex: "1 1 auto", overflow: "auto", padding: "8px 0 12px" }}>
         {msgs.length === 0 && (
-          <div style={{ padding: "16px 14px", color: "var(--text-faint)", fontSize: 13, lineHeight: 1.8 }}>
+          <div className="ai-empty" style={{ padding: "16px 14px", color: "var(--text-faint)", fontSize: 13, lineHeight: 1.8 }}>
             <div style={{ marginBottom: 10 }}>让 AI 在你的资料库里干活。它能读、能写、能改你的笔记。</div>
             {!vaultPath && <div style={{ color: "var(--red)" }}>先打开一个库（Ctrl+O）</div>}
             {health && !health.ok && (
@@ -309,7 +309,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
         )}
 
         {msgs.map((m, i) => (
-          <div key={i} style={{ padding: "6px 12px" }}>
+          <div className="ai-message" key={i} style={{ padding: "6px 12px" }}>
             {m.role === "user" ? (
               <div
                 style={{
@@ -372,7 +372,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
       </div>
 
       {/* 输入区 */}
-      <div style={{ flex: "0 0 auto", borderTop: "1px solid var(--bd)", padding: 8 }}>
+      <div className="ai-composer" style={{ flex: "0 0 auto", borderTop: "1px solid var(--bd)", padding: 8 }}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}

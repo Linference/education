@@ -67,12 +67,33 @@ function parseQuestionsFromMarkdown(text) {
 
   // 按标题行切块。三级以上标题（###、####）都算一道题的开头；
   // 如果全文没有任何标题，就把全文当成一道题。
-  const lines = String(text).replace(/\r\n?/g, "\n").split("\n");
+  let sourceText = String(text).replace(/^\uFEFF/, '').replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n/, '').replace(/\r\n?/g, "\n");
+  // Ordinary question lists from text/Word/PDF also have numbered beginnings.
+  if (!/^\s{0,3}#{2,6}\s+/m.test(sourceText)) {
+    const numbered = /^(?:第\s*(\d+)\s*题[：:]?|([0-9]{1,3})[.．、)）])\s*(\S.*)$/gm;
+    const matches = [...sourceText.matchAll(numbered)];
+    if (matches.length) {
+      sourceText = sourceText.slice(matches[0].index).replace(numbered, (_m,a,b,stem) => `### 第 ${a || b} 题\n题干：${stem}`);
+    }
+  }
+  const lines = sourceText.split("\n");
   const blocks = [];
   let cur = null;
-  const isHeading = (l) => /^\s{0,3}#{2,6}\s+\S/.test(l);
+  const questionLevel = lines.find(l => /^\s{0,3}#{2,6}\s+(?:第\s*\d+\s*题|题目|例题|练习)/.test(l))?.trim().match(/^#+/)[0].length
+    || (lines.some(l => /^\s{0,3}###\s+\S/.test(l)) ? 3 : 2);
+  const isHeading = l => new RegExp('^\\s{0,3}#{' + questionLevel + '}\\s+\\S').test(l);
+  const hasHeadings = lines.some(isHeading);
+  let fence = null;
 
   for (const line of lines) {
+    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker) {
+      if (!fence) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      if (cur) cur.lines.push(line);
+      continue;
+    }
+    if (fence) { if (cur) cur.lines.push(line); continue; }
     if (isHeading(line)) {
       if (cur) blocks.push(cur);
       cur = { heading: line.replace(/^\s{0,3}#{2,6}\s+/, "").trim(), lines: [] };
@@ -80,7 +101,7 @@ function parseQuestionsFromMarkdown(text) {
       cur.lines.push(line);
     } else {
       // 标题之前的内容，如果非空就自己起一块
-      if (line.trim()) cur = { heading: "", lines: [line] };
+      if (!hasHeadings && line.trim() && !/^#\s/.test(line)) cur = { heading: "", lines: [line] };
     }
   }
   if (cur) blocks.push(cur);
@@ -105,12 +126,23 @@ function parseQuestionsFromMarkdown(text) {
     const stemLines = [];
     const solutionLines = [];
     const extraLines = [];   // 题干之前、字段之外的散行
+    let blockFence = null;
+    const append = line => {
+      if (field === 'stem') stemLines.push(line);
+      else if (field === 'solution') solutionLines.push(line);
+      else if (field === 'answer') q.answer += (q.answer ? '\n' : '') + line;
+      else extraLines.push(line);
+    };
 
     const flushField = () => { field = null; };
 
     for (const raw of b.lines) {
       const line = raw;
-      const m = FIELD.exec(line);
+      const fenceMarker=/^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+      if (fenceMarker) { if (!blockFence) blockFence=fenceMarker; else if (blockFence[0]===fenceMarker[0] && fenceMarker.length>=blockFence.length) blockFence=null; append(line); continue; }
+      if (blockFence) { append(line); continue; }
+      const fieldLine = line.replace(/^\s*(?:[-*]\s+)?\*\*([^*]+)\*\*\s*[:：]?\s*/, (_m,label) => label.replace(/[:：]$/,'')+'：');
+      const m = FIELD.exec(fieldLine);
       if (m) {
         const key = m[1];
         const val = m[2].trim();
@@ -136,15 +168,15 @@ function parseQuestionsFromMarkdown(text) {
             break;
           }
           case "科目": q.subject = val; break;
-          case "答案": q.answer = val; field = val ? null : "answer"; break;
-          case "解析": case "解答": q.solution = val; field = val ? null : "solution"; break;
+          case "答案": q.answer = val; field = "answer"; break;
+          case "解析": case "解答": if (val) solutionLines.push(val); field = "solution"; break;
           case "题干": case "题目": if (val) stemLines.push(val); field = "stem"; break;
         }
         continue;
       }
 
       // 选项行
-      const opt = parseOption(line);
+      const opt = field === 'stem' || field === null ? parseOption(line) : null;
       if (opt) { q.options.push(opt); continue; }
 
       // 续行
@@ -160,6 +192,9 @@ function parseQuestionsFromMarkdown(text) {
     }
 
     q.stem = stemLines.join("\n").trim();
+    const headingIsStem=!q.stem && b.heading && !/^(?:题目|第\s*\d+\s*题|例题|练习)/.test(b.heading) && (q.answer || q.options.length);
+    if (headingIsStem) q.stem=b.heading;
+    q.answer = q.answer.trim();
     if (!q.solution && solutionLines.length) q.solution = solutionLines.join("\n").trim();
 
     // 没有题干就跳过（可能是纯说明性的标题块）
@@ -170,7 +205,7 @@ function parseQuestionsFromMarkdown(text) {
       continue;
     }
     // 标题如果不像"题目/第 N 题"这类，就当作题干的一部分（有些整理稿把题干写在标题里）
-    if (b.heading && !/^题目|^第\s*\d+\s*题|^例题|^练习/.test(b.heading)) {
+    if (!headingIsStem && b.heading && !/^题目|^第\s*\d+\s*题|^例题|^练习/.test(b.heading)) {
       q.stem = `${b.heading}\n${q.stem}`;
     }
     questions.push(q);

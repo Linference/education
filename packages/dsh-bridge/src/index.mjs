@@ -112,6 +112,7 @@ export function parseEventLine(line) {
  * @returns {AsyncGenerator<object>} 逐个产出解析后的事件
  */
 export async function* runHeadless({ task, cwd = process.cwd(), sessionId, profile = "headless", signal, bin } = {}) {
+  if (signal?.aborted) throw new Error('任务已停止');
   const spec = resolveLaunchSpec(bin);
   const args = [...spec.args, "--profile", profile, "headless", "--json"];
   if (sessionId) args.push("--session-id", sessionId);

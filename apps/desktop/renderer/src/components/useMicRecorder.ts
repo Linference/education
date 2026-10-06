@@ -81,6 +81,8 @@ export function useMicRecorder() {
   const [seconds, setSeconds] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending,setPending] = useState(false);
+  const pendingBlob = useRef<Blob | null>(null);
 
   const ctxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -134,6 +136,7 @@ export function useMicRecorder() {
     if (recording) return;
     setError(null);
     setSeconds(0);
+    pendingBlob.current = null; setPending(false);
     chunksRef.current = [];
 
     try {
@@ -170,7 +173,7 @@ export function useMicRecorder() {
 
       timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
       // 到自动停的时限就自己停，别让用户录到一半才发现超限
-      autoRef.current = setTimeout(() => { void stopInternal(); }, AUTO_STOP_MS);
+      autoRef.current = setTimeout(() => { void stopInternal().then(blob => { pendingBlob.current = blob; setPending(Boolean(blob)); }); }, AUTO_STOP_MS);
     } catch (e: any) {
       cleanup();
       setRecording(false);
@@ -186,7 +189,8 @@ export function useMicRecorder() {
     setBusy(true);
     setError(null);
     try {
-      const blob = await stopInternal();
+      const blob = pendingBlob.current || await stopInternal();
+      pendingBlob.current = null; setPending(false);
       if (!blob) {
         setBusy(false);
         const msg = "没有录到声音";
@@ -213,9 +217,10 @@ export function useMicRecorder() {
   const cancel = useCallback(() => {
     setRecording(false);
     chunksRef.current = [];
+    pendingBlob.current = null; setPending(false);
     cleanup();
     setSeconds(0);
   }, [cleanup]);
 
-  return { recording, seconds, busy, error, start, stopAndRecognize, cancel, setError };
+  return { recording, seconds, busy, error, pending, start, stopAndRecognize, cancel, setError };
 }

@@ -1,6 +1,6 @@
 {
   "name": "gezhi",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "private": true,
   "type": "module",
   "description": "格致 —— 本地优先的个人学习操作系统（知识库 / AI 陪练 / 题库组卷 / 日历计划）",
@@ -32,6 +32,9 @@
     "ui:verify:office:ui": "node apps/desktop/verify-office-ui.mjs",
     "ui:verify:chat": "node apps/desktop/verify-chat-persist.mjs",
     "ui:verify:typography": "node apps/desktop/verify-chat-typography.mjs",
+    "ui:verify:workbench": "node apps/desktop/verify-workbench.mjs",
+    "learning:test": "node --test apps/desktop/learning.test.mjs",
+    "ui:verify:learning": "node apps/desktop/verify-learning.mjs",
     "verify": "node scripts/verify-all.mjs",
     "verify:quick": "node scripts/verify-all.mjs --quick",
     "doc:test": "node scripts/doc-extract.test.cjs",
@@ -58,11 +61,44 @@
     },
     "files": [
       "main/**/*",
+      "shared/**/*",
       "renderer/**/*",
       "package.json",
       "!**/*.map"
     ],
     "extraResources": [
+      {
+        "from": "vendor/dsh",
+        "to": "dsh"
+      },
+      {
+        "from": "packages/db/src/index.mjs",
+        "to": "packages/db/src/index.mjs"
+      },
+      {
+        "from": "packages/db/schema.sql",
+        "to": "packages/db/schema.sql"
+      },
+      {
+        "from": "brand/assets/icon-256.png",
+        "to": "branding/icon-256.png"
+      },
+      {
+        "from": "packages/voice/src",
+        "to": "packages/voice/src",
+        "filter": [
+          "**/*",
+          "!**/*.test.mjs"
+        ]
+      },
+      {
+        "from": "packages/voice/node_modules",
+        "to": "packages/voice/node_modules"
+      },
+      {
+        "from": "packages/core/src/credentials.mjs",
+        "to": "packages/core/src/credentials.mjs"
+      },
       {
         "from": "packages/dsh-bridge/src",
         "to": "dsh-bridge"

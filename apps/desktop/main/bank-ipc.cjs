@@ -51,6 +51,18 @@ function registerBank(ipcMain, getWindow, app) {
     return { ok: true, questions: r.questions, warnings: r.warnings, count: r.questions.length };
   }));
 
+  // Read browser File contents rather than the removed Electron File.path.
+  ipcMain.handle("bank:parseText", wrap(({ text }) => {
+    if (typeof text !== 'string') return { ok: false, error: '没有可解析的文本' };
+    if (Buffer.byteLength(text, 'utf8') > 8 * 1024 * 1024) return { ok: false, error: '文件超过 8 MB，建议拆成几个再导入' };
+    const r = parseQuestionsFromMarkdown(text);
+    return { ...r, count: r.questions.length };
+  }));
+  ipcMain.handle('bank:parseDocument', async (_e, p) => {
+    try { return await require('./lib/bank-document.cjs').parseDocument(p || {}); }
+    catch (e) { return { ok: false, error: e.message }; }
+  });
+
   // ---- 导出成 Markdown（把库里的题变成可编辑文档） ----
   ipcMain.handle("bank:toMarkdown", wrap(({ vault, ids }) => {
     const r = bank.getQuestionsByIds(open(), { vault, ids });

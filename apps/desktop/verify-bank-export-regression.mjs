@@ -1,0 +1,86 @@
+// Actual Electron UI and IPC regression, isolated from the user's app data.
+import { _electron as electron } from 'playwright';
+import fs from 'node:fs';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const out = path.resolve(HERE, '../../output/verification/bank-export');
+fs.mkdirSync(out, { recursive: true });
+const run = fs.mkdtempSync(path.join(out, 'run-'));
+const a = path.join(run, '数学库'), b = path.join(run, '生物库');
+for (const dir of [a,b]) fs.mkdirSync(dir);
+const note = path.join(a, '导出笔记.md');
+const md = '# 中文导出\n\n保持公式 $x^2+1$、中文和换行。\n';
+fs.writeFileSync(note, md);
+const imported = path.join(run, '生物题库.md');
+fs.writeFileSync(imported, '# 生物题库\n这是说明，不是题目。\n\n### 第 1 题\n题型：选择题\n知识点：细胞\n科目：生物\n题干：哪一个结构控制物质进出？\nA. 细胞膜\nB. 细胞核\n答案：A\n解析：细胞膜控制物质进出。\n它具有选择透过性。\n');
+const app = await electron.launch({ executablePath: path.join(HERE,'node_modules/electron/dist/electron.exe'), args: [HERE], env: { ...process.env, GEZHI_TEST: '1', GEZHI_TEST_APPDATA: path.join(run,'appdata') }, timeout: 30000 });
+const checks = [], errors = [];
+const check = name => { checks.push(name); console.log('[PASS] ' + name); };
+try {
+  const page = await app.firstWindow();
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('dialog', dialog => dialog.accept());
+  await page.waitForFunction(() => Boolean(window.__gezhiTest));
+  // Only replace native save dialog; real export implementations and files run.
+  await app.evaluate(({ dialog }) => { dialog.showSaveDialog = async (_window, options) => ({ canceled: false, filePath: options.defaultPath }); });
+  await page.evaluate(dir => window.__gezhiTest.openVault(dir), a);
+  await page.getByRole('button', { name: '学习工作室', exact: true }).click();
+  await page.getByRole('tab', { name: '自信度练习', exact: true }).click();
+  await page.getByText('没有匹配的练习', { exact: true }).waitFor();
+  let catalog = await page.evaluate(vault => window.gezhi.learning.catalog({ vault }), a);
+  assert.equal(catalog.activities.length, 0);
+  assert.equal((await page.evaluate(vault => window.gezhi.learning.summary({ vault }), a)).evidence.length, 0);
+  check('空文件夹不再自动出现二次函数示例题与示例概念');
+  const examples = page.getByRole('checkbox', { name: '显示内置示例（非当前资料库内容）' });
+  await examples.check(); await page.locator('.learning-exercise').waitFor();
+  catalog = await page.evaluate(vault => window.gezhi.learning.catalog({ vault, includeExamples: true }), a);
+  assert.equal(catalog.activities.length, 16); check('内置示例通过明确开关展示，保留全部示例功能');
+  await page.evaluate(dir => window.__gezhiTest.openVault(dir), b);
+  await page.getByRole('tab', { name: '自信度练习', exact: true }).click();
+  await page.getByText('没有匹配的练习', { exact: true }).waitFor();
+  assert.equal(await examples.isChecked(), false); check('切换资料库清空示例开关与旧练习选择');
+  await page.getByRole('button', { name: '打开题库', exact: true }).click();
+  await page.locator('input[type=file]').setInputFiles(imported);
+  await page.getByRole('button', { name: '确认导入 1 道题', exact: true }).click();
+  await page.getByText('已导入 1 道题。', { exact: true }).waitFor();
+  const bank = await page.evaluate(vault => window.gezhi.bank.list({ vault }), b);
+  assert.equal(bank.total, 1); assert.equal(bank.questions[0].subject, '生物');
+  assert.equal(bank.questions[0].solution, '细胞膜控制物质进出。\n它具有选择透过性。');
+  check('真实文件选择导入成功，不依赖 File.path，保留多行解析');
+  await page.locator('input[type=file]').setInputFiles(imported);
+  await page.getByRole('checkbox', { name: '跳过当前库中题干、选项和答案相同的重复题' }).uncheck();
+  await page.getByRole('button', { name: '确认导入 1 道题', exact: true }).click();
+  await page.getByText('共 2 道', { exact: true }).waitFor(); check('同一文件可以再次选择导入');
+  const assembled = await page.evaluate(vault => window.gezhi.learning.catalog({ vault }), b);
+  assert.equal(assembled.activities.length, 2); assert.ok(assembled.activities.every(q => q.concept === '细胞'));
+  assert.equal((await page.evaluate(vault => window.gezhi.bank.list({ vault }), a)).total, 0);
+  check('导入题进入当前库的学习工作室，其他资料库不串题');
+  await page.getByRole('button', { name: '题库组卷', exact: false }).first().click().catch(() => {});
+  await page.evaluate(dir => window.__gezhiTest.openVault(dir), a);
+  await page.getByRole('button', { name: '学习工作室', exact: true }).click();
+  await page.getByRole('button', { name: '学习工作室', exact: true }).click();
+  await page.evaluate(p => window.__gezhiTest.openFileByPath(p), note);
+  await page.locator('button[title="导出（PDF / Word / Markdown）"]').click();
+  await page.getByRole('button', { name: /Markdown.*原样另存/ }).click();
+  await page.getByText(/已导出 Markdown/).waitFor();
+  const mdCopy = path.join(a,'导出笔记.导出.md');
+  assert.equal(fs.readFileSync(mdCopy,'utf8'), md); check('Markdown 菜单另存为实际落盘，内容与原文完全一致');
+  const directoryExport = await page.evaluate(vault => window.gezhi.exporter.run({ format:'markdown', markdown:'# 学习记录', sourcePath:vault, defaultName:'学习记录' }), a);
+  assert.equal(directoryExport.ok,true); assert.equal(path.dirname(directoryExport.path),a);
+  const secondExport = await page.evaluate(vault => window.gezhi.exporter.run({ format:'markdown', markdown:'第二份', sourcePath:vault, defaultName:'学习记录' }), a);
+  assert.notEqual(directoryExport.path, secondExport.path);
+  assert.equal(fs.readFileSync(directoryExport.path,'utf8'),'# 学习记录'); check('目录来源导出留在库内，多次自动导出不覆盖旧副本');
+  for (const format of ['pdf','docx']) {
+    const r = await page.evaluate(({format,note,md}) => window.gezhi.exporter.run({format,markdown:md,sourcePath:note,defaultName:'验证输出'}), {format,note,md});
+    assert.equal(r.ok,true,r.error); assert.ok(fs.statSync(r.path).size>1000); check('Markdown 转 '+format+' 使用真实转换器生成文件');
+  }
+  const invalid = await page.evaluate(note => window.gezhi.exporter.run({ format:'markdown',markdown:'内容',sourcePath:note,defaultName:'不合法/名称' }), note);
+  assert.equal(invalid.ok,false); assert.ok(invalid.error); check('非法输出文件名返回明确错误，不产生未处理异常');
+  assert.deepEqual(errors,[]); check('全过程无渲染异常');
+  await page.screenshot({path:path.join(run,'final.png')});
+} finally {
+  await app.close();
+  fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({checks,errors,run},null,2));
+}

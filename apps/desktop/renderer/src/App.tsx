@@ -3,7 +3,7 @@
 // 结构照 Obsidian：左侧竖条(ribbon) + 侧栏(文件树) + 中央(标签页+查看器) + 右侧面板 + 底部状态栏。
 // 这一版把关键能力补齐：Markdown 渲染、PDF 与 Word 查看、代码高亮、属性面板、字数统计。
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AppInfo, TreeEntry, VaultInfo, FileKind } from "./types";
+import type { AppInfo, TreeEntry, VaultInfo, FileKind, SofficeProbe, PptResult } from "./types";
 import { kindOf, iconFor } from "./types";
 import { renderMarkdown as renderMarkdownForTest } from "./lib/markdown";
 import MarkdownView from "./components/MarkdownView";
@@ -20,11 +20,13 @@ import MdEditor from "./components/MdEditor";
 import SearchPanel from "./components/SearchPanel";
 import BacklinksPanel from "./components/BacklinksPanel";
 import CalendarPanel from "./components/CalendarPanel";
-import AvatarPanel from "./components/AvatarPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import GraphView from "./components/GraphView";
 import BankView from "./components/BankView";
-import logoMark from "./assets/app-icon-256.png";
+import LearningStudio, { type StudioRequest } from "./components/LearningStudio";
+import DshOnboarding from './components/DshOnboarding';
+import { useSurfaceMotion } from './lib/useSurfaceMotion';
+import logoMark from "./assets/gezhi-mark-v3.png";
 
 // ---------------------------------------------------------------- 类型
 
@@ -200,6 +202,14 @@ const WORD_COUNT_MAX = 2 * 1024 * 1024;   // 2 MB 以内才算词数
 // ---------------------------------------------------------------- 应用
 
 export default function App() {
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try { return localStorage.getItem("gezhi.theme.v2") === "dark" ? "dark" : "light"; }
+    catch { return "light"; }
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem("gezhi.theme.v2", theme); } catch { /* keep theme usable if storage is full */ }
+  }, [theme]);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [vault, setVault] = useState<VaultInfo | null>(null);
   const [tree, setTree] = useState<TreeEntry[]>([]);
@@ -213,7 +223,7 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(260);
   const [showRight, setShowRight] = useState(true);
   const [showLeft, setShowLeft] = useState(true);
-  const [rightTab, setRightTab] = useState<"ai" | "info" | "links" | "cal" | "avatar" | "settings">("ai");
+  const [rightTab, setRightTab] = useState<"ai" | "info" | "links" | "settings">("ai");
   /**
    * 中间栏显示什么。
    *   files —— 平常的文件标签页
@@ -221,18 +231,24 @@ export default function App() {
    *   bank  —— 题库组卷
    * 图谱与题库做成"换视图"而不是弹窗：它们要看的内容量大，弹窗挤不下。
    */
-  const [mainView, setMainView] = useState<"files" | "graph" | "bank">("files");
+  const [mainView, setMainView] = useState<"files" | "graph" | "bank" | "learning">("files");
+  const centerMotion = useSurfaceMotion<HTMLDivElement>(mainView);
+  const [studioRequest, setStudioRequest] = useState<StudioRequest>({ view: 'teach' });
+  const openStudio = (request: StudioRequest = { view: 'teach' }) => {
+    setStudioRequest({ ...request, nonce: Date.now() });
+    setMainView('learning');
+  };
   /** 左栏视图：文件树 / 全文检索 */
   /**
    * 左栏视图。
    *
    * ★ 归类原则（照 Obsidian 的分法）：
-   *   左栏 = 导航与工具（文件、检索、日历、数字人）
+   *   左栏 = 导航与工具（文件、检索、日历）
    *   右栏 = 当前文件的上下文（AI 助手、信息、反向链接、设置）
-   *   日历与数字人原来在右栏，和"当前文件"没关系，
-   *   还把那边的页签挤到 6 个 —— 归类错了，挪到左栏。
+   *   角色统一从学习工作室进入，避免重复的数字人入口。
    */
-  const [leftView, setLeftView] = useState<"files" | "search" | "cal" | "avatar">("files");
+  const [leftView, setLeftView] = useState<"files" | "search" | "cal">("files");
+  const sidebarMotion = useSurfaceMotion<HTMLDivElement>(leftView + ':' + showLeft, 5);
   /** 索引版本号：索引完成后 +1，用来触发反链面板重新拉取 */
   const [indexVersion, setIndexVersion] = useState(0);
   /** 索引状态（界面上显示"已索引 N 篇"） */
@@ -293,6 +309,7 @@ export default function App() {
   const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
 
   const activeTab = useMemo(() => tabs.find((t) => t.path === activePath) ?? null, [tabs, activePath]);
+  const viewerMotion = useSurfaceMotion<HTMLDivElement>(mainView + ':' + (activePath || '') + ':' + (activePath ? modeByPath.get(activePath) || 'read' : 'read'), 5);
 
   useEffect(() => {
     window.gezhi.info()
@@ -311,9 +328,10 @@ export default function App() {
   // ---------------------------------------------------------------- 打开库
   const loadVault = useCallback(async (v: VaultInfo) => {
     if (!v.ok || !v.path) { setStatus("打开失败：" + (v.error ?? "未知错误")); return; }
-    setVault(v);
     // 告诉主进程当前库 —— 文件写入的路径校验要用（防止写到库外面）
-    await window.gezhi.vault.set(v.path).catch(() => { /* 忽略 */ });
+    await window.gezhi.vault.set(v.path);
+    setVault(v);
+    setStudioRequest({ view: 'teach' });
     setExpanded(new Set());
     setChildren(new Map());
     setTabs([]);
@@ -693,7 +711,7 @@ export default function App() {
          */
         const r = await window.gezhi.file.readPptx?.(entry.path);
         tab = r?.ok
-          ? { ...base, pptSlides: r.slides, docMs: r.ms, lossyText: true }
+          ? { ...base, pptSlides: (r as PptResult).slides, docMs: r.ms, lossyText: true }
           : { ...base, error: r?.error ?? "读取失败" };
       } else if (kind === "doc" || kind === "ppt") {
         // 旧版 Office 二进制（OLE 复合文档）必须走主进程解析器 ——
@@ -710,7 +728,7 @@ export default function App() {
               docMs: r.ms,
               lossyText: r.lossy,
               // .ppt 的近似分页也带上，查看器直接渲染
-              pptSlides: kind === "ppt" ? r.slides : undefined,
+              pptSlides: kind === "ppt" ? (r as PptResult).slides : undefined,
             }
           : { ...base, error: r.error ?? "读取失败" };
       } else {
@@ -864,6 +882,7 @@ export default function App() {
    */
   useEffect(() => {
     if (!vault?.path || !filter.trim()) return;
+    const vaultPath = vault.path;
     let cancelled = false;
 
     (async () => {
@@ -883,7 +902,7 @@ export default function App() {
         }
       };
 
-      await walk(vault.path, 0);
+      await walk(vaultPath, 0);
       if (cancelled) return;
       setChildren(acc);
 
@@ -904,7 +923,7 @@ export default function App() {
           }
         }
       };
-      expand(acc.get(vault.path) ?? [], []);
+      expand(acc.get(vaultPath) ?? [], []);
       if (toExpand.size) setExpanded((prev) => new Set([...prev, ...toExpand]));
 
       setFilterLoading(false);
@@ -1077,11 +1096,18 @@ export default function App() {
   const renderViewer = () => {
     if (!activeTab) {
       return (
-        <div className="empty-state">
-          <div style={{ fontSize: 15 }}>还没有打开任何文件</div>
-          <div style={{ fontSize: 13 }}>
-            按 <kbd>Ctrl</kbd>+<kbd>O</kbd> 打开一个库，或从左侧选择文件
+        <div className="welcome-shell">
+          <div className="welcome-kicker"><img className="brand-mark" src={logoMark} width={36} height={36} alt="" />格物 · 致知</div>
+          <h1>让知识连接，<br />让理解发生。</h1>
+          <p>{vault ? `欢迎回到「${vault.name}」。从一篇笔记开始，或把今天学到的知识讲给小格。` : "你的笔记、教材与学习计划，在一个安静的工作空间里。打开资料库，开始今天的学习。"}</p>
+          <div className="welcome-actions">
+            <button className="welcome-action" onClick={() => openStudio()}><span>◐</span><div><strong>进入学习工作室</strong><small>检验误区、迁移知识、动手做实验</small></div></button>
+            <button className="welcome-action" onClick={openVaultDialog}><span><Icon.folder /></span><div><strong>打开资料库</strong><small>接着整理你的笔记与教材</small></div></button>
+            <button className="welcome-action" onClick={() => openStudio({ view: 'teach' })}><span><Icon.sparkle /></span><div><strong>进入角色空间</strong><small>选择听众，获得六维讲解反馈</small></div></button>
+            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setMainView("graph"); }}><span>◎</span><div><strong>探索知识图谱</strong><small>发现笔记之间的连接</small></div></button>
+            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setLeftView("cal"); setShowLeft(true); }}><span><Icon.calendar /></span><div><strong>安排今天</strong><small>查看日程、待办与倒计时</small></div></button>
           </div>
+          <div className="welcome-hint"><kbd>Ctrl</kbd> + <kbd>O</kbd> 打开资料库 · 从左侧选择文件即可阅读</div>
         </div>
       );
     }
@@ -1165,20 +1191,19 @@ export default function App() {
 
   return (
     <div className="app">
+      <DshOnboarding />
       {/* 标题栏 */}
       <div className="titlebar">
-        {/* 应用标识：用真的 logo 而不是纯文字。
-            ⚠️ 尺寸取 24px —— 实测 16/18/20px 下 GZ 两个字母会糊成一团
-            （标志本身是字母组合，笔画在 20px 以下挤在一起），24px 起才读得出。
-            对比图见 产出/logo尺码对比.png */}
+        {/* 四向交织标志：透明底，主题切换时使用单色反白。 */}
         <img
+          className="brand-mark"
           src={logoMark}
           alt="格致"
-          width={24}
-          height={24}
+          width={32}
+          height={32}
           style={{ borderRadius: 6, flex: "0 0 auto" }}
         />
-        <span style={{ fontWeight: 600, fontSize: 13.5, letterSpacing: 0.5 }}>格致</span>
+        <span className="titlebar-brand">格致</span>
 
         <div style={{ width: 1, height: 16, background: "var(--bd-strong)", margin: "0 2px" }} />
 
@@ -1218,9 +1243,12 @@ export default function App() {
         </div>
 
         <div style={{ flex: 1 }} />
-        <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
-          {info ? `Electron ${info.electron} · Chromium ${info.chrome}` : ""}
-        </span>
+        <div className="titlebar-meta">
+          <span className="local-badge"><i />资料保存在本机</span>
+          <button className="theme-switch" aria-label={theme === "light" ? "切换深色主题" : "切换浅色主题"} onClick={() => setTheme(t => t === "light" ? "dark" : "light")}>
+            {theme === "light" ? "◐" : "☀"}<span>{theme === "light" ? "深色" : "浅色"}</span>
+          </button>
+        </div>
       </div>
 
       <div className="main">
@@ -1271,8 +1299,8 @@ export default function App() {
           </button>
 
           <button
-            className={`ribbon-btn${rightTab === "ai" && showRight ? " active" : ""}`}
-            onClick={() => { setRightTab("ai"); setShowRight(true); }}
+            className={`ribbon-btn${rightTab === "ai" && showRight && mainView !== "learning" ? " active" : ""}`}
+            onClick={() => { if (mainView === "learning") setMainView("files"); setRightTab("ai"); setShowRight(true); }}
             title="AI 助手（DeepSeek Harness）"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -1311,10 +1339,14 @@ export default function App() {
           {/* 主视图切换：关系图谱 / 题库组卷 / 日历计划。
               图谱与题库是**中间栏换视图**（不是弹窗）——
               它们要看的内容量大，弹窗会挤得没法用。 */}
+          <button className={'ribbon-btn' + (mainView === 'learning' ? ' active' : '')} aria-current={mainView === 'learning' ? 'page' : undefined} onClick={() => mainView === 'learning' ? setMainView('files') : openStudio()} title="学习工作室（角色空间 / 自信度 / 错误侦探 / 学习证据 / 迁移挑战 / 概念实验）" aria-label="学习工作室">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 2 22 8v8l-10 6L2 16V8Z" /><path d="m2 8 10 6 10-6M12 14v8M7 5l10 6" /></svg>
+          </button>
           <button
             className={`ribbon-btn${mainView === "graph" ? " active" : ""}`}
             onClick={() => setMainView((v) => (v === "graph" ? "files" : "graph"))}
             title={mainView === "graph" ? "返回文件视图" : "关系图谱（把笔记间的链接画成图）"}
+            aria-current={mainView === 'graph' ? 'page' : undefined}
           >
             <Icon.graph />
           </button>
@@ -1322,10 +1354,11 @@ export default function App() {
             className={`ribbon-btn${mainView === "bank" ? " active" : ""}`}
             onClick={() => setMainView((v) => (v === "bank" ? "files" : "bank"))}
             title={mainView === "bank" ? "返回文件视图" : "题库组卷（抽题 → 导出试卷）"}
+            aria-current={mainView === 'bank' ? 'page' : undefined}
           >
             <Icon.book />
           </button>
-          {/* 日历与数字人在**左栏**（它们是工具，不是"当前文件的上下文"）。
+          {/* 日历在左栏。
               点一下切到该面板，再点一下回文件列表。 */}
           <button
             className={`ribbon-btn${leftView === "cal" && showLeft ? " active" : ""}`}
@@ -1336,16 +1369,6 @@ export default function App() {
             title={leftView === "cal" ? "回到文件列表" : "日历计划（月历 / 待办 / 倒计时）"}
           >
             <Icon.calendar />
-          </button>
-          <button
-            className={`ribbon-btn${leftView === "avatar" && showLeft ? " active" : ""}`}
-            onClick={() => {
-              setShowLeft(true);
-              setLeftView((v) => (v === "avatar" ? "files" : "avatar"));
-            }}
-            title={leftView === "avatar" ? "回到文件列表" : "数字人（费曼讲解 / 对话 / 能力检测）"}
-          >
-            <Icon.sparkle />
           </button>
 
           <div className="ribbon-spacer" />
@@ -1362,19 +1385,14 @@ export default function App() {
         {/* 左侧栏 */}
         {showLeft && (
           <>
-            <div className="sidebar" style={{ width: leftWidth }}>
-              {/* 左栏视图：文件 / 检索 / 日历 / 数字人。
-                  
-                  ★ 为什么改到这里（原来日历与数字人在右栏）：
-                    右栏是"关于当前文件的上下文"（AI 助手、信息、反向链接），
-                    左栏是"导航与工具"。日历、数字人是**工具**，
-                    塞进右栏后那边挤了 6 个页签，340px 宽根本展开不了，
-                    而且和"当前文件"毫无关系 —— 归类是错的。
-                    参照 Obsidian 的分法：左侧放插件面板，右侧放上下文。 */}
-              <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-                {([["files", "文件"], ["search", "检索"], ["cal", "日历"], ["avatar", "数字人"]] as const).map(([k, label]) => (
+            <div ref={sidebarMotion} className="sidebar motion-surface" style={{ width: leftWidth }}>
+              {/* 左栏视图：文件 / 检索 / 日历。 */}
+              <div className="workspace-panel-tabs" role="tablist" aria-label="学习工具" style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
+                {([["files", "文件"], ["search", "检索"], ["cal", "日历"]] as const).map(([k, label]) => (
                   <button
                     key={k}
+                    role="tab"
+                    aria-selected={leftView === k}
                     onClick={() => setLeftView(k)}
                     style={{
                       flex: "1 1 auto", padding: "6px 0", fontSize: 12, whiteSpace: "nowrap",
@@ -1393,15 +1411,8 @@ export default function App() {
                 ))}
               </div>
 
-              {/* 日历与数字人放左栏：它们是工具，与"当前文件"无关 */}
+              {/* 日历工具 */}
               {leftView === "cal" && <CalendarPanel vaultPath={vault?.path ?? null} />}
-              {leftView === "avatar" && (
-                <AvatarPanel
-                  vaultPath={vault?.path ?? null}
-                  currentFileName={activeTab?.name ?? null}
-                  currentFileText={activeTab?.text ?? null}
-                />
-              )}
 
               {leftView === "search" ? (
                 <SearchPanel
@@ -1415,14 +1426,6 @@ export default function App() {
                     const entry = rr.entries.find((x) => x.name === name);
                     if (entry) await openFile(entry);
                     else setFsNotice({ ok: false, text: `找不到文件：${name}` });
-                  }}
-                  onCreate={async (name) => {
-                    // 出链指向不存在的笔记 → 一键创建
-                    if (!vault?.path) return;
-                    const r = await window.gezhi.fsx.createFile({ dir: vault.path, name });
-                    if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
-                    setFsNotice({ ok: true, text: `已创建「${r.name}」` });
-                    await refreshTree();
                   }}
                 />
               ) : leftView === "files" ? (
@@ -1549,15 +1552,23 @@ export default function App() {
         {/* 中央。
             图谱与题库是**换视图**而不是弹窗 —— 它们要看的内容量大，
             弹窗挤不下；换视图还能保留标签页不动，切回来原来的文件还开着。 */}
-        <div className="center">
-          {mainView === "graph" ? (
+        <div ref={centerMotion} className="center motion-surface">
+          {mainView === "learning" ? (
+            <LearningStudio key={vault?.path || 'no-vault'} vaultPath={vault?.path ?? null} request={studioRequest}
+              referenceName={activeTab?.name} referenceText={activeTab ? drafts.get(activeTab.path) ?? activeTab.text : null}
+              onOpen={(p) => { setMainView('files'); void openFileByPath(p); }} onOpenVault={() => void openVaultDialog()} onBank={() => setMainView('bank')} />
+          ) : mainView === "graph" ? (
             <GraphView
               vaultPath={vault?.path ?? null}
-              onOpen={(p) => { void openFileByPath(p); }}
+              activePath={activePath}
+              onEvidence={() => openStudio({ view: 'evidence' })}
+              onOpen={(p) => { setMainView("files"); void openFileByPath(p); }}
             />
           ) : mainView === "bank" ? (
             <BankView
+              key={vault?.path || 'no-vault'}
               vaultPath={vault?.path ?? null}
+              onPractice={(id, priorExposure) => openStudio({ view: 'practice', activityId: 'bank:' + id, priorExposure })}
               onOpen={(p) => { void openFileByPath(p); }}
             />
           ) : (
@@ -1636,12 +1647,13 @@ export default function App() {
               </div>
             )}
           </div>
-          <div className="viewer">{renderViewer()}</div>
+          <div ref={viewerMotion} className="viewer motion-surface">{renderViewer()}</div>
           </>
           )}
         </div>
 
         {/* 右侧栏 */}
+        <div style={{ display: mainView === 'learning' && rightTab !== 'settings' ? 'none' : 'contents' }}>
         {showRight ? (
           <>
             <div
@@ -1658,7 +1670,7 @@ export default function App() {
                     · 容器允许横向滚动，挤的时候能滑
                     · 每个页签不换行、不压缩
                   比"把名字改短"更好的做法 —— 改短是在为布局牺牲可读性。 */}
-              <div style={{
+              <div className="workspace-panel-tabs" role="tablist" aria-label="当前文件上下文" style={{
                 display: "flex", alignItems: "center",
                 borderBottom: "1px solid var(--bd)", flex: "0 0 auto",
                 overflowX: "auto",
@@ -1666,6 +1678,8 @@ export default function App() {
                 {(["ai", "info", "links", "settings"] as const).map((k) => (
                   <button
                     key={k}
+                    role="tab"
+                    aria-selected={rightTab === k}
                     onClick={() => setRightTab(k)}
                     style={{
                       flex: "0 0 auto",
@@ -1865,6 +1879,7 @@ export default function App() {
             </span>
           </button>
         )}
+        </div>
       </div>
 
       {/* 右键菜单：重命名 / 删除 / 在此新建。

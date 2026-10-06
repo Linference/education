@@ -75,6 +75,7 @@ export default function ExportMenu({ markdown, sourcePath, defaultName }: Props)
         markdown,
         sourcePath,
         defaultName,
+        saveAs: true,
       });
       setResult({ ...r, format });
     } catch (e: any) {
@@ -200,6 +201,7 @@ export default function ExportMenu({ markdown, sourcePath, defaultName }: Props)
                   <div style={{ wordBreak: "break-all", fontSize: 11, marginTop: 2, opacity: 0.85 }}>
                     {result.path}
                   </div>
+                  {result.warnings?.map((warning,i) => <div key={i} style={{fontSize:11,marginTop:5}}>{warning}</div>)}
                   <button
                     onClick={() => result.path && window.gezhi.exporter.reveal(result.path)}
                     style={{ marginTop: 5, fontSize: 11.5, textDecoration: "underline" }}

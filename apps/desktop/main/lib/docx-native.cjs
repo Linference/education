@@ -136,7 +136,7 @@ function markdownToDocx(markdown, opts = {}) {
   const flushTable = () => {
     if (!tableBuf.length) return;
     const rows = tableBuf.map((r) =>
-      r.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim())
+      r.trim().replace(/^\|/, "").replace(/\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))
     );
     // 丢掉 |---|---| 分隔行
     const data = rows.filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c)));

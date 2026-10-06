@@ -56,6 +56,8 @@ const SPEAK_MAX_CHARS = 600;
 
 export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
+  const messagesRef = useRef<Msg[]>([]);
+  useEffect(() => { messagesRef.current = msgs; }, [msgs]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   /** 自动念出回答（默认开：不然"对话"就少了半边） */
@@ -181,7 +183,10 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
       const r = await window.gezhi.ai.run({ task, cwd: vaultPath, sessionId });
       if (r.sessionId) setSessionId(r.sessionId);
 
-      let answer = "";
+      // React may defer state updaters. Read the response before scheduling UI
+      // updates so automatic speech never depends on when React renders.
+      const lastMessage = messagesRef.current[messagesRef.current.length - 1];
+      const answer = r.finalText ?? (lastMessage?.role === "assistant" ? lastMessage.text : "");
       setMsgs((prev) => {
         const next = [...prev];
         const last = { ...next[next.length - 1] };
@@ -189,14 +194,13 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
         last.streaming = false;
         if (r.finalText) last.text = r.finalText;
         if (!r.ok) last.error = r.error ?? "运行失败";
-        answer = last.text ?? "";
         next[next.length - 1] = last;
         return next;
       });
 
       setRunning(false);
 
-      if (autoSpeak) {
+      if (autoSpeak && r.ok) {
         const spoken = markdownToSpeech(answer);
         if (!spoken) {
           setHint("这次回答没有可朗读的文字内容");
@@ -232,7 +236,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
       style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}
     >
       {/* ---- 形象 ---- */}
-      <div style={{
+      <div className="companion-hero" style={{
         flex: "0 0 auto", display: "flex", justifyContent: "center",
         padding: "4px 8px 2px", background: "var(--bg-secondary)",
         borderBottom: "1px solid var(--bd)",
@@ -241,13 +245,13 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
           frames={voice.frames}
           speaking={voice.speaking}
           actualMs={voice.actualMs}
-          size={150}
+          size={160}
+          mood={mic.recording ? "listening" : running ? "thinking" : "idle"}
           status={
             voice.speaking
               ? (voice.curChar ? `「${voice.curChar}」` : "正在说…")
-              : voice.frames.length
-                ? `口型 ${voice.frames.length} 帧 · ${voice.source === "cloud" ? "云端时间戳" : "本地估算"}`
-                : "还没说过话"
+              : mic.recording ? "我在听，慢慢说"
+                : running ? "正在想一想…" : "一起把问题想明白"
           }
         />
       </div>
@@ -392,7 +396,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
             style={{
               flex: "1 1 auto", padding: "7px 0", borderRadius: 6, fontSize: 13,
               background: running || !input.trim() ? "var(--bg-secondary)" : "var(--accent)",
-              color: running || !input.trim() ? "var(--text-faint)" : "#fff",
+              color: running || !input.trim() ? "var(--text-faint)" : "var(--on-accent)",
               cursor: running || !input.trim() ? "not-allowed" : "pointer",
               fontWeight: 500,
             }}
@@ -416,7 +420,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
               background: mic.recording
                 ? "var(--red, #dc2626)"
                 : (!cloudReady || running || mic.busy ? "var(--bg-secondary)" : "var(--accent)"),
-              color: (!cloudReady || running || mic.busy) && !mic.recording ? "var(--text-faint)" : "#fff",
+              color: (!cloudReady || running || mic.busy) && !mic.recording ? "var(--text-faint)" : mic.recording ? "#fff" : "var(--on-accent)",
               cursor: (!cloudReady || running || mic.busy) ? "not-allowed" : "pointer",
             }}
           >

@@ -133,7 +133,7 @@ function addQuestion(db, p) {
  *   （每条一次 fsync）。而且导入到一半失败会留半份数据，
  *   事务能保证"要么全进，要么全不进"。
  */
-function addQuestions(db, { vault, questions }) {
+function addQuestions(db, { vault, questions, skipDuplicates = false }) {
   if (!Array.isArray(questions) || !questions.length) {
     return { ok: false, error: "没有要导入的题目" };
   }
@@ -142,12 +142,16 @@ function addQuestions(db, { vault, questions }) {
      values(?,?,?,?,?,?,?,?,?,?,?,?,?)`
   );
   let added = 0;
+  let skipped = 0;
+  const signature = q => JSON.stringify([String(q.stem || '').normalize('NFKC').replace(/\s+/g,''), q.options, String(q.answer || '').trim()]);
+  const seen = new Set(skipDuplicates ? db.prepare('SELECT stem,options,answer FROM questions WHERE vault=?').all(vault).map(q => signature({ ...q, options: parseJson(q.options,[]) })) : []);
   const failed = [];
   db.exec("begin");
   try {
     for (const [i, q] of questions.entries()) {
       const stem = String(q?.stem ?? "").trim();
       if (!stem) { failed.push({ index: i, reason: "题干为空" }); continue; }
+      if (skipDuplicates && seen.has(signature(q))) { skipped++; continue; }
       try {
         stmt.run(
           vault,
@@ -164,6 +168,7 @@ function addQuestions(db, { vault, questions }) {
           nowIso(), nowIso(),
         );
         added++;
+        if (skipDuplicates) seen.add(signature(q));
       } catch (e) {
         failed.push({ index: i, reason: String(e?.message ?? e) });
       }
@@ -173,7 +178,7 @@ function addQuestions(db, { vault, questions }) {
     db.exec("rollback");
     return { ok: false, error: "导入失败已回滚：" + String(e?.message ?? e) };
   }
-  return { ok: true, added, failed };
+  return { ok: added > 0 || skipped > 0, added, skipped, failed, ...(added || skipped ? {} : { error: '没有成功导入题目，请检查题干与字段格式' }) };
 }
 
 function updateQuestion(db, { vault, id, patch }) {

@@ -114,7 +114,7 @@ export default function SettingsPanel({ onChanged }: Props) {
         tencent: { secretId, secretKey },
         ...(passphrase ? { passphrase } : {}),
       });
-      if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
       setSecretId(""); setSecretKey(""); setPassphrase("");
       setMsg({ ok: true, text: `已保存（${r.mode === "dpapi" ? "Windows 账户绑定加密" : "主密码加密"}）。语音功能现在应该可用了。` });
       await refresh();
@@ -129,7 +129,7 @@ export default function SettingsPanel({ onChanged }: Props) {
     setMsg(null);
     try {
       const r = await window.gezhi.settings.credSave({ deepseek: { apiKey: deepseekKey } });
-      if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
       setDeepseekKey("");
       setMsg({ ok: true, text: "DeepSeek 密钥已保存。" });
       await refresh();
@@ -143,7 +143,7 @@ export default function SettingsPanel({ onChanged }: Props) {
     setMsg(null);
     try {
       const r = await window.gezhi.settings.credDelete({ which });
-      if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
       setMsg({ ok: true, text: "已清除。" });
       await refresh();
       onChanged?.();
@@ -156,7 +156,7 @@ export default function SettingsPanel({ onChanged }: Props) {
     setBusy(true);
     try {
       const r = await window.gezhi.settings.set({ dshPath });
-      if (!r.ok) { setMsg({ ok: false, text: r.error }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
       setMsg({ ok: true, text: dshPath ? "路径已保存，正在复查…" : "已恢复自动探测。" });
       await refresh();
     } finally {
@@ -166,7 +166,7 @@ export default function SettingsPanel({ onChanged }: Props) {
 
   const toggle = async (key: string, value: unknown) => {
     const r = await window.gezhi.settings.set({ [key]: value });
-    if (r?.ok) { setSettings(r.settings); onChanged?.(); }
+    if (r?.ok) { setSettings(r.settings ?? null); onChanged?.(); }
   };
 
   const inputStyle: React.CSSProperties = {

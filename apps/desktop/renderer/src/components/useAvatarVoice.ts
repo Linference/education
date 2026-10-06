@@ -40,10 +40,14 @@ export function useAvatarVoice() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   /** 用于让旧的朗读在被新的替换时停下（跟着最后一次请求走） */
   const seqRef = useRef(0);
+  const cancelRef = useRef<(() => void) | null>(null);
 
   /** 停掉一切正在发声的东西 */
   const stop = useCallback(() => {
     seqRef.current += 1;
+    const cancel = cancelRef.current;
+    cancelRef.current = null;
+    cancel?.();
     try { (window as any).speechSynthesis?.cancel(); } catch { /* 忽略 */ }
     if (audioRef.current) {
       try { audioRef.current.pause(); } catch { /* 忽略 */ }
@@ -51,6 +55,7 @@ export function useAvatarVoice() {
     }
     setSpeaking(false);
     setCurChar("");
+    setStatus(null);
   }, []);
 
   // 卸载时清理，避免"关掉面板声音还在响"
@@ -88,7 +93,7 @@ export function useAvatarVoice() {
       }
       const clean = text.trim();
       if (!clean) { resolve({ ok: false, source: "system", error: "文本为空" }); return; }
-
+      stop();
       try { synth.cancel(); } catch { /* 忽略 */ }
 
       // 本地估算的口型帧（系统语音拿不到时间戳）
@@ -97,8 +102,9 @@ export function useAvatarVoice() {
       setActualMs(null);
 
       const seq = ++seqRef.current;
+      cancelRef.current = () => resolve({ ok: false, source: 'system', error: '已停止' });
       const u = new SpeechSynthesisUtterance(clean);
-      u.lang = "zh-CN";
+      u.lang = document.documentElement.lang === 'en' ? 'en-US' : 'zh-CN';
       u.rate = 1.0;
 
       u.onstart = () => {
@@ -111,14 +117,16 @@ export function useAvatarVoice() {
       u.onend = () => {
         if (seq !== seqRef.current) return;
         const real = performance.now() - startRef.current;
+        cancelRef.current = null;
         setSpeaking(false);
         setCurChar("");
         if (real > 200) setActualMs(Math.round(real));
-        setStatus(`朗读完成（${(real / 1000).toFixed(1)} 秒，口型已按此时长对齐）`);
+        setStatus(`朗读完成（${(real / 1000).toFixed(1)} 秒）`);
         resolve({ ok: true, source: "system", ms: Math.round(real) });
       };
       u.onerror = (e: any) => {
         if (seq !== seqRef.current) return;
+        cancelRef.current = null;
         setSpeaking(false);
         setCurChar("");
         const msg = e?.error ?? "未知原因";
@@ -127,16 +135,18 @@ export function useAvatarVoice() {
       };
       synth.speak(u);
     });
-  }, []);
+  }, [stop]);
 
   /** 云端语音（腾讯云；需要凭据） */
   const speakCloud = useCallback(async (text: string): Promise<SpeakResult> => {
     const clean = text.trim();
     if (!clean) return { ok: false, source: "cloud", error: "文本为空" };
-
+    stop();
+    const seq = ++seqRef.current;
     setStatus("正在请求云端语音…");
     try {
       const r = await window.gezhi.avatar.tts({ text: clean });
+      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: '已停止' };
       if (!r.ok || !r.base64) {
         const msg = `${r.error ?? "未知原因"}${r.hint ? ` —— ${r.hint}` : ""}`;
         setStatus("云端合成失败：" + msg);
@@ -155,53 +165,57 @@ export function useAvatarVoice() {
       if (r.timings?.length) setFrames(buildVisemeTrackFromTimings(r.timings));
 
       const knownMs = r.totalMs && r.totalMs > 0 ? r.totalMs : null;
-      const seq = ++seqRef.current;
-
       return await new Promise<SpeakResult>((resolve) => {
+        const cleanup = () => {
+          audio.onplay = audio.onended = audio.onerror = audio.onloadedmetadata = null;
+          URL.revokeObjectURL(url);
+          if (audioRef.current === audio) audioRef.current = null;
+          if (seq === seqRef.current) cancelRef.current = null;
+        };
+        cancelRef.current = () => { audio.pause(); cleanup(); resolve({ ok: false, source: 'cloud', error: '已停止' }); };
         audio.onplay = () => {
           if (seq !== seqRef.current) return;
           setSpeaking(true);
           setSource("cloud");
           setActualMs(knownMs);
+          setStatus('正在朗读…');
         };
         audio.onended = () => {
           if (seq !== seqRef.current) { URL.revokeObjectURL(url); return; }
           setSpeaking(false);
           setCurChar("");
           setActualMs(knownMs);
-          URL.revokeObjectURL(url);
-          audioRef.current = null;
-          setStatus(
-            `已朗读（${(r.bytes! / 1024).toFixed(0)} KB · ${r.ms}ms 合成 · ` +
-            `${r.timingAvailable ? `${r.timings!.length} 段真实时间戳驱动口型` : "无时间戳"})`
-          );
+          cleanup();
+          setStatus(knownMs ? `朗读完成（${(knownMs / 1000).toFixed(1)} 秒）` : '朗读完成');
           resolve({ ok: true, source: "cloud", ms: knownMs ?? undefined });
         };
         audio.onerror = () => {
-          URL.revokeObjectURL(url);
-          audioRef.current = null;
+          cleanup();
+          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: '已停止' }); return; }
           setSpeaking(false);
           setStatus("音频播放失败（格式可能不被支持）");
           resolve({ ok: false, source: "cloud", error: "播放失败" });
         };
         audio.onloadedmetadata = () => {
+          if (seq !== seqRef.current) return;
           if (!knownMs && Number.isFinite(audio.duration) && audio.duration > 0) {
             setActualMs(Math.round(audio.duration * 1000));
           }
         };
         audio.play().catch((err) => {
-          URL.revokeObjectURL(url);
-          audioRef.current = null;
+          cleanup();
+          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: '已停止' }); return; }
           setSpeaking(false);
           setStatus("播放被拒绝：" + (err?.message ?? err));
           resolve({ ok: false, source: "cloud", error: String(err?.message ?? err) });
         });
       });
     } catch (e: any) {
+      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: '已停止' };
       setStatus("云端朗读失败：" + (e?.message ?? e));
       return { ok: false, source: "cloud", error: String(e?.message ?? e) };
     }
-  }, []);
+  }, [stop]);
 
   /**
    * 自动选路径发声。

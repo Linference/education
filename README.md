@@ -1,5 +1,53 @@
 # 格致
 
+**当前版本：0.0.5 · 2026 年 10 月 6 日**
+
+格致已从本地资料管理工具，发展为以讲解、追问和可追溯反馈为核心的 AI 学习工作室。
+
+## 发展历程
+
+完整记录见 **[格致的发展历程](docs/发展历程.md)**。最初的 23 个 Git 提交完整保留，后续版本在原历史之上追加。
+
+| 阶段 | 主要进展 |
+| --- | --- |
+| 2026-10-01 | 工程地基、中文编辑与检索、Electron 桌面端、文档查看、AI 助手、语音与费曼讲解。 |
+| 2026-10-02 | 设置、关系图谱、题库组卷、工作区设计与交接清单。 |
+| 0.0.2 | 自信度记录、错误侦探、学习证据地图、迁移挑战和概念实验。 |
+| 0.0.3 · 2026-10-06 | 五个角色空间、六维讲解反馈、首次连接引导，改进题库导入与文档导出。 |
+| 0.0.4 · 2026-10-06 | 统一数字空间入口与动效，修复矩阵乘积等公式的 PDF 导出。 |
+| 0.0.5 · 2026-10-06 | 采用“六维之窗”标志，软件与安装包图标使用真实透明背景。 |
+
+## 当前功能与说明
+
+- 五种听众：同学、教师、学生、考官、研究伙伴，采用不同追问策略。
+- 六维反馈：准确性、条件、推理、表达、举例与迁移，附讲解原话、判断原因和下一步建议；证据不足时保留未评分状态。
+- 学习活动：自信度练习、错误侦探、证据地图、迁移挑战与函数 / 受力 / 概率实验。
+- 资料工作区、全文检索、笔记图谱、题库预览导入与组卷，以及 Markdown / PDF / Word 导出。
+- 深浅主题、减少动态效果设置与透明 Logo。
+
+实现文档：[学习工作室](docs/学习工作室-实现与验证.md) · [数字空间](docs/多角色学习空间-0.0.3.md) · [动效与公式修复](docs/数字空间与动效-0.0.4.md) · [品牌记录](brand/identity-v3.md)。
+
+AI 反馈属于形成性反馈，目前没有真实学生试用数据，评分尚未经教师校准。扫描 PDF 需要先 OCR；云端 AI 与语音需要相应账号和网络。
+
+## 开发与构建
+
+推荐 Windows x64 与 Node.js 24.x。在仓库根目录安装锁定依赖并构建：
+
+```powershell
+npm ci
+npm --prefix apps/desktop ci
+npm --prefix packages/voice ci
+npm --prefix apps/desktop run build:renderer
+& .\apps\desktop\node_modules\.bin\electron.cmd .\apps\desktop
+```
+
+完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.5/`。
+
+核心验证：`node --test apps/desktop/learning.test.mjs apps/desktop/bank-import.test.mjs apps/desktop/companions.test.mjs`；公式验证：`node scripts/latex2typst.test.cjs` 与 `node scripts/verify-math-pdf.mjs`。真实模型测试需额外服务配置，可能产生费用。
+
+<details>
+<summary>初始工程阶段说明（保留作为历史资料）</summary>
+
 > 本地优先的个人学习操作系统 —— 像 Obsidian 一样管知识，像 VSCode 一样编辑文档，
 > 让 AI 站在**你自己的书上**说话，能出卷、能考你、能替你排计划。
 
@@ -113,3 +161,5 @@ node packages/dsh-bridge/smoke.mjs
 P1 = 知识库与编辑器（Electron 壳 + 文件树 + 标签页 + CodeMirror 6 + Live Preview）。
 
 进度与验收标准见 [格致-开发计划.md](格致-开发计划.md) §5。
+
+</details>

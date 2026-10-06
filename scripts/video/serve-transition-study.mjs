@@ -1,0 +1,5 @@
+import http from 'node:http';import fs from 'node:fs';import path from 'node:path';import {fileURLToPath}from'node:url';
+const dir=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../output/transition-study');
+const files={'/':'index.html','/index.html':'index.html','/roles.png':'roles.png','/mark.png':'mark.png','/GEZHI-Transition-Study.mp4':'GEZHI-Transition-Study.mp4'};
+const server=http.createServer((req,res)=>{const name=files[new URL(req.url,'http://localhost').pathname];if(!name){res.writeHead(404);res.end();return}const file=path.join(dir,name);if(!fs.existsSync(file)){res.writeHead(404);res.end();return}res.setHeader('Content-Type',name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.png')?'image/png':'video/mp4');res.setHeader('Cache-Control','no-store');fs.createReadStream(file).pipe(res)});
+server.listen(Number(process.env.GEZHI_PREVIEW_PORT)||0,'127.0.0.1',()=>{const url='http://127.0.0.1:'+server.address().port+'/';fs.writeFileSync(path.join(dir,'preview-url.txt'),url);console.log(url)});

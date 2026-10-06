@@ -18,7 +18,10 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const BRAND = path.join(ROOT, "brand", "assets");
-const OUT = path.join(ROOT, "dist", "installer");
+const release = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+// Versioned outputs let an older preview stay open while building the update.
+const outputRelative = `dist/installer/${release.version}`;
+const OUT = path.join(ROOT, outputRelative);
 
 function step(title) {
   console.log(`\n──────── ${title} ────────`);
@@ -39,7 +42,7 @@ function run(cmd, args, opts = {}) {
 // ---------------------------------------------------------------- 前置检查
 
 step("1. 图标资产检查");
-const required = ["app.ico", "icon-256.png", "icon-512.png", "nsis-header.bmp"];
+const required = ["app.ico", "icon-256.png", "icon-512.png", "nsis-header-v3.bmp"];
 const missing = required.filter((f) => !fs.existsSync(path.join(BRAND, f)));
 if (missing.length) {
   console.error(`  [FAIL] 缺图标资产：${missing.join(", ")}`);
@@ -64,7 +67,19 @@ for (const f of ["apps/desktop/main/index.cjs", "apps/desktop/main/preload.cjs"]
     process.exit(1);
   }
 }
-console.log("  [OK] 主进程与 preload 存在且无 BOM");
+// Check every loaded local module, not only the entry files. A syntax error in
+// a nested IPC dependency can prevent Electron from ever creating a window.
+const sourceFiles = fs.readdirSync(path.join(ROOT, 'apps/desktop/main'), { recursive: true })
+  .filter(f => f.endsWith('.cjs')).map(f => path.join(ROOT, 'apps/desktop/main', f));
+sourceFiles.push(...fs.readdirSync(path.join(ROOT, 'apps/desktop/shared'))
+  .filter(f => /\.(mjs|cjs)$/.test(f)).map(f => path.join(ROOT, 'apps/desktop/shared', f)));
+for (const f of sourceFiles) {
+  if (run(process.execPath, ['--check', f]) !== 0) {
+    console.error(`  [FAIL] 主进程模块语法错误：${path.relative(ROOT, f)}`);
+    process.exit(1);
+  }
+}
+console.log(`  [OK] 入口存在且无 BOM，${sourceFiles.length} 个主进程 / 共享模块通过语法检查`);
 
 step("3.2 内置依赖检查（全内置目标：装完就能用）");
 // Typst：导 PDF 用。不带上，用户得自己 winget install —— 中学生做不到。
@@ -89,6 +104,12 @@ try {
 }
 
 // docx：Word 导出用（纯 JS，无外部依赖）
+const dshInstaller = path.join(ROOT, 'vendor/dsh/dsh-installer.exe');
+if (!fs.existsSync(dshInstaller) || fs.statSync(dshInstaller).size < 1024*1024 || !fs.existsSync(path.join(ROOT,'vendor/dsh/LICENSE'))) {
+  console.error('  [FAIL] 缺少内置 DeepSeek Harness 安装程序或许可文件'); process.exit(1);
+}
+console.log('  [OK] DeepSeek Harness 安装程序随包，首次启动提供安装与官方登录引导');
+
 const docxPkg = path.join(ROOT, "apps", "desktop", "node_modules", "docx", "package.json");
 if (!fs.existsSync(docxPkg)) {
   console.error("  [FAIL] 缺 apps/desktop/node_modules/docx —— Word 导出会失效");
@@ -173,12 +194,13 @@ const env = {
   CSC_IDENTITY_AUTO_DISCOVERY: "false",
 };
 
-// ⚠️ 不要加 --config —— 配置只放在 package.json 的 build 字段里。
+// 配置只放在 package.json 的 build 字段里，不加载第二份配置文件。
+// 唯一的命令行覆盖是本次版本的输出目录，避免覆盖正在运行的预览。
 //    曾经同时存在 package.json.build 与 build/*.cjs 两份配置，
 //    改了其中一份却跑另一份，白查了半天 schema 报错。
 const code = run(
   process.platform === "win32" ? "npx.cmd" : "npx",
-  ["electron-builder", "--win", "nsis"],
+  ["electron-builder", "--win", "nsis", `--config.directories.output=${outputRelative}`],
   { env, shell: process.platform === "win32" }
 );
 if (code !== 0) {
@@ -190,7 +212,7 @@ if (code !== 0) {
 
 step("5. 产物核验");
 if (!fs.existsSync(OUT)) { console.error("  [FAIL] 没有输出目录"); process.exit(1); }
-const artifacts = fs.readdirSync(OUT).filter((f) => f.endsWith(".exe"));
+const artifacts = fs.readdirSync(OUT).filter((f) => f === `格致-${release.version}-安装包.exe`);
 if (artifacts.length === 0) { console.error("  [FAIL] 没有生成 .exe"); process.exit(1); }
 
 for (const a of artifacts) {

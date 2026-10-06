@@ -24,6 +24,7 @@ import { useMicRecorder } from "./useMicRecorder";
 import { markdownToSpeech } from "./viseme";
 
 interface Props {
+  onOpenRooms?: () => void;
   vaultPath: string | null;
   /** 是否可用云端语音 */
   cloudReady: boolean;
@@ -48,12 +49,13 @@ type Phase = "idle" | "recording" | "analyzing" | "done";
  *   5. 追问要**针对最薄弱环节** —— 这是查缺补漏真正落地的地方
  */
 function buildFeynmanPrompt(topic: string, transcript: string, fileContext?: string | null): string {
+  if (document.documentElement.lang === 'en') return `A student is explaining ${topic} in their own words. Evaluate only this explanation, using the reference where relevant. Do not call tools or modify files. Reply entirely in English, at most 160 words, with four short sections: What is correct; Missing conditions; Incorrect or unclear claims; Two follow-up questions. Do not give a complete replacement lecture. Be explicit if the reference is insufficient. This is AI feedback, not a certified assessment.\nStudent explanation:\n${transcript}\nReference:\n${(fileContext || '').slice(0, 4000)}`;
   const bg = fileContext
     ? `\n\n【参考资料（他正在看的文件内容，可用于判断他讲得对不对）】\n${fileContext.slice(0, 4000)}`
     : "";
   return `学生正在用费曼学习法讲解「${topic}」。
 
-下面是他**口述**的讲解记录（由语音识别转写，可能有同音错字与断句问题，请容忍错别字，不要纠错别字）：
+下面是他用自己的话讲解的记录（可能来自语音转写或文字输入；请容忍转写错别字）：
 
 """
 ${transcript}
@@ -79,7 +81,7 @@ function fmtDur(sec: number): string {
   return `${Math.floor(sec / 60)} 分 ${sec % 60} 秒`;
 }
 
-export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, currentFileText }: Props) {
+export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, currentFileText, onOpenRooms }: Props) {
   const [topic, setTopic] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   /** 累加的讲解文字 */
@@ -207,9 +209,10 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
   const canAnalyze = wordCount >= 10 && !recording && phase !== "analyzing";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="feynman-panel" data-testid="feynman-panel" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      {onOpenRooms && <button className="learning-primary" style={{ margin: 8 }} onClick={onOpenRooms}>选择数字人 · 进入六维讲解空间 ↗</button>}
       {/* ---- 顶部：数字人（讲的时候它在听） ---- */}
-      <div style={{
+      <div className="companion-hero" style={{
         flex: "0 0 auto", display: "flex", flexDirection: "column", alignItems: "center",
         padding: "6px 8px 4px", background: "var(--bg-secondary)", borderBottom: "1px solid var(--bd)",
       }}>
@@ -217,7 +220,8 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
           frames={voice.frames}
           speaking={voice.speaking}
           actualMs={voice.actualMs}
-          size={118}
+          size={160}
+          mood={recording ? "listening" : phase === "analyzing" ? "thinking" : "idle"}
           status={
             recording
               ? `在听你讲… ${mic.seconds} 秒`
@@ -251,7 +255,7 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
 
         {/* ---- 录音按钮 ---- */}
         <button
-          onClick={() => (recording ? void stopSegment() : void startSegment())}
+          onClick={() => (recording || mic.pending ? void stopSegment() : void startSegment())}
           disabled={!cloudReady || phase === "analyzing"}
           title={cloudReady ? "" : "讲解要用语音输入，需要腾讯云凭据（识别没有本地回退方案）"}
           style={{
@@ -259,12 +263,12 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
             background: !cloudReady ? "var(--bg-secondary)"
               : recording ? "var(--red, #dc2626)"
               : "var(--accent)",
-            color: !cloudReady ? "var(--text-faint)" : "#fff",
+            color: !cloudReady ? "var(--text-faint)" : recording ? "#fff" : "var(--on-accent)",
             cursor: !cloudReady || phase === "analyzing" ? "not-allowed" : "pointer",
             marginBottom: 6,
           }}
         >
-          {recording ? `■ 讲完了这一段（${mic.seconds} 秒）` : "🎤 开始讲（点一下就开始录）"}
+          {recording ? `■ 讲完了这一段（${mic.seconds} 秒）` : mic.pending ? '识别已录制的这一段' : "🎤 开始讲（点一下就开始录）"}
         </button>
 
         <div style={{ fontSize: 10.5, color: "var(--text-faint)", lineHeight: 1.7, marginBottom: 8 }}>
@@ -273,6 +277,10 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
         </div>
 
         {/* ---- 讲解记录 ---- */}
+        <label style={{ display: 'block', fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+          也可以输入或修改你的讲解
+          <textarea aria-label="文字讲解" value={transcript} onChange={e => setTranscript(e.target.value)} disabled={recording || phase === 'analyzing'} rows={5} maxLength={12000} placeholder="用自己的话解释，并说明适用条件。" style={{ width: '100%', boxSizing: 'border-box', marginTop: 5, padding: 9, borderRadius: 8, background: 'var(--bg-primary)', color: 'var(--text-normal)', border: '1px solid var(--bd-strong)', fontSize: 12.5, lineHeight: 1.6, resize: 'vertical' }} />
+        </label>
         {transcript && (
           <div style={{ marginBottom: 8 }}>
             <div style={{
@@ -311,7 +319,7 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
           style={{
             width: "100%", padding: "9px 0", borderRadius: 8, fontSize: 13.5, fontWeight: 500,
             background: canAnalyze ? "var(--accent)" : "var(--bg-secondary)",
-            color: canAnalyze ? "#fff" : "var(--text-faint)",
+            color: canAnalyze ? "var(--on-accent)" : "var(--text-faint)",
             cursor: canAnalyze ? "pointer" : "not-allowed",
             marginBottom: 8,
           }}
@@ -325,13 +333,13 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
 
         {/* ---- AI 反馈 ---- */}
         {(feedback || streaming) && (
-          <div style={{
+          <div className="companion-feedback" style={{
             padding: "8px 10px", borderRadius: 6, fontSize: 12.5, lineHeight: 1.85,
             background: "var(--bg-primary)", border: "1px solid var(--bd-strong)",
             whiteSpace: "pre-wrap", wordBreak: "break-word",
           }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--accent)", marginBottom: 4 }}>
-              老师的反馈
+              这次讲解的反馈
               {streaming && <span style={{ color: "var(--text-faint)", fontWeight: 400 }}> 生成中…</span>}
             </div>
             {feedback}
@@ -362,7 +370,7 @@ export default function FeynmanPanel({ vaultPath, cloudReady, currentFileName, c
         {/* ---- 空状态提示 ---- */}
         {!transcript && !feedback && (
           <div style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.9, padding: "4px 0" }}>
-            费曼学习法的做法是：**假装你在给一个完全不懂的人上课**，
+            费曼学习法的做法是：假装你在给一个完全不懂的人上课，
             把知识点用自己的话讲一遍。
             <div style={{ marginTop: 6 }}>
               讲的时候不用怕说错 —— AI 会指出你漏掉的关键点、说含糊的地方，

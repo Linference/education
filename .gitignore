@@ -73,7 +73,7 @@ vendor/soffice/*
 !vendor/soffice/README.md
 
 
-# �����õ���ʱĿ¼��vscode-office Դ�롢ACL ��ϱ��棩
+# 调研用临时目录（vscode-office 源码和 ACL 报告）
 .tmp-vscode-office/
 _acl-report/
 .git-commit-msg.txt
@@ -83,3 +83,12 @@ credentials.enc
 .m3.txt
 .m4.txt
 .m5.txt
+
+# 本地验证与录制输出（包含隔离测试数据，不进入仓库）
+/output/
+/tmp/
+/brand/archive/
+/题库源/
+
+# 第三方安装器二进制：保留 README、许可和摘要
+/vendor/dsh/*.exe

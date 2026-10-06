@@ -1,0 +1,23 @@
+import fs from 'node:fs';
+const source=fs.readFileSync('scripts/video/record-demo.mjs','utf8');
+const start=source.slice(0,source.indexOf(" if(!resume){"));
+const ending=source.slice(source.indexOf('} catch(e){'));
+const actions=`
+ await page.keyboard.press('Control+b');
+ const md=fs.readFileSync(path.join(VAULT,'My Study Guide.md'),'utf8');
+ const exported=await page.evaluate(p=>window.gezhi.exporter.run(p),{format:'docx',markdown:md,sourcePath:path.join(VAULT,'My Study Guide.md'),defaultName:'My Study Guide',saveAs:false});if(!exported.ok)throw Error(exported.error);
+ await begin('05-word');await open('My Study Guide.docx');await page.waitForFunction(()=>document.querySelector('.pdf-viewer canvas')||document.querySelector('.docx-wrap'),{},{timeout:90000});await pause(2800);await shot('05-word');await move(830,640);await page.mouse.wheel(0,270);await pause(2300);await end('05-word');
+ await page.keyboard.press('Control+e');await click(page.locator('button[aria-label="Learning Studio"]'));await tab('evidence');
+ await click(page.locator('.evidence-node[aria-label^="Discriminant"]'));await page.locator('.evidence-layout').evaluate(e=>e.scrollIntoView({block:'start'}));await pause(1200);
+ await begin('09-evidence');await move(665,360);await pause(1700);await click(page.locator('.evidence-tools button').last());await pause(1800);await shot('09-evidence');await end('09-evidence');
+ await tab('lab');await page.locator('.lab-layout').evaluate(e=>e.scrollIntoView({block:'start'}));
+ await begin('11-quadratic');const slider=page.locator('.lab-controls input[type=range]').first();await slider.focus();for(let i=0;i<8;i++){await slider.press('ArrowLeft');await pause(260);}await pause(2200);await shot('11-quadratic');await end('11-quadratic');
+ await click(page.locator('.lab-selector button').filter({hasText:'Force and motion'}));await click(page.getByRole('button',{name:'Start a prediction',exact:true}));const ex=page.getByTestId('learning-exercise');await ex.locator('input.learning-number').fill('4.02');await ex.locator('textarea').fill('Net force = 20 - 0.1*4*9.8 = 16.08 N; acceleration = 16.08/4.');await click(ex.getByRole('radio',{name:'Confident',exact:true}));await click(ex.getByRole('button',{name:'Submit prediction',exact:true}));await page.locator('.lab-layout').evaluate(e=>e.scrollIntoView({block:'start'}));await pause(900);
+ await begin('12-force');await click(page.getByRole('button',{name:'Run a 3-second experiment',exact:true}));await pause(3300);await shot('12-force');await click(page.getByRole('button',{name:'Run a 3-second experiment',exact:true}));await pause(3300);await end('12-force');
+ await click(page.locator('.lab-selector button').filter({hasText:'Probability and sampling'}));await click(page.getByRole('button',{name:'Start a prediction',exact:true}));const ep=page.getByTestId('learning-exercise');await ep.locator('input.learning-number').fill('75');await ep.locator('textarea').fill('P(at least once) = 1 - 0.5^2 = 0.75.');await click(ep.getByRole('radio',{name:'Confident',exact:true}));await click(ep.getByRole('button',{name:'Submit prediction',exact:true}));await page.locator('.lab-layout').evaluate(e=>e.scrollIntoView({block:'start'}));await pause(900);
+ await begin('13-probability');await click(page.getByRole('button',{name:'Sample 1000 groups',exact:true}));await pause(1400);await click(page.getByRole('button',{name:'Sample 1000 groups',exact:true}));await pause(1400);await click(page.getByRole('button',{name:'Sample 1000 groups',exact:true}));await pause(2100);await shot('13-probability');await end('13-probability');
+ await click(page.locator('.ribbon-btn[title^="Note Relationship Graph"]'));await begin('14-note-graph');await pause(1600);await move(743,430);await pause(1600);await page.mouse.wheel(0,-160);await pause(1400);await shot('14-note-graph');await end('14-note-graph');
+ const summary=await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),VAULT);fs.writeFileSync(path.join(OUT,'actual-learning-records.json'),JSON.stringify(summary,null,2));
+ console.log('Retakes completed');
+`;
+fs.writeFileSync('scripts/video/record-retakes.mjs',start+actions+ending);

@@ -17,6 +17,14 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+// Explicit test runs keep Chromium, settings and indices away from real app data.
+if (process.env.GEZHI_TEST === "1" && process.env.GEZHI_TEST_APPDATA) {
+  const testRoot = path.resolve(process.env.GEZHI_TEST_APPDATA);
+  fs.mkdirSync(path.join(testRoot, "userData"), { recursive: true });
+  app.setPath("appData", testRoot);
+  app.setPath("userData", path.join(testRoot, "userData"));
+  process.env.APPDATA = testRoot;
+}
 const { registerAIStream, registerAI } = require("./ai.cjs");
 const { registerExport } = require("./export-ipc.cjs");
 const { registerVaultFs } = require("./vault-fs.cjs");
@@ -26,6 +34,9 @@ const { registerCalendar } = require("./calendar-ipc.cjs");
 const { registerAvatar } = require("./avatar-ipc.cjs");
 const { registerSettings } = require("./settings-ipc.cjs");
 const { registerBank } = require("./bank-ipc.cjs");
+const { registerLearning } = require("./learning-ipc.cjs");
+const { registerCompanions } = require('./companion-ipc.cjs');
+const { registerDshSetup } = require('./dsh-setup-ipc.cjs');
 const { extractDocText, extractPptText } = require("./lib/doc-extract.cjs");
 const { parsePptxFile } = require("./lib/pptx.cjs");
 const { parseSheetFile } = require("./lib/xlsx.cjs");
@@ -60,6 +71,9 @@ function createWindow() {
     // 居中：避免窗口跑出屏幕外（多显示器/小屏时尤其明显）
     center: true,
     title: "格致",
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, "branding", "icon-256.png")
+      : path.resolve(HERE, "..", "..", "..", "brand", "assets", "icon-256.png"),
     backgroundColor: "#ffffff",
     show: false,                    // 等 ready-to-show，避免白屏闪烁
     webPreferences: {
@@ -95,7 +109,10 @@ function createWindow() {
     const fallback = path.join(ROOT, "renderer", "index.html");
     const target = fs.existsSync(built) ? built : fallback;
     // GEZHI_TEST=1 时带 ?test=1，启用界面里的自动化测试钩子（详见 renderer/src/App.tsx）
-    const query = process.env.GEZHI_TEST === "1" ? { search: "test=1" } : undefined;
+    const params = new URLSearchParams();
+    if (process.env.GEZHI_TEST === '1') params.set('test', '1');
+    if (process.env.GEZHI_DEMO_EN === '1') params.set('demo', 'en');
+    const query = params.size ? { search: params.toString() } : undefined;
     mainWindow.loadFile(target, query);
   }
 
@@ -345,6 +362,9 @@ function registerIpc() {
 
   // 题库与组卷（SQLite，库放 %APPDATA%）
   registerBank(ipcMain, () => mainWindow, app);
+  registerLearning(ipcMain, app);
+  registerCompanions(ipcMain, app);
+  registerDshSetup(ipcMain, app);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */

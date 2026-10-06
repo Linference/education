@@ -90,23 +90,15 @@ const TYPST_BUILTIN_OPS = new Set([
 ]);
 
 function splitLetterRuns(s) {
-  // 规则（每一条都对应实测踩过的坑）：
-  //
-  //   1. **已知命令/算子名一律保留**，不管大小写。
-  //      `Delta`、`Omega`、`alpha`、`sin`、`thin` 都是 Typst 认识的标识符。
-  //      ⚠️ 第一版只看小写，把 `\Delta` 拆成了 `De l t a`、把间距命令
-  //      `thin` 拆成了 `t h i n` —— 判断顺序错了：应该**先查名单再看大小写**。
-  //   2. 后面紧跟 `.` 或 `(` 的保留（`arrow.r`、`overline(`）。
-  //   3. 前面是 `#` `@` `.` `\` 的保留（Typst 语法：引用、字段、命名空间）。
-  //   4. 剩下的**全小写**串才拆 —— `mc` 是 m×c。
-  //      大写串不拆：数学里 `AB` 通常是一个符号（向量/矩阵/点）。
-  return s.replace(/[A-Za-z]{2,}/g, (run, offset, whole) => {
-    if (TYPST_BUILTIN_OPS.has(run)) return run;              // 规则 1 优先
+  // Raw LaTeX letters are separate symbols, including Ax, By and AB.
+  // Preserve quoted text as a complete token: splitting inside \text{...}
+  // would corrupt English words and explicit multi-letter labels.
+  return s.replace(/"(?:\\.|[^"\\])*"|[A-Za-z]{2,}/g, (run, offset, whole) => {
+    if (run.startsWith('"') || TYPST_BUILTIN_OPS.has(run) || FUNCTIONS.includes(run) || DECORATIONS.includes(run)) return run;
     const prev = offset > 0 ? whole[offset - 1] : "";
     if (prev === "#" || prev === "@" || prev === "." || prev === "\\") return run;
     const next = whole[offset + run.length] ?? "";
-    if (next === "." || next === "(") return run;
-    if (!/^[a-z]+$/.test(run)) return run;                    // 含大写 → 保留
+    if (next === ".") return run;
     return run.split("").join(" ");
   });
 }
@@ -135,6 +127,12 @@ function latexToTypst(tex) {
     const r = latexToTypst(t);
     for (const w of r.warnings) warnings.push(w);
     return r.typst;
+  };
+  // Commands must not merge with the preceding variable (y\leq → y lt.eq).
+  const identifier = (name) => {
+    if (/[A-Za-z0-9]$/.test(out)) out += " ";
+    out += name;
+    if (/[A-Za-z]/.test(s[i] || "")) out += " ";
   };
 
   while (i < s.length) {
@@ -233,6 +231,10 @@ function latexToTypst(tex) {
       // 我第一版"顺手"把空格也吃掉，结果是 `\left( x \right)` 变成 `(x)`
       // 而 `\left( \frac{a}{b} \right)` 变成 `((a)/(b))`：
       // 看起来更紧凑，但那是**猜**用户的意图。用户的空格就该照原样保留。
+      if (name === "quad" || name === "qquad") {
+        out += " space ";
+        continue;
+      }
       if (DROP.has(name)) {
         continue;
       }
@@ -240,12 +242,12 @@ function latexToTypst(tex) {
       // 一元函数
       if (FUNCTIONS.includes(name)) {
         // \lim_{x \to 0} 的下标要跟着
-        out += name;
+        identifier(name);
         continue;
       }
 
       // 直接换名
-      if (RENAME[name]) { out += RENAME[name]; continue; }
+      if (RENAME[name]) { identifier(RENAME[name]); continue; }
 
       // 不认识的命令：**保留原文**并记警告，绝不静默丢内容
       warnings.push(name);

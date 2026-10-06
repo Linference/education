@@ -84,6 +84,7 @@ function registerSettings(ipcMain, getWindow, app) {
   async function loadCred() {
     if (credMod) return credMod;
     const candidates = [
+      path.join(process.resourcesPath ?? "", "packages", "core", "src", "credentials.mjs"),
       path.resolve(__dirname, "..", "..", "..", "packages", "core", "src", "credentials.mjs"),
       path.join(process.resourcesPath ?? "", "core", "credentials.mjs"),
     ];
@@ -211,9 +212,7 @@ function registerSettings(ipcMain, getWindow, app) {
   /** DSH 状态：AI 能不能用，取决于它 */
   ipcMain.handle("settings:dshStatus", async () => {
     try {
-      const bridge = await import(pathToFileURL(
-        path.resolve(__dirname, "..", "..", "..", "packages", "dsh-bridge", "src", "index.mjs"),
-      ).href).catch(() => null);
+      const bridge = await require('./ai.cjs').loadBridge().catch(() => null);
       if (!bridge) return { ok: false, error: "找不到 DSH 桥接模块" };
 
       const custom = readSettings().dshPath;

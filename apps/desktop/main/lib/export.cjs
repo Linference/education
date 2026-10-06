@@ -15,7 +15,9 @@
 const path = require("node:path");
 const fs = require("node:fs");
 const os = require("node:os");
-const { spawnSync } = require("node:child_process");
+const { spawnSync, execFile } = require("node:child_process");
+const { promisify } = require('node:util');
+const { fileURLToPath } = require('node:url');
 const { markdownToTypst, buildTypstDocument } = require("./md2typst.cjs");
 
 // ---------------------------------------------------------------- 找工具
@@ -148,11 +150,24 @@ async function exportPdf({ markdown, sourcePath, outputPath, title, author, temp
 
   const dir = path.dirname(sourcePath);
   const stem = path.basename(sourcePath, path.extname(sourcePath));
-  const typPath = path.join(dir, `${stem}.gezhi.typ`);
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gezhi-pdf-'));
+  const typPath = path.join(workDir, 'document.typ');
   const pdfPath = outputPath ?? path.join(dir, `${stem}.pdf`);
+  const warnings = [];
+  let retainWork = false;
 
   try {
-    const { body, title: autoTitle } = markdownToTypst(markdown);
+    let assetIndex = 0;
+    const imageResolver = src => {
+      try {
+        if (/^https?:/i.test(src)) { warnings.push('未嵌入网络图片，请先保存到本地：' + src); return null; }
+        const local = src.startsWith('file:') ? fileURLToPath(src) : path.resolve(dir, decodeURIComponent(src));
+        if (!fs.statSync(local).isFile()) throw new Error('不是文件');
+        const fileName = 'image-' + (++assetIndex) + path.extname(local);
+        fs.copyFileSync(local, path.join(workDir,fileName)); return fileName;
+      } catch { warnings.push('找不到本地图片：' + src); return null; }
+    };
+    const { body, title: autoTitle } = markdownToTypst(markdown, { imageResolver });
     const docTitle = title ?? autoTitle ?? stem;
     const authorLine = author ? `  author: ${JSON.stringify(author)},\n` : "";
 
@@ -162,12 +177,12 @@ async function exportPdf({ markdown, sourcePath, outputPath, title, author, temp
     //   所以把模板复制到输出目录旁边，用**相对路径** import，
     //   并把 --root 指向输出目录。这样图片等相对资源也能正确解析。
     const tplName = "gezhi-handout.typ";
-    const tplDest = path.join(dir, tplName);
+    const tplDest = path.join(workDir, tplName);
     fs.copyFileSync(templatePath, tplDest);
     // gezhi.typ（字体栈）也要一起带过去，handout.typ 会 import 它
     const gezhiSrc = path.join(path.dirname(templatePath), "gezhi.typ");
     if (fs.existsSync(gezhiSrc)) {
-      fs.copyFileSync(gezhiSrc, path.join(dir, "gezhi.typ"));
+      fs.copyFileSync(gezhiSrc, path.join(workDir, "gezhi.typ"));
     }
 
     // ⚠️ 顺序：#import 必须在 #show 之前 —— 否则 handout 还没定义就用了。
@@ -185,25 +200,14 @@ ${body}
 
     const args = [
       "compile",
-      "--root", dir,
+      "--root", workDir,
       "--font-path", "C:\\Windows\\Fonts",
       typPath,
       pdfPath,
     ];
-    const r = spawnSync(typstBin, args, {
-      encoding: "utf8",
-      timeout: 180000,
-      windowsHide: true,
-    });
-
-    if (r.status !== 0) {
-      const err = String(r.stderr ?? "") + String(r.stdout ?? "");
-      return {
-        ok: false,
-        error: `Typst 编译失败（退出码 ${r.status}）：\n${err.slice(0, 2000)}`,
-        typPath,
-      };
-    }
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    // Compilation is asynchronous so the window remains interactive.
+    await promisify(execFile)(typstBin,args,{encoding:'utf8',timeout:180000,windowsHide:true,maxBuffer:4*1024*1024});
     if (!fs.existsSync(pdfPath)) {
       return { ok: false, error: "Typst 报告成功但没有生成 PDF", typPath };
     }
@@ -213,17 +217,15 @@ ${body}
       return { ok: false, error: `生成的 PDF 只有 ${size} 字节，疑似失败`, typPath };
     }
 
-    // 清理中间产物（只留 PDF，除非调用方要求保留 .typ 以便改版式）
-    for (const f of [tplDest, path.join(dir, "gezhi.typ")]) {
-      try { fs.unlinkSync(f); } catch { /* 忽略 */ }
-    }
-    if (!keepTypst) {
-      try { fs.unlinkSync(typPath); } catch { /* 忽略 */ }
-    }
-
-    return { ok: true, path: pdfPath, size, typPath: keepTypst ? typPath : null, engine: typstBin };
+    retainWork = Boolean(keepTypst);
+    return { ok: true, path: pdfPath, size, warnings, typPath: keepTypst ? typPath : null, engine: typstBin };
   } catch (e) {
-    return { ok: false, error: e.message };
+    return { ok: false, error: 'PDF 导出失败：' + String(e.stderr || e.message).slice(0,2500) };
+  } finally {
+    // Delete only the uniquely-created owned temporary directory.
+    const tempRoot = fs.realpathSync(os.tmpdir());
+    const real = fs.realpathSync(workDir);
+    if (!retainWork && path.dirname(real) === tempRoot && path.basename(real).startsWith('gezhi-pdf-')) fs.rmSync(real,{recursive:true,force:true});
   }
 }
 

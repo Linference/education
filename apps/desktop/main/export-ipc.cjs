@@ -9,6 +9,7 @@ const fs = require("node:fs");
 // app 用来取系统"下载"文件夹的真实路径（用户可能改过位置，也可能被组策略重定向）
 const { dialog, app } = require("electron");
 const { exportPdf, exportDocx, probeExportCapabilities } = require("./lib/export.cjs");
+const { validateName } = require('./vault-fs.cjs');
 
 function registerExport(ipcMain, getWindow) {
   const ROOT = path.resolve(__dirname, "..", "..", "..");       // 仓库根（开发态）
@@ -66,15 +67,19 @@ function registerExport(ipcMain, getWindow) {
    * @param payload.toDownloads 导出到系统"下载"文件夹，而不是源文件所在目录
    */
   ipcMain.handle("export:run", async (_e, payload) => {
-    const { format, markdown, sourcePath, defaultName, author, saveAs, toDownloads } = payload ?? {};
-    if (!markdown || typeof markdown !== "string") {
+    try {
+    const { format, markdown, sourcePath: suppliedSource, defaultName, author, saveAs, toDownloads } = payload ?? {};
+    if (!['markdown', 'pdf', 'docx'].includes(format)) return { ok: false, error: '不支持的导出格式' };
+    if (typeof markdown !== "string" || (format !== 'markdown' && !markdown.trim())) {
       return { ok: false, error: "没有可导出的内容" };
     }
-    if (!sourcePath) {
+    if (typeof suppliedSource !== 'string' || !suppliedSource.trim()) {
       return { ok: false, error: "缺少源文件路径" };
     }
 
-    const stem = defaultName || path.basename(sourcePath, path.extname(sourcePath));
+    const sourcePath = fs.existsSync(suppliedSource) && fs.statSync(suppliedSource).isDirectory()
+      ? path.join(suppliedSource, '学习记录.md') : suppliedSource;
+    const stem = validateName(defaultName || path.basename(sourcePath, path.extname(sourcePath)));
     /*
      * 输出目录。
      *
@@ -102,6 +107,8 @@ function registerExport(ipcMain, getWindow) {
     if (format === "markdown") {
       const ext = ".md";
       target = path.join(dir, `${stem}.导出${ext}`);
+      // Automatic export must not silently replace an earlier copy.
+      for (let n = 2; !saveAs && fs.existsSync(target); n++) target = path.join(dir, `${stem}.导出-${n}${ext}`);
       if (saveAs) {
         const r = await dialog.showSaveDialog(getWindow(), {
           title: "导出 Markdown",
@@ -111,6 +118,7 @@ function registerExport(ipcMain, getWindow) {
         if (r.canceled || !r.filePath) return { ok: false, canceled: true };
         target = r.filePath;
       }
+      if (path.extname(target).toLowerCase() !== '.md') target += '.md';
       try {
         fs.writeFileSync(target, markdown, "utf8");
         return { ok: true, path: target, size: fs.statSync(target).size };
@@ -132,6 +140,7 @@ function registerExport(ipcMain, getWindow) {
       if (r.canceled || !r.filePath) return { ok: false, canceled: true };
       target = r.filePath;
     }
+    if (path.extname(target).toLowerCase() !== ext) target += ext;
 
     if (format === "pdf") {
       return exportPdf({
@@ -154,6 +163,9 @@ function registerExport(ipcMain, getWindow) {
       });
     }
     return { ok: false, error: `不支持的格式：${format}` };
+    } catch (e) {
+      return { ok: false, error: String(e?.message ?? e) };
+    }
   });
 
   // 在资源管理器里定位导出结果

@@ -1,6 +1,6 @@
 {
   "name": "@gezhi/desktop",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "private": true,
   "description": "格致 · 本地优先的个人学习操作系统",
   "main": "main/index.cjs",
@@ -19,6 +19,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@lezer/markdown": "^1.7.2",
+    "d3-force": "^3.0.0",
     "docx": "^9.8.1",
     "docx-preview": "^0.3.7",
     "highlight.js": "^11.11.1",

@@ -75,11 +75,28 @@ export interface DocResult {
 }
 
 export interface GezhiApi {
+  companions: import('./lib/companion-types').CompanionApi;
+  dshSetup: {
+    status(): Promise<{ ok: boolean; installed: boolean; installerBundled: boolean; completed: boolean; error?: string }>;
+    install(): Promise<{ ok: boolean; error?: string }>;
+    login(): Promise<{ ok: boolean; error?: string }>;
+    complete(): Promise<{ ok: boolean; error?: string }>;
+  };
+  learning: import('./lib/learning-types').LearningApi;
   info(): Promise<AppInfo>;
   vault: {
+    set(dir: string): Promise<{ ok: boolean; vault?: string }>;
     pick(): Promise<VaultInfo | null>;
     info(dir: string): Promise<VaultInfo>;
     list(dir: string): Promise<ListResult>;
+  };
+  fsx: {
+    createFile(p: { dir: string; name: string }): Promise<FsMutationResult>;
+    createFolder(p: { dir: string; name: string }): Promise<FsMutationResult>;
+    rename(p: { target: string; newName: string }): Promise<FsMutationResult>;
+    remove(p: { target: string }): Promise<FsMutationResult>;
+    writeText(p: { path: string; text: string }): Promise<FsMutationResult>;
+    currentVault(): Promise<{ vault: string | null }>;
   };
   file: {
     read(p: string): Promise<TextResult>;
@@ -128,6 +145,7 @@ export interface GezhiApi {
       sourcePath: string;
       defaultName?: string;
       author?: string;
+      title?: string;
       saveAs?: boolean;
       /** 导出到系统"下载"文件夹（组卷出卷走这条），而不是源文件所在目录 */
       toDownloads?: boolean;
@@ -183,6 +201,7 @@ export interface GezhiApi {
   // ★ available=false 时 reason 说明缺什么；**不要把它当成"整个功能坏了"**：
   //   口型算法与系统语音是本地能力，不需要密钥。
   avatar: {
+    asr(p: { audioBase64: string; format?: string; sampleRate?: number }): Promise<{ ok: boolean; text?: string; error?: string; hint?: string; empty?: boolean }>;
     probe(): Promise<AvatarProbe>;
     /**
      * 云端合成。返回带 timings（字级时间戳）—— 口型的真实数据源；
@@ -232,13 +251,19 @@ export interface GezhiApi {
     stats(p: { vault: string }): Promise<BankStats>;
     byIds(p: { vault: string; ids: number[] }): Promise<{ ok: boolean; questions?: BankQuestion[]; error?: string }>;
     add(p: Record<string, unknown>): Promise<{ ok: boolean; id?: number; error?: string }>;
-    addMany(p: { vault: string; questions: Array<Record<string, unknown>> }):
-      Promise<{ ok: boolean; added?: number; failed?: Array<{ index: number; reason: string }>; error?: string }>;
+    addMany(p: { vault: string; questions: Array<Record<string, unknown>>; skipDuplicates?: boolean }):
+      Promise<{ ok: boolean; added?: number; skipped?: number; failed?: Array<{ index: number; reason: string }>; error?: string }>;
     update(p: Record<string, unknown>): Promise<{ ok: boolean; error?: string }>;
     delete(p: { vault: string; id: number }): Promise<{ ok: boolean; removed?: number; error?: string }>;
     /** 解析 Markdown，**先看结果再决定导不导**（避免一次导进几百道错题） */
     parseFile(p: { filePath: string }): Promise<{
       ok: boolean; questions?: Array<Record<string, unknown>>; warnings?: string[]; count?: number; error?: string;
+    }>;
+    parseText(p: { text: string }): Promise<{
+      ok: boolean; questions?: Array<Record<string, unknown>>; warnings?: string[]; count?: number; error?: string;
+    }>;
+    parseDocument(p: { name: string; text?: string; bytes?: Uint8Array }): Promise<{
+      ok: boolean; questions?: Array<Record<string, unknown>>; warnings?: string[]; count?: number; error?: string; text?: string;
     }>;
     toMarkdown(p: { vault: string; ids: number[] }): Promise<{ ok: boolean; markdown?: string; count?: number; error?: string }>;
     savePaper(p: { vault: string; title: string; qids: number[]; config?: unknown }):
@@ -252,6 +277,9 @@ export interface GezhiApi {
     info(): Promise<{ ok: boolean; path?: string; size?: number; exists?: boolean }>;
   };
 }
+
+export type FsMutationResult = { ok: true; path: string; name?: string; oldPath?: string; unchanged?: boolean; size?: number; mtime?: string }
+  | { ok: false; error: string };
 
 export interface BankQuestion {
   id: number;
@@ -457,6 +485,7 @@ export interface ExportCapabilities {
 }
 
 export interface ExportResult {
+  warnings?: string[];
   ok: boolean;
   path?: string;
   size?: number;

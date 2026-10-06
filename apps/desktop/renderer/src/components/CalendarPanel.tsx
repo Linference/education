@@ -55,7 +55,7 @@ function ymd(d: Date): string {
 const datePart = (s?: string | null) => (s ? String(s).slice(0, 10) : "");
 
 /** 距离目标日期还有几天（按本地日期算整天，不按小时） */
-function daysUntil(target: string): number | null {
+function daysUntil(target?: string | null): number | null {
   if (!target) return null;
   const t = new Date(`${target}T00:00:00`);
   if (Number.isNaN(t.getTime())) return null;
@@ -179,7 +179,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
   const monthLabel = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月`;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="calendar-panel" data-testid="calendar-panel" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* 页签 */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
         {([["month", "月历"], ["tasks", "待办"], ["countdown", "倒计时"]] as const).map(([k, label]) => (
@@ -325,7 +325,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                 onClick={() => void addEvent()}
                 style={{
                   padding: "4px 8px", borderRadius: 4, fontSize: 12,
-                  background: "var(--accent)", color: "#fff",
+                  background: "var(--accent)", color: "var(--on-accent)",
                 }}
               >加</button>
             </div>
@@ -392,7 +392,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
             />
             <button
               onClick={() => void addTask()}
-              style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "#fff" }}
+              style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "var(--on-accent)" }}
             >加</button>
           </div>
 
@@ -451,7 +451,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
             />
             <button
               onClick={() => void addCountdown()}
-              style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "#fff" }}
+              style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "var(--on-accent)" }}
             >加</button>
           </div>
           <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 8 }}>

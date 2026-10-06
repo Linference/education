@@ -37,7 +37,7 @@ const CASES = [
   [L("@hat{y} = @vec{x} @cdot @vec{w}"), "hat(y) = vec(x) dot.op vec(w)"],
   [L("@bar{x}"), "bar(x)"],
   [L("@tilde{n} @approx 3"), "tilde(n) approx 3"],
-  [L("@overline{AB}"), "overline(AB)"],
+  [L("@overline{AB}"), "overline(A B)"],
   [L("@hat{@beta}_0"), "hat(beta)_0"],
   // ---- 关系与集合 ----
   [L("a @leq b @neq c"), "a lt.eq b eq.not c"],
@@ -64,7 +64,16 @@ const CASES = [
   ["E = mc^2", "E = m c^2"],
   ["F = ma", "F = m a"],
   ["x^2 + y_1", "x^2 + y_1"],
-  ["AB", "AB"],
+  ["AB", "A B"],
+  ["Ax + By", "A x + B y"],
+  ["AB(x+y)", "A B(x+y)"],
+  [L("Ax+By@leq b"), "A x+B y lt.eq b"],
+  [L("x@in@mathbb{R}"), "x in bb(R)"],
+  [L('@text{subject to Ax and By}'), 'upright("subject to Ax and By")'],
+  [L('@operatorname{rank}(AB)'), 'upright("rank")(A B)'],
+  [L("a@quad b"), "a space  b"],
+  [L("@underbrace{AB}"), "underbrace(A B)"],
+  [L("@overbrace{AB}"), "overbrace(A B)"],
   ["sin x", "sin x"],
 ];
 
