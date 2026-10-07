@@ -83,6 +83,11 @@ try {
   const previewed = (await page.evaluate(v => window.gezhi.learning.summary({ vault: v }), vault)).history[0];
   assert.equal(previewed.correct, true); assert.equal(previewed.previewedAnswer, true); assert.equal(previewed.hints, 1);
   pass('真实题库入口联动、分数数值核验与参考答案预览标记');
+  const firstAttemptId=previewed.id;
+  await exercise().getByRole('button',{name:'重新作答',exact:true}).click();
+  await exercise().getByRole('textbox',{name:'预测或计算的数值'}).fill('0.5');await confidence('确定');await submit();
+  const repeated=(await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),vault)).history[0];
+  assert.notEqual(repeated.id,firstAttemptId);assert.equal(repeated.previewedAnswer,true);assert.equal(repeated.hints,1);pass('重做产生新记录，已看过反馈的作答保留参考帮助标记');
   const proof = await page.evaluate(v => window.gezhi.bank.add({ vault: v, type: 'proof', stem: '证明并说明条件', answer: '完整论证见解析', kps: ['逻辑证明'], source: 'QA 原创证明题' }), vault);
   await page.getByRole('button', { name: '打开题库', exact: true }).click(); await page.getByRole('button', { name: '记录自信度练习', exact: true }).first().click(); await exercise().waitFor(); assert.equal(await exercise().getAttribute('data-activity-id'), 'bank:' + proof.id);
   await page.getByRole('textbox', { name: '你的答案', exact: true }).fill('先列出条件，再进行证明。'); await confidence('大概'); await submit(); await exercise().getByRole('button', { name: '核对后：正确', exact: true }).click(); await page.waitForTimeout(150);

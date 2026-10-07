@@ -116,6 +116,8 @@ try {
   assert.notEqual(await canvas.evaluate(el => el.toDataURL()), beforePan); check("空白画布拖拽平移");
   await page.getByRole("button", { name: "适应画布", exact: true }).click();
   // Find a genuinely colored node pixel and exercise the real hit-test/pin path.
+  // fit() redraws on RAF; read pixels only after that frame, especially during packaging.
+  await canvas.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const pixel = await canvas.evaluate(el => {
     const ctx = el.getContext("2d"), { data } = ctx.getImageData(0, 0, el.width, el.height);
     for (let y = 60; y < el.height - 60; y++) for (let x = 60; x < el.width - 60; x++) {

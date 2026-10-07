@@ -77,7 +77,7 @@ export default function EvidenceMap({ summary: s, vault, focusConcept, onPractic
     </div>
     <aside className="evidence-inspector" data-testid="evidence-inspector">
       {node ? <><span className="learning-eyebrow">{node.subject}</span><h2>{node.id}</h2><span className="evidence-status" style={{ color: STATUS[node.status].color }}>{STATUS[node.status].label}</span><p>{node.reason}</p>
-        <div className="evidence-metrics"><span><b>{node.total}</b>条记录</span><span><b>{node.independent}</b>次独立通过</span><span><b>{node.transferLevel}/3</b>迁移关卡</span></div>
+        <div className="evidence-metrics"><span><b>{node.total}</b>条作答</span><span><b>{node.reportCount||0}</b>份讲解反馈</span><span><b>{node.independent}</b>次独立通过</span><span><b>{node.transferLevel}/3</b>迁移关卡</span></div>
         <p className="learning-muted">{node.delayed ? '已有间隔至少一天、不同题目的独立通过记录。' : '尚缺不同题目的延迟复测证据。'}</p>
         <div className="learning-actions"><button onClick={() => onPractice('practice', node.id)}>针对性练习</button><button onClick={() => onPractice('transfer', node.id)}>迁移挑战</button><button disabled={!node.total} onClick={() => void schedule()}>安排复测</button><button onClick={() => onCoach(node.id + '。' + node.reason)}>听小格的建议</button></div>
         {notice && <p role="status">{notice}</p>}

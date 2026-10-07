@@ -10,7 +10,7 @@ interface Props {
   children?: React.ReactNode;
   revealFeedback?: boolean;
 }
-const drafts = new Map<string, { response: string; correction: string; reflection: string; confidence: number; hint: boolean; attempt: LearningAttempt | null; submission: string }>();
+const drafts = new Map<string, { response: string; correction: string; reflection: string; confidence: number; hint: boolean; attempt: LearningAttempt | null; submission: string; previewed: boolean }>();
 export default function LearningExercise({ activity: a, vault, priorExposure = false, onRecorded, onCoach, onResult, onEvidence, children, revealFeedback = true }: Props) {
   const key = vault+'\0'+a.id, draft = drafts.get(key);
   const [response, setResponse] = useState(draft?.response || '');
@@ -18,12 +18,14 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
   const [reflection, setReflection] = useState(draft?.reflection || '');
   const [confidence, setConfidence] = useState(draft?.confidence || 0);
   const [hint, setHint] = useState(draft?.hint || false);
+  const [previewed,setPreviewed]=useState(draft?.previewed || false);
+  const assisted=priorExposure||previewed;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState<LearningAttempt | null>(draft?.attempt || null);
   const [scheduled, setScheduled] = useState(false);
   const submission = useRef(draft?.submission || crypto.randomUUID());
-  useEffect(() => { drafts.set(key,{response,correction,reflection,confidence,hint,attempt,submission:submission.current}); if (drafts.size>300) drafts.delete(drafts.keys().next().value!); }, [key,response,correction,reflection,confidence,hint,attempt]);
+  useEffect(() => { drafts.set(key,{response,correction,reflection,confidence,hint,attempt,submission:submission.current,previewed}); if (drafts.size>300) drafts.delete(drafts.keys().next().value!); }, [key,response,correction,reflection,confidence,hint,attempt,previewed]);
   const saving = useRef(false);
   const needsReflection = ['detective', 'transfer', 'lab'].includes(a.mode);
   const canSubmit = Boolean(response.trim() && confidence && (!needsReflection || reflection.trim()) && (!a.correctionOptions || correction));
@@ -32,7 +34,7 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
     saving.current = true; setBusy(true); setError('');
     try {
       const r = await window.gezhi.learning.submit({ vault, activityId: a.id, submissionId: submission.current,
-        response, correction, confidence, usedHint: hint, previewedAnswer: priorExposure, reflection });
+        response, correction, confidence, usedHint: hint, previewedAnswer: assisted, reflection });
       if (!r.ok || !r.attempt) throw new Error(r.error || '保存失败');
       setAttempt(r.attempt); onResult?.(r.attempt); onRecorded();
       onCoach(!revealFeedback ? '预测已记录。现在操作实验，再比较你的预测与实际结果。' : (r.attempt.correct === null ? '请根据参考答案核对你的推理。' : r.attempt.correct ? '这次验证通过了。' : '这次验证还没有通过。') + r.attempt.explanation);
@@ -54,7 +56,7 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
     <h2>{a.title}</h2>
     <p className="learning-source">{a.source}</p>
     <p className="learning-prompt">{a.prompt}</p>
-    {priorExposure && <div className="learning-callout">你已在题库查看过参考答案。本轮按有参考帮助的练习记录。</div>}
+    {assisted && <div className="learning-callout">{previewed?'你已查看过此题反馈。本轮重做按有参考帮助的练习记录。':'你已在题库查看过参考答案。本轮按有参考帮助的练习记录。'}</div>}
     {a.mode === 'detective' && a.correctionOptions && <div className="learning-callout">这是找错挑战。以下步骤包含已知错误，请定位最早的错误，并选择修正方案。</div>}
     {a.grading === 'self' && <div className="learning-callout">开放探究 · 提交后对照原文自评，文字回答不计入可核验的独立通过。</div>}
     <fieldset disabled={busy || Boolean(attempt)} className="learning-answer-fields">
@@ -87,6 +89,7 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
       {attempt.grading === 'self' ? <><p className="learning-muted">本题采用自评；自评结果会保留，但不计入“独立通过”的可核验证据。</p><div className="learning-actions">{[['correct', '核对后：正确'], ['partial', '部分正确'], ['incorrect', '需要重做']].map(([v, label]) => <button key={v} disabled={busy} aria-pressed={attempt.selfVerdict === v} onClick={() => void selfReview(v)}>{label}{attempt.selfVerdict === v ? ' ✓' : ''}</button>)}</div></>
         : reflection && <p className="learning-muted">选项或数值已核验。文字推理已保存，尚未进行语义评分。</p>}
       <div className="learning-actions"><button onClick={() => onCoach(attempt.explanation, true)}>请小格朗读解析</button><button onClick={() => onEvidence?.(a.concept)}>查看学习证据</button><button disabled={busy || scheduled} onClick={() => void schedule()}>{scheduled ? '已加入日历复测待办' : '安排明天复测'}</button></div>
+      {a.mode!=='lab'&&<button disabled={busy} onClick={()=>{submission.current=crypto.randomUUID();setPreviewed(true);setAttempt(null);setResponse('');setCorrection('');setReflection('');setConfidence(0);setHint(false);setScheduled(false);setError('');}}>重新作答</button>}
     </section>}
     {children}
   </section>;
