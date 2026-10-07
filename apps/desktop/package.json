@@ -1,6 +1,6 @@
 {
   "name": "@gezhi/desktop",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "private": true,
   "description": "格致 · 本地优先的个人学习操作系统",
   "main": "main/index.cjs",

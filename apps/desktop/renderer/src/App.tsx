@@ -310,6 +310,16 @@ export default function App() {
 
   const activeTab = useMemo(() => tabs.find((t) => t.path === activePath) ?? null, [tabs, activePath]);
   const viewerMotion = useSurfaceMotion<HTMLDivElement>(mainView + ':' + (activePath || '') + ':' + (activePath ? modeByPath.get(activePath) || 'read' : 'read'), 5);
+  const readingScroll=useRef(new Map<string,number>());
+  useEffect(()=>{
+    const viewer=viewerMotion.current;
+    if(mainView!=='files'||!activePath||!viewer)return;
+    const key=activePath+'\0'+(modeByPath.get(activePath)||'read');
+    const frame=requestAnimationFrame(()=>{viewer.scrollTop=readingScroll.current.get(key)||0;});
+    const remember=()=>readingScroll.current.set(key,viewer.scrollTop);
+    viewer.addEventListener('scroll',remember);
+    return()=>{cancelAnimationFrame(frame);remember();viewer.removeEventListener('scroll',remember);};
+  },[mainView,activePath,modeByPath]);
 
   useEffect(() => {
     window.gezhi.info()
@@ -1553,11 +1563,12 @@ export default function App() {
             图谱与题库是**换视图**而不是弹窗 —— 它们要看的内容量大，
             弹窗挤不下；换视图还能保留标签页不动，切回来原来的文件还开着。 */}
         <div ref={centerMotion} className="center motion-surface">
-          {mainView === "learning" ? (
+          <div style={{display:mainView==='learning'?'flex':'none',flex:'1 1 auto',minHeight:0,minWidth:0}}>
             <LearningStudio key={vault?.path || 'no-vault'} vaultPath={vault?.path ?? null} request={studioRequest}
-              referenceName={activeTab?.name} referenceText={activeTab ? drafts.get(activeTab.path) ?? activeTab.text : null}
-              onOpen={(p) => { setMainView('files'); void openFileByPath(p); }} onOpenVault={() => void openVaultDialog()} onBank={() => setMainView('bank')} />
-          ) : mainView === "graph" ? (
+              visible={mainView==='learning'} referencePath={activeTab?.path} referenceName={activeTab?.name} referenceText={activeTab ? drafts.get(activeTab.path) ?? activeTab.text : null}
+              onBrowse={() => setMainView('files')} onOpen={(p) => { setMainView('files'); void openFileByPath(p); }} onOpenVault={() => void openVaultDialog()} onBank={() => setMainView('bank')} />
+          </div>
+          {mainView === "learning" ? null : mainView === "graph" ? (
             <GraphView
               vaultPath={vault?.path ?? null}
               activePath={activePath}

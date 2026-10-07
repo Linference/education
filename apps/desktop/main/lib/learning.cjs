@@ -5,6 +5,7 @@ function openLearningDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;');
   db.exec("CREATE TABLE IF NOT EXISTS learning_attempts(id TEXT PRIMARY KEY, vault TEXT NOT NULL, activity_id TEXT NOT NULL, concept TEXT NOT NULL, mode TEXT NOT NULL, at TEXT NOT NULL, correct INTEGER, confidence INTEGER NOT NULL, hints INTEGER NOT NULL, grading TEXT NOT NULL, data TEXT NOT NULL); CREATE INDEX IF NOT EXISTS learning_vault_at ON learning_attempts(vault,at); CREATE TABLE IF NOT EXISTS learning_labs(id TEXT PRIMARY KEY, vault TEXT NOT NULL, data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS learning_reviews(vault TEXT NOT NULL, concept TEXT NOT NULL, task_id TEXT NOT NULL, PRIMARY KEY(vault,concept));");
+  db.exec('CREATE TABLE IF NOT EXISTS learning_sources(id TEXT NOT NULL,vault TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(id,vault));');
   return db;
 }
 function normalize(value) { return String(value ?? '').normalize('NFKC').trim().replace(/[−–]/g, '-').replace(/\s+/g, '').toLowerCase(); }
@@ -32,7 +33,8 @@ function catalog(db, bank, vault, includeActivityId, includeExamples = false) {
     const q = bank.byIds({ vault, ids: [Number(includeActivityId.slice(5))] }).questions?.[0];
     if (q) imported.questions.push(q);
   }
-  return { ok: true, activities: [...(includeExamples ? content.activities : []), ...(imported.questions || []).map(bankActivity)].map(a => ({ ...content.publicActivity(a), unlocked: !a.requires || passes.has(a.requires), completed: passes.has(a.id) })), bankTotal: imported.total || 0, bankShown: imported.questions?.length || 0 };
+  const contextual = db.prepare("SELECT data FROM learning_labs WHERE vault=? AND id LIKE 'study:%' ORDER BY rowid DESC LIMIT 200").all(vault).map(r => JSON.parse(r.data));
+  return { ok: true, activities: [...contextual, ...(includeExamples ? content.activities : []), ...(imported.questions || []).map(bankActivity)].map(a => ({ ...content.publicActivity(a), unlocked: !a.requires || passes.has(a.requires), completed: passes.has(a.id) })), bankTotal: imported.total || 0, bankShown: imported.questions?.length || 0 };
 }
 function resolveActivity(db, bank, vault, id) {
   const built = content.activities.find(a => a.id === id);
@@ -53,15 +55,16 @@ function submit(db, bank, p) {
   const response = String(p.response ?? '').trim();
   const reflection = String(p.reflection ?? '').trim();
   if (!response || response.length > 12000 || reflection.length > 6000) throw new Error('请填写有效答案');
-  if (a.mode === 'detective' && (!reflection || !p.correction)) throw new Error('请给出修正方案，并说明错误原因。');
+  if (a.mode === 'detective' && (!reflection || (a.correctionOptions && !p.correction))) throw new Error('请给出修正方案，并说明错误原因。');
   if (a.mode === 'lab' && !reflection) throw new Error('请写下预测依据，再进行验证。');
   if (a.mode === 'transfer' && !reflection) throw new Error('请记录你在新情境中使用的方法。');
   let correct = null;
   if (a.grading === 'choice') { if (!a.options.some(o => o.label === response)) throw new Error('请选择一个有效选项'); correct = response === a.answer; }
   if (a.grading === 'numeric') { const n = numeric(response), expected = numeric(a.answer); if (n === null || !Number.isFinite(n)) throw new Error('请填写一个数值，也可以使用分数。单位已显示在题目中。'); if (expected === null || !Number.isFinite(expected)) throw new Error('参考答案无法核验，请核对题库'); correct = Math.abs(n - expected) <= (a.tolerance ?? 1e-8) * (a.relative ? Math.max(1, Math.abs(expected)) : 1); }
-  if (a.mode === 'detective') { if (!['A', 'B', 'C'].includes(p.correction)) throw new Error('修正选项无效'); correct = correct && p.correction === a.correctionAnswer; }
+  if (a.mode === 'detective' && a.correctionOptions) { if (!['A', 'B', 'C'].includes(p.correction)) throw new Error('修正选项无效'); correct = correct && p.correction === a.correctionAnswer; }
   const at = new Date().toISOString();
   const data = { title: a.title, prompt: a.prompt, response, reflection, correction: typeof p.correction === 'string' ? p.correction : null, answer: String(a.answer ?? ''), explanation: a.explanation, source: a.source, level: a.level || null, chain: a.chain || null, params: a.params || null, labKind: a.labKind || null, selfVerdict: null, observation: null, usedHint: p.usedHint === true, previewedAnswer: p.previewedAnswer === true };
+  Object.assign(data, { sourceRef: a.sourceRef || null, focus: a.focus || '', sampleSeed: a.sampleSeed ?? null, previousLabId: a.previousLabId || null, measurement: null, labVerified: false });
   db.prepare('INSERT INTO learning_attempts VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(p.submissionId, p.vault, a.id, a.concept, a.mode, at, correct === null ? null : Number(correct), p.confidence, p.usedHint === true || p.previewedAnswer === true ? 1 : 0, a.grading, JSON.stringify(data));
   return { ok: true, attempt: rowAttempt(db.prepare('SELECT * FROM learning_attempts WHERE id=?').get(p.submissionId)) };
 }
@@ -89,7 +92,7 @@ function summary(db, bank, vault, now = Date.now(), includeExamples = false) {
   }
   const evidence = [...nodes.values()].map(node => {
     const history = attempts.filter(a => a.concept === node.id);
-    const verified = history.filter(a => a.grading !== 'self' && a.correct !== null);
+    const verified = history.filter(a => a.grading !== 'self' && a.correct !== null && (a.mode !== 'lab' || a.labVerified));
     const latest = verified[0];
     let status = history.length ? 'unverified' : 'untested', reason = history.length ? '已有作答或自评，尚缺可核验的独立练习。' : '还没有学习证据，完成一道练习开始验证。';
     if (latest) {
@@ -105,6 +108,28 @@ function summary(db, bank, vault, now = Date.now(), includeExamples = false) {
   });
   const priority = { misconception: 0, needsPractice: 1, needsRetest: 2, unverified: 3, untested: 4, supported: 5 };
   const recommendations = evidence.filter(n => n.total && n.status !== 'supported').sort((a, b) => priority[a.status] - priority[b.status]).slice(0, 8).map(n => ({ concept: n.id, reason: n.reason, mode: n.status === 'misconception' && content.activities.some(a => a.mode === 'detective' && a.concept === n.id) ? 'detective' : 'practice', dueAt: new Date(now).toISOString() }));
-  return { ok: true, total: attempts.length, independent: attempts.filter(a => a.correct && !a.hints && a.grading !== 'self').length, highConfidenceWrong: attempts.filter(a => a.correct === false && a.confidence === 3).length, evidence, edges, recommendations, history: attempts.slice(0, 120), historyShown: Math.min(attempts.length, 120) };
+  return { ok: true, total: attempts.length, independent: attempts.filter(a => a.correct && !a.hints && a.grading !== 'self' && (a.mode !== 'lab' || a.labVerified)).length, highConfidenceWrong: attempts.filter(a => a.correct === false && a.confidence === 3).length, evidence, edges, recommendations, history: attempts.slice(0, 120), historyShown: Math.min(attempts.length, 120) };
 }
-module.exports = { openLearningDb, normalize, numeric, bankActivity, catalog, resolveActivity, submit, annotate, summary, content };
+function sourceById(db, vault, id) {
+  if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) throw new Error('资料引用无效，请重新选择章节。');
+  const row = db.prepare('SELECT data FROM learning_sources WHERE vault=? AND id=?').get(vault, id);
+  if (!row) throw new Error('当前资料库没有这份资料引用，请重新载入。');
+  return JSON.parse(row.data);
+}
+function saveSource(db, vault, source) { db.prepare('INSERT OR IGNORE INTO learning_sources VALUES(?,?,?)').run(source.id, vault, JSON.stringify(source)); return source; }
+function linkReports(result, reports) {
+  result.aiReportCount = reports.length;
+  for (const report of reports) {
+    const concept = report.sourceRef?.concept || report.topic;
+    let node = result.evidence.find(n => n.id === concept);
+    if (!node) { node = { id: concept, subject: '讲解资料', status: 'unverified', reason: '已有 AI 讲解反馈，尚缺可核验的独立作答。', total: 0, verified: 0, independent: 0, delayed: false, transferLevel: 0, latestAt: report.at, evidence: [] }; result.evidence.push(node); }
+    node.aiReports ||= []; node.reportCount = (node.reportCount || 0) + 1;
+    if (node.aiReports.length < 5) node.aiReports.push(report);
+  }
+  for (const node of result.evidence) {
+    const sources = [...node.evidence.map(a => a.sourceRef), ...(node.aiReports || []).map(r => r.sourceRef)].filter(Boolean);
+    node.sources = [...new Map(sources.map(s => [s.id, s])).values()];
+  }
+  return result;
+}
+module.exports = { openLearningDb, normalize, numeric, bankActivity, catalog, resolveActivity, submit, annotate, summary, content, sourceById, saveSource, linkReports };

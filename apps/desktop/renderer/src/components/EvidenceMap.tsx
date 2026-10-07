@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent } from 'react';
-import type { EvidenceNode, LearningMode, LearningSummary } from '../lib/learning-types';
+import type { EvidenceNode, LearningMode, LearningSummary, StudySource } from '../lib/learning-types';
+import type { CompanionReport } from '../lib/companion-types';
 import { CONFIDENCE, MODE_LABEL, STATUS, supportLabel } from '../lib/learning-types';
+import {measurementText} from '../../../shared/study-format.mjs';
 
-interface Props { summary: LearningSummary; vault: string; focusConcept?: string; onPractice: (mode: LearningMode, concept: string) => void; onOpen: (path: string) => void; onCoach: (text: string) => void }
-export default function EvidenceMap({ summary: s, vault, focusConcept, onPractice, onOpen, onCoach }: Props) {
+interface Props { summary: LearningSummary; vault: string; focusConcept?: string; onPractice: (mode: LearningMode, concept: string) => void; onOpen: (path: string) => void; onCoach: (text: string) => void; onReport?:(report:CompanionReport)=>void; onStudySource?:(source:StudySource)=>void }
+export default function EvidenceMap({ summary: s, vault, focusConcept, onPractice, onOpen, onCoach,onReport,onStudySource }: Props) {
   const [selected, setSelected] = useState(focusConcept || '');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('');
@@ -81,6 +83,9 @@ export default function EvidenceMap({ summary: s, vault, focusConcept, onPractic
         {notice && <p role="status">{notice}</p>}
         <h3>作答证据</h3>{node.evidence.length ? node.evidence.map(a => <article className="evidence-record" key={a.id}><div><strong>{MODE_LABEL[a.mode]}</strong><time>{new Date(a.at).toLocaleString('zh-CN')}</time></div><p>{a.title}</p><span>{a.correct === null ? '待核验 / 自评' : a.correct ? '通过' : '未通过'} · {CONFIDENCE[a.confidence]} · {supportLabel(a)}</span><details><summary>展开答案与推理</summary><p>题目：{a.prompt}</p><p>作答：{a.response}</p>{a.reflection && <p>推理：{a.reflection}</p>}<p>参考答案：{a.answer || '未提供'}</p><p>{a.explanation}</p>{a.selfVerdict && <p>自评：{({ correct: '正确', partial: '部分正确', incorrect: '需要重做' })[a.selfVerdict]}</p>}{a.observation && <p>观察：{a.observation}</p>}<p className="learning-source">{a.source}</p></details></article>) : <p className="learning-muted">还没有记录。</p>}
         {node.total > node.evidence.length && <p className="learning-muted">此处显示最近 {node.evidence.length} 条；完整统计保留全部记录。</p>}
+        {node.evidence.some(a=>a.mode==='lab')&&<details className="evidence-source"><summary>实验运行数据</summary>{node.evidence.filter(a=>a.mode==='lab').map(a=><p key={a.id}>{a.title}：{measurementText(a.measurement)}</p>)}</details>}
+        <h3>讲解反馈 · AI 判断</h3><p className="learning-muted">讲解反馈与作答核验分别展示，AI 分数不计入独立通过。</p>{node.aiReports?.length?node.aiReports.map(r=><article className="evidence-record" key={r.id}><strong>{r.topic}</strong><p>{r.summary}</p><time>{new Date(r.at).toLocaleString('zh-CN')}</time><button onClick={()=>onReport?.(r)}>查看六维反馈与原话</button></article>):<p className="learning-muted">尚无关联讲解反馈。</p>}
+        <h3>资料来源</h3>{node.sources?.length?node.sources.map(ref=><details className="evidence-source" key={ref.id}><summary>{ref.name} · {ref.section}</summary><p>{ref.page?`PDF 第 ${ref.page} 页`:`提取文字第 ${ref.startLine}–${ref.endLine} 行`}{ref.origin==='draft'?' · 未保存草稿快照':''}</p><blockquote>{ref.text}</blockquote><div className="learning-actions"><button onClick={()=>onOpen(ref.path)}>打开原文件</button><button onClick={()=>onStudySource?.(ref)}>用此资料继续探究</button></div></details>):<p className="learning-muted">早期记录或内置示例没有文件引用。</p>}
         <h3>关联笔记</h3>{notes.filter(n => n.name.replace(/\.[^.]+$/, '').includes(node.id)).slice(0, 6).map(n => <button className="evidence-note" key={n.id} onClick={() => onOpen(n.id)}>↗ {n.name}</button>)}{!notes.some(n => n.name.includes(node.id)) && <p className="learning-muted">暂无同名关联笔记，可在资料库中添加。</p>}
       </> : <div className="evidence-inspector-empty"><span>◎</span><h3>选中一个知识点</h3><p>查看答案、自信度、提示使用和迁移记录，了解每种状态的依据。</p></div>}
     </aside>

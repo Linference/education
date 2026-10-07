@@ -10,6 +10,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+const readingPositions = new Map<string,{page:number;scale:number}>();
 
 interface Props {
   bytes: Uint8Array;
@@ -18,19 +19,23 @@ interface Props {
 
 export default function PdfViewer({ bytes, path }: Props) {
   const [doc, setDoc] = useState<any>(null);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(readingPositions.get(path)?.page || 1);
   const [pageCount, setPageCount] = useState(0);
-  const [scale, setScale] = useState(1.25);
+  const [scale, setScale] = useState(readingPositions.get(path)?.scale || 1.25);
   const [error, setError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
+  const loadedPath=useRef('');
+  useEffect(()=>{if(doc&&loadedPath.current===path){readingPositions.set(path,{page,scale});if(readingPositions.size>100)readingPositions.delete(readingPositions.keys().next().value!);}},[doc,path,page,scale]);
 
   // 载入文档
   useEffect(() => {
     let cancelled = false;
+    let loadedDoc:any;
     setDoc(null);
     setError(null);
-    setPage(1);
+    loadedPath.current='';
+    setScale(readingPositions.get(path)?.scale || 1.25);
 
     (async () => {
       try {
@@ -38,6 +43,8 @@ export default function PdfViewer({ bytes, path }: Props) {
         const task = pdfjsLib.getDocument({ data: bytes.slice(0) });
         const d = await task.promise;
         if (cancelled) { d.destroy(); return; }
+        loadedDoc=d;loadedPath.current=path;
+        setPage(Math.min(d.numPages,readingPositions.get(path)?.page || 1));
         setDoc(d);
         setPageCount(d.numPages);
       } catch (e: any) {
@@ -45,8 +52,8 @@ export default function PdfViewer({ bytes, path }: Props) {
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [bytes]);
+    return () => { cancelled = true;renderTaskRef.current?.cancel();void loadedDoc?.destroy(); };
+  }, [bytes,path]);
 
   // 渲染当前页
   const renderPage = useCallback(async () => {

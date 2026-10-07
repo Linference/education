@@ -40,6 +40,7 @@ interface Props {
   /** 库里的文件与文件夹名（wikilink 补全用） */
   vaultNames?: string[];
 }
+const editorPositions=new Map<string,{anchor:number;head:number;scrollTop:number}>();
 
 export default function MdEditor({ path, value, onChange, onSave, vaultNames = [] }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -167,9 +168,13 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
 
     const view = new EditorView({ state, parent: host });
     viewRef.current = view;
+    const position=editorPositions.get(path);
+    if(position){view.dispatch({selection:{anchor:Math.min(position.anchor,state.doc.length),head:Math.min(position.head,state.doc.length)}});requestAnimationFrame(()=>{if(viewRef.current===view)view.scrollDOM.scrollTop=position.scrollTop;});}
     view.focus();
 
     return () => {
+      editorPositions.set(path,{anchor:view.state.selection.main.anchor,head:view.state.selection.main.head,scrollTop:view.scrollDOM.scrollTop});
+      if(editorPositions.size>100)editorPositions.delete(editorPositions.keys().next().value!);
       view.destroy();
       viewRef.current = null;
     };

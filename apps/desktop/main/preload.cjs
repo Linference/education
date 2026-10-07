@@ -22,6 +22,10 @@ const api = {
     stop: () => ipcRenderer.invoke('companions:stop'),
   },
   learning: {
+    material: p => ipcRenderer.invoke('learning:material', p),
+    source: p => ipcRenderer.invoke('learning:source', p),
+    excerpt: p => ipcRenderer.invoke('learning:excerpt', p),
+    createTask: p => ipcRenderer.invoke('learning:createTask', p),
     catalog: p => ipcRenderer.invoke('learning:catalog', p),
     summary: p => ipcRenderer.invoke('learning:summary', p),
     submit: p => ipcRenderer.invoke('learning:submit', p),

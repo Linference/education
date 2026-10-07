@@ -4,8 +4,9 @@ const { randomUUID } = require('node:crypto');
 const rubric = require('../shared/companion-rubric.cjs');
 const { assertInsideVault } = require('./vault-fs.cjs');
 const { loadBridge } = require('./ai.cjs');
+const learning = require('./lib/learning.cjs');
 function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
-  let db, active = null;
+  let db, sourceDb, active = null;
   const open = () => {
     if (!db) {
       fs.mkdirSync(app.getPath('userData'), { recursive: true });
@@ -17,7 +18,7 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
   const vault = p => { const real = assertInsideVault(p.vault, { mustExist: true }); if (!fs.statSync(real).isDirectory()) throw new Error('资料库无效'); return real; };
   ipcMain.handle('companions:roles', () => ({ ok: true, roles: rubric.ROLES, dimensions: rubric.DIMENSIONS }));
   ipcMain.handle('companions:history', (_e, p = {}) => {
-    try { const rows = open().prepare('SELECT data FROM reports WHERE vault=? AND role=? ORDER BY at DESC LIMIT 20').all(vault(p),p.roleId); return { ok: true, reports: rows.map(r => JSON.parse(r.data)) }; }
+    try { const current = vault(p); const rows = p.roleId ? open().prepare('SELECT data FROM reports WHERE vault=? AND role=? ORDER BY at DESC LIMIT 20').all(current,p.roleId) : open().prepare('SELECT data FROM reports WHERE vault=? ORDER BY at DESC LIMIT 100').all(current); return { ok: true, reports: rows.map(r => JSON.parse(r.data)) }; }
     catch (e) { return { ok: false, error: e.message }; }
   });
   ipcMain.handle('companions:evaluate', async (_e, p = {}) => {
@@ -28,7 +29,19 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
       const currentVault = vault(p);
       if (typeof p.topic !== 'string' || !p.topic.trim() || p.topic.length > 200) throw new Error('请填写讲解主题（不超过 200 字）');
       if (typeof p.transcript !== 'string' || p.transcript.trim().length < 10 || p.transcript.length > 12000) throw new Error('请提供 10 至 12000 字的讲解');
-      const task = rubric.prompt(p), bridge = await getBridge();
+      let sourceRef = null, previous = null;
+      if (p.sourceId) {
+        const file = path.join(app.getPath('userData'), 'learning.db');
+        if (!fs.existsSync(file)) throw new Error('请先选择学习资料。');
+        sourceDb ||= learning.openLearningDb(file);
+        sourceRef = learning.sourceById(sourceDb, currentVault, p.sourceId);
+      }
+      if (p.previousId) {
+        const row = open().prepare('SELECT data FROM reports WHERE vault=? AND role=? AND id=?').get(currentVault, p.roleId, p.previousId);
+        previous = row ? JSON.parse(row.data) : null;
+        if (!previous || previous.topic !== p.topic || (previous.sourceRef?.id || null) !== (sourceRef?.id || null)) throw new Error('再次讲解需要使用原来的主题、角色和资料章节。');
+      }
+      const task = rubric.prompt({ ...p, context: sourceRef?.text ?? p.context, sourceLocation: sourceRef ? sourceRef.name + ' · ' + sourceRef.section : '', previous, focus: String(p.focus || '').slice(0,1800) }), bridge = await getBridge();
       if (controller.signal.aborted) throw new Error('评估已停止');
       timer = setTimeout(() => controller.abort(), 120000);
       let final = '', text = '';
@@ -42,6 +55,8 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
       if (vault(p) !== currentVault) throw new Error('资料库已切换，本次评估未保存。');
       const assessment = rubric.normalize(final || text, p.transcript);
       const report = { id: randomUUID(), roleId: p.roleId, topic: p.topic, transcript: p.transcript, referenceName: String(p.referenceName || '').slice(0,200), at: new Date().toISOString(), ...assessment };
+      Object.assign(report, { sourceRef, referenceName: sourceRef ? sourceRef.name + ' · ' + sourceRef.section : report.referenceName, previousId: previous?.id || null,
+        comparison: previous ? assessment.dimensions.flatMap(d => { const before = previous.dimensions.find(x => x.id === d.id)?.score; return typeof before === 'number' && typeof d.score === 'number' ? [{ id: d.id, before, after: d.score, delta: d.score-before }] : []; }) : [] });
       open().prepare('INSERT INTO reports VALUES(?,?,?,?,?)').run(report.id,currentVault,p.roleId,report.at,JSON.stringify(report));
       return { ok: true, report };
     } catch (e) {
@@ -51,6 +66,6 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
     finally { clearTimeout(timer); if (active === controller) active = null; }
   });
   ipcMain.handle('companions:stop', () => { active?.abort(); return { ok: true }; });
-  app.once('before-quit', () => { active?.abort(); db?.close(); });
+  app.once('before-quit', () => { active?.abort(); db?.close(); sourceDb?.close(); });
 }
 module.exports = { registerCompanions };

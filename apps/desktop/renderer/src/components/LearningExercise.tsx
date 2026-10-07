@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LearningActivity, LearningAttempt } from '../lib/learning-types';
 import { CONFIDENCE, supportLabel } from '../lib/learning-types';
 
@@ -8,21 +8,25 @@ interface Props {
   onRecorded: () => void; onCoach: (text: string, read?: boolean) => void;
   onResult?: (attempt: LearningAttempt) => void; onEvidence?: (concept: string) => void;
   children?: React.ReactNode;
+  revealFeedback?: boolean;
 }
-export default function LearningExercise({ activity: a, vault, priorExposure = false, onRecorded, onCoach, onResult, onEvidence, children }: Props) {
-  const [response, setResponse] = useState('');
-  const [correction, setCorrection] = useState('');
-  const [reflection, setReflection] = useState('');
-  const [confidence, setConfidence] = useState(0);
-  const [hint, setHint] = useState(false);
+const drafts = new Map<string, { response: string; correction: string; reflection: string; confidence: number; hint: boolean; attempt: LearningAttempt | null; submission: string }>();
+export default function LearningExercise({ activity: a, vault, priorExposure = false, onRecorded, onCoach, onResult, onEvidence, children, revealFeedback = true }: Props) {
+  const key = vault+'\0'+a.id, draft = drafts.get(key);
+  const [response, setResponse] = useState(draft?.response || '');
+  const [correction, setCorrection] = useState(draft?.correction || '');
+  const [reflection, setReflection] = useState(draft?.reflection || '');
+  const [confidence, setConfidence] = useState(draft?.confidence || 0);
+  const [hint, setHint] = useState(draft?.hint || false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [attempt, setAttempt] = useState<LearningAttempt | null>(null);
+  const [attempt, setAttempt] = useState<LearningAttempt | null>(draft?.attempt || null);
   const [scheduled, setScheduled] = useState(false);
-  const submission = useRef(crypto.randomUUID());
+  const submission = useRef(draft?.submission || crypto.randomUUID());
+  useEffect(() => { drafts.set(key,{response,correction,reflection,confidence,hint,attempt,submission:submission.current}); if (drafts.size>300) drafts.delete(drafts.keys().next().value!); }, [key,response,correction,reflection,confidence,hint,attempt]);
   const saving = useRef(false);
   const needsReflection = ['detective', 'transfer', 'lab'].includes(a.mode);
-  const canSubmit = Boolean(response.trim() && confidence && (!needsReflection || reflection.trim()) && (a.mode !== 'detective' || correction));
+  const canSubmit = Boolean(response.trim() && confidence && (!needsReflection || reflection.trim()) && (!a.correctionOptions || correction));
   const submit = async () => {
     if (saving.current || !canSubmit || attempt) return;
     saving.current = true; setBusy(true); setError('');
@@ -31,7 +35,7 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
         response, correction, confidence, usedHint: hint, previewedAnswer: priorExposure, reflection });
       if (!r.ok || !r.attempt) throw new Error(r.error || '保存失败');
       setAttempt(r.attempt); onResult?.(r.attempt); onRecorded();
-      onCoach((r.attempt.correct === null ? '请根据参考答案核对你的推理。' : r.attempt.correct ? '这次验证通过了。' : '这次验证还没有通过。') + r.attempt.explanation);
+      onCoach(!revealFeedback ? '预测已记录。现在操作实验，再比较你的预测与实际结果。' : (r.attempt.correct === null ? '请根据参考答案核对你的推理。' : r.attempt.correct ? '这次验证通过了。' : '这次验证还没有通过。') + r.attempt.explanation);
     } catch (e) { setError(String((e as Error).message)); }
     finally { saving.current = false; setBusy(false); }
   };
@@ -51,9 +55,10 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
     <p className="learning-source">{a.source}</p>
     <p className="learning-prompt">{a.prompt}</p>
     {priorExposure && <div className="learning-callout">你已在题库查看过参考答案。本轮按有参考帮助的练习记录。</div>}
-    {a.mode === 'detective' && <div className="learning-callout">这是找错挑战。以下步骤包含已知错误，请定位最早的错误，并选择修正方案。</div>}
+    {a.mode === 'detective' && a.correctionOptions && <div className="learning-callout">这是找错挑战。以下步骤包含已知错误，请定位最早的错误，并选择修正方案。</div>}
+    {a.grading === 'self' && <div className="learning-callout">开放探究 · 提交后对照原文自评，文字回答不计入可核验的独立通过。</div>}
     <fieldset disabled={busy || Boolean(attempt)} className="learning-answer-fields">
-      <legend>{a.mode === 'detective' ? '先找到出错的一步' : a.options.length ? '选择你的答案' : '写下你的答案'}</legend>
+      <legend>{a.mode === 'detective' && a.correctionOptions ? '先找到出错的一步' : a.options.length ? '选择你的答案' : '写下你的答案'}</legend>
       {a.options.length > 0 ? <div className="learning-options">{a.options.map(o => <label key={o.label} className={'learning-option' + (response === o.label ? ' selected' : '')}>
         <input type="radio" name={'answer-' + a.id} value={o.label} checked={response === o.label} onChange={() => setResponse(o.label)} />
         <span className="option-letter">{o.label}</span><span>{o.text}</span>
@@ -73,7 +78,8 @@ export default function LearningExercise({ activity: a, vault, priorExposure = f
     </fieldset>
     {hint && <div className="learning-callout" role="note">小格的提示：{a.hint}</div>}
     {error && <div className="learning-error" role="alert">{error}</div>}
-    {attempt && <section className={'learning-feedback ' + (attempt.correct === null ? 'unverified' : attempt.correct ? 'correct' : 'incorrect')} data-testid="learning-feedback">
+    {attempt && !revealFeedback && <p className="learning-callout" role="status">预测已锁定，请完成上方实验。实验后显示数值核验结果。</p>}
+    {attempt && revealFeedback && <section className={'learning-feedback ' + (attempt.correct === null ? 'unverified' : attempt.correct ? 'correct' : 'incorrect')} data-testid="learning-feedback">
       <div className="learning-feedback-heading"><strong>{attempt.correct === null ? '已记录 · 等待核对' : attempt.correct ? '验证通过' : '需要再检验'}</strong><span>自信度：{CONFIDENCE[attempt.confidence]} · {supportLabel(attempt)}</span></div>
       <p><b>参考答案：</b>{attempt.answer || '题库没有参考答案，请查阅原始资料。'}</p>
       <p>{attempt.explanation}</p>
