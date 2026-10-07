@@ -16,6 +16,12 @@ const api = {
     complete: () => ipcRenderer.invoke('dsh:completeSetup'),
   },
   companions: {
+    startSession: p => ipcRenderer.invoke('companions:startSession',p),
+    reply: p => ipcRenderer.invoke('companions:reply',p),
+    session: p => ipcRenderer.invoke('companions:session',p),
+    sessions: p => ipcRenderer.invoke('companions:sessions',p),
+    saveDraft: p => ipcRenderer.invoke('companions:saveDraft',p),
+    loadDraft: p => ipcRenderer.invoke('companions:loadDraft',p),
     roles: () => ipcRenderer.invoke('companions:roles'),
     evaluate: p => ipcRenderer.invoke('companions:evaluate', p),
     history: p => ipcRenderer.invoke('companions:history', p),

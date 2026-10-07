@@ -2,6 +2,7 @@ import type { LabKind, LabParams } from '../../../shared/lab-models.mjs';
 export type LearningMode = 'practice' | 'detective' | 'transfer' | 'lab';
 export type StudioView = LearningMode | 'evidence' | 'teach';
 export interface StudySource {
+  focusQuote?:string;
   id: string; path: string; name: string; section: string; text: string; concept: string;
   origin: 'file' | 'draft'; startLine: number; endLine: number; page?: number; parentId?: string;
   labs: { kind: LabKind; concept: string; parameters: LabParams }[];

@@ -12,6 +12,7 @@ export default function StudyMaterialPanel(p: Props) {
   const [selection, setSelection] = useState(''), [pageStart, setPageStart] = useState(1), [pageEnd, setPageEnd] = useState(20);
   const text = useRef<HTMLDivElement>(null);
   useEffect(() => { setSelection(''); }, [p.source?.id]);
+  useEffect(()=>{if(p.source?.focusQuote)text.current?.querySelector('mark')?.scrollIntoView({block:'nearest',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});},[p.source?.focusQuote]);
   useEffect(() => { if (p.totalPages) setPageEnd(Math.min(20, p.totalPages)); }, [p.totalPages]);
   const capture = () => {
     const selected = window.getSelection();
@@ -25,7 +26,7 @@ export default function StudyMaterialPanel(p: Props) {
     {p.error && <div className="learning-error" role="alert">{p.error}<button onClick={() => p.onLoadPages()}>重试</button></div>}
     {p.sources.length > 0 && <label className="study-section-picker">章节 / 页段<select aria-label="学习资料章节" value={p.source?.id || ''} onChange={e => { const source = p.sources.find(s => s.id===e.target.value); if (source) p.onSelect(source); }}>{p.source && !p.sources.some(s => s.id===p.source?.id) && <option value={p.source.id}>{p.source.section}</option>}{p.sources.map(s => <option key={s.id} value={s.id}>{s.section}{s.page ? '' : ` · 第 ${s.startLine}–${s.endLine} 行`}</option>)}</select></label>}
     {p.source ? <><div className="study-source-location"><span>{p.source.page ? `PDF 第 ${p.source.page} 页` : `提取文字第 ${p.source.startLine}–${p.source.endLine} 行`}</span>{p.source.origin==='draft' && <span>未保存草稿快照</span>}</div>
-      <div ref={text} className="study-source-text" onMouseUp={capture} onKeyUp={capture} tabIndex={0} aria-label="当前章节原文">{p.source.text}</div>
+      <div ref={text} className="study-source-text" onMouseUp={capture} onKeyUp={capture} tabIndex={0} aria-label="当前章节原文">{p.source.focusQuote&&p.source.text.includes(p.source.focusQuote)?<>{p.source.text.slice(0,p.source.text.indexOf(p.source.focusQuote))}<mark>{p.source.focusQuote}</mark>{p.source.text.slice(p.source.text.indexOf(p.source.focusQuote)+p.source.focusQuote.length)}</>:p.source.text}</div>
       <button disabled={selection.length<3 || selection.length>7000 || p.loading} onClick={() => { p.onExcerpt(selection); setSelection(''); }}>用选中段落学习{selection ? `（${selection.length} 字）` : ''}</button>
       <div className="study-source-tasks"><button onClick={() => p.onTask('practice')}>解释概念</button><button onClick={() => p.onTask('detective')}>找出反例</button><button onClick={() => p.onTask('transfer')}>迁移应用</button><button onClick={() => p.onTask('lab')}>进入实验</button></div>
       <p className="learning-muted">任务和报告保留此段引用快照；原文件修改后，旧记录仍显示当时使用的内容。</p></> : !p.loading && <p className="learning-muted">打开一份资料，再选择章节。数字空间、练习和实验会沿用当前引用。</p>}

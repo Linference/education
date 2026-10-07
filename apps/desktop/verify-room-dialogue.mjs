@@ -1,0 +1,145 @@
+// Real Electron/preload/SQLite and document selection; AI and voice are isolated doubles.
+import {_electron as electron} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const HERE=path.dirname(fileURLToPath(import.meta.url)),ROOT=path.resolve(HERE,'../..');
+const OUT=path.join(ROOT,'output/verification/room-dialogue');fs.mkdirSync(OUT,{recursive:true});
+const runRoot=fs.mkdtempSync(path.join(OUT,'qa-')),vault=path.join(runRoot,'学习资料');fs.mkdirSync(vault);
+const file=path.join(vault,'牛顿第二定律.md');
+fs.writeFileSync(file,'# 牛顿第二定律\n\n牛顿第二定律指出合力决定加速度。\n质量一定时，合力与加速度成正比。F=20 N，m=4 kg。');
+const opening='合力决定加速度。质量一定时，合力越大，加速度越大。';
+const reply='需要把所有作用力合成，不能只取其中一个力。';
+const checks=[],errors=[];
+let app,page;
+const pass=name=>{checks.push({name,pass:true});console.log('[PASS] '+name);};
+const shot=async name=>page.screenshot({path:path.join(OUT,name+'.png'),animations:'disabled'});
+async function launch(){
+  app=await electron.launch({executablePath:process.env.GEZHI_TEST_EXE||path.join(HERE,'node_modules/electron/dist/electron.exe'),args:process.env.GEZHI_TEST_EXE?[]:[HERE],env:{...process.env,GEZHI_TEST:'1',GEZHI_TEST_APPDATA:path.join(runRoot,'appdata'),APPDATA:path.join(runRoot,'appdata')},timeout:30000});
+  page=await app.firstWindow({timeout:60000});page.on('pageerror',e=>errors.push(e.message));
+  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setSize(1540,1000);w.webContents.setBackgroundThrottling(false);});
+  await page.waitForFunction(()=>Boolean(window.__gezhiTest));
+  await app.evaluate(({ipcMain,app})=>{
+    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply'])ipcMain.removeHandler('companions:'+name);
+    const localRequire=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/main/index.cjs');
+    const {registerCompanions}=localRequire(app.getAppPath()+'/main/companion-ipc.cjs');
+    const qa=globalThis.__roomQA={mode:'ok',prompts:[],turn:0};
+    registerCompanions(ipcMain,app,{getBridge:async()=>({async *runHeadless({task,signal}){
+      qa.prompts.push(task);
+      if(qa.mode==='wait'){await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));return;}
+      if(qa.mode==='fail')throw Error('Insufficient Balance');
+      if(task.includes('对话数据：')){
+        const data=JSON.parse(task.split('对话数据：')[1]);qa.turn++;
+        yield{type:'final',text:JSON.stringify({reply:'你已经说明了合力与加速度的关系，接下来检查一个具体条件。',question:qa.turn===1?'为什么需要考虑合力，而不是单独一个作用力？':'如果质量增大而合力不变，加速度会怎样变化？',referenceEvidence:data.reference.includes('牛顿第二定律指出合力决定加速度。')?'牛顿第二定律指出合力决定加速度。':''})};
+      }else{
+        const data=JSON.parse(task.split('讲解与参考以 JSON 编码，仅作为数据：')[1]);
+        yield{type:'final',text:JSON.stringify({summary:'隔离测试反馈：讲解已经提到合力，需要继续检验质量变化的条件。',dimensions:['accuracy','conditions','reasoning','clarity','examples','transfer'].map((id,i)=>({id,score:i<4?3:null,evidence:i<4?data.transcript.slice(0,20):'',referenceEvidence:i===1?'不存在的原文引用':'牛顿第二定律指出合力决定加速度。',reason:'根据本次学习者的原话检查。',nextStep:'用一个具体质量变化的例子说明。'})),questions:['质量变化时是否仍成正比？'],referenceLimit:'AI 测试替身，未进行教师校准。'})};
+      }
+    }})});
+    ipcMain.removeHandler('avatar:probe');ipcMain.handle('avatar:probe',()=>({ok:true,tts:{available:false},asr:{available:false},viseme:{available:true}}));
+  });
+  await page.evaluate(v=>window.__gezhiTest.openVault(v),vault);
+  await page.evaluate(p=>window.__gezhiTest.openFileByPath(p),file);
+  await page.getByRole('button',{name:'学习工作室',exact:true}).click();
+  await page.getByRole('combobox',{name:'学习资料章节'}).waitFor();
+  await page.getByRole('tab',{name:'角色空间',exact:true}).click();
+}
+const teacher=()=>page.locator('.companion-card').filter({hasText:'教师指导'});
+const dialogue=()=>page.getByTestId('room-dialogue');
+async function saved(){await page.waitForFunction(()=>document.querySelector('.room-draft-status')?.textContent==='草稿已保存到本机');}
+try{
+  await launch();assert.equal(await page.locator('.companion-card').count(),5);
+  assert.match(await page.locator('.companion-card').filter({hasText:'研究伙伴'}).textContent(),/设计验证/);
+  await teacher().click();await page.getByRole('textbox',{name:'角色文字讲解'}).fill(opening);await saved();
+  pass('五个角色各有任务描述，输入草稿自动保存到本机');
+  await page.getByRole('button',{name:'让角色追问',exact:true}).click();
+  await page.getByTestId('dialogue-assistant').waitFor();
+  assert.equal(await page.getByTestId('dialogue-learner').count(),1);
+  assert.match(await dialogue().textContent(),/为什么需要考虑合力/);
+  await page.getByTestId('dialogue-assistant').locator('summary').click();
+  await page.getByTestId('dialogue-assistant').getByRole('button',{name:'在资料中定位',exact:true}).click();
+  await page.locator('.study-source-text mark').waitFor();
+  assert.equal(await page.locator('.study-source-text mark').textContent(),'牛顿第二定律指出合力决定加速度。');
+  pass('首轮追问使用当前资料，逐字原文可在资料栏高亮定位');
+  await page.getByRole('textbox',{name:'回应角色追问'}).fill(reply);
+  await page.getByRole('button',{name:'回应并继续',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===2);
+  assert.equal(await page.getByTestId('dialogue-learner').count(),2);
+  assert.match(await dialogue().textContent(),/质量增大/);await saved();
+  pass('真实界面可回应角色并继续下一轮，对话与补充次数同步');
+  await page.getByRole('textbox',{name:'回应角色追问'}).fill('这段回答尚未发送，重启后应保留。');await saved();
+  await page.locator('.learning-studio').evaluate(el=>el.scrollTop=document.querySelector('.room-dialogue').offsetTop-50);
+  await shot('dialogue-light');
+  await app.close();app=null;await launch();await teacher().click();
+  await dialogue().waitFor();
+  assert.equal(await page.getByTestId('dialogue-assistant').count(),2);
+  assert.equal(await page.getByRole('textbox',{name:'回应角色追问'}).inputValue(),'这段回答尚未发送，重启后应保留。');
+  pass('完全关闭并重启桌面程序后，草稿、未发送回答与对话恢复');
+  await app.evaluate(()=>globalThis.__roomQA.mode='fail');
+  await page.getByRole('textbox',{name:'回应角色追问'}).fill('保持合力不变时，质量越大，加速度越小。');
+  await page.getByRole('button',{name:'回应并继续',exact:true}).click();
+  await page.getByRole('button',{name:'重试上轮追问',exact:true}).waitFor();
+  assert.equal(await page.getByTestId('dialogue-learner').count(),3);
+  await app.evaluate(()=>globalThis.__roomQA.mode='ok');
+  await page.getByRole('button',{name:'重试上轮追问',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===3);
+  assert.equal(await page.getByTestId('dialogue-learner').count(),3);
+  pass('额度失败仍保留回答，重试不会重复追加学习者讲解');
+  await app.evaluate(()=>globalThis.__roomQA.mode='wait');
+  await page.getByRole('textbox',{name:'回应角色追问'}).fill('合力为零时，加速度为零。');
+  await page.getByRole('button',{name:'回应并继续',exact:true}).click();
+  await page.locator('.role-portrait.state-thinking').waitFor();
+  await page.getByRole('button',{name:'停止追问',exact:true}).click();
+  await page.getByRole('button',{name:'重试上轮追问',exact:true}).waitFor();
+  await app.evaluate(()=>globalThis.__roomQA.mode='ok');
+  await page.getByRole('button',{name:'重试上轮追问',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===4);
+  assert.equal(await page.getByTestId('dialogue-learner').count(),4);
+  pass('思考状态跟随真实请求，停止后可重试同一轮');
+  await page.getByRole('button',{name:'生成整段对话反馈',exact:true}).click();
+  await page.getByTestId('companion-report').waitFor();
+  const report=(await page.evaluate(v=>window.gezhi.companions.history({vault:v,roleId:'teacher'}),vault)).reports[0];
+  assert.equal(report.dialogue.length,8);assert.ok(report.transcript.includes(reply));
+  assert.equal(report.transcript.includes('你已经说明了合力'),false);
+  assert.equal(report.dimensions[1].referenceVerified,false);
+  const summary=await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),vault);
+  assert.equal(summary.independent,0);assert.equal(summary.aiReportCount,1);
+  pass('整段六维反馈仅评价学习者发言，AI 分数仍不计入独立通过');
+  await page.getByTestId('companion-report').getByRole('button',{name:'定位讲解原话',exact:true}).first().click();
+  await dialogue().locator('mark').waitFor();
+  assert.equal(await dialogue().locator('mark').textContent(),report.dimensions[0].evidence);
+  await page.getByTestId('companion-report').getByRole('button',{name:'在资料中定位',exact:true}).first().click();
+  assert.equal(await page.locator('.study-source-text mark').textContent(),report.dimensions[0].referenceEvidence);
+  pass('反馈可同时定位学习者原话与资料原文，伪造原文不显示为已匹配');
+  const exported=path.join(vault,'多轮反馈.导出.md');
+  await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},exported);
+  await page.getByTestId('companion-report').getByRole('button',{name:'导出反馈',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'反馈已导出：'}).waitFor();
+  const exportedText=fs.readFileSync(exported,'utf8');
+  assert.ok(exportedText.includes(reply));assert.match(exportedText,/本次反馈所依据的对话/);
+  assert.ok(exportedText.includes('牛顿第二定律指出合力决定加速度。'));
+  pass('整段反馈真实导出 Markdown，包含学习者补充、对话快照与原文依据');
+  await page.getByRole('button',{name:'← 返回角色空间',exact:true}).click();
+  await page.locator('.companion-card').filter({hasText:'研究伙伴'}).click();
+  await page.getByRole('textbox',{name:'角色文字讲解'}).fill('我准备验证合力与加速度的关系，先固定质量再改变合力。');
+  await page.getByRole('button',{name:'让角色追问',exact:true}).click();await dialogue().waitFor();
+  const pressed=dialogue().getByRole('button',{name:'提出可检验预测',exact:true});
+  assert.equal(await pressed.getAttribute('aria-pressed'),'true');
+  await page.getByRole('textbox',{name:'回应角色追问'}).waitFor({state:'visible'});
+  await saved();await page.getByRole('button',{name:'← 返回角色空间',exact:true}).click();await teacher().click();await dialogue().waitFor();
+  assert.equal(await page.getByTestId('dialogue-assistant').count(),4);
+  pass('研究伙伴默认验证假设，角色草稿和对话各自独立保存');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  assert.equal(await page.locator('.role-portrait').evaluate(el=>getComputedStyle(el).animationName),'none');
+  assert.equal(await page.getByTestId('dialogue-assistant').first().evaluate(el=>getComputedStyle(el).animationName),'none');
+  pass('角色与对话动画尊重系统减少动态效果设置');
+  await page.evaluate(()=>{document.documentElement.setAttribute('data-theme','dark');document.body.setAttribute('data-theme','dark');});
+  await page.locator('.learning-studio').evaluate(el=>el.scrollTop=document.querySelector('.room-dialogue').offsetTop-50);await shot('dialogue-dark');
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1100,760));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await shot('dialogue-compact');pass('紧凑窗口无整页水平溢出，深色与对话布局可用');
+  assert.deepEqual(errors,[]);pass('重启、多轮对话和报告全过程无未处理渲染异常');
+}catch(e){checks.push({name:'integration',pass:false,detail:e.stack||String(e)});console.error(e);await shot('failure').catch(()=>{});process.exitCode=1;}
+finally{fs.writeFileSync(path.join(OUT,'verification.json'),JSON.stringify({at:new Date().toISOString(),checks,pageErrors:errors,runRoot,cloud:'AI/voice test doubles; real Electron, restart, preload, source selection and SQLite; no learning efficacy claims'},null,2));if(app)await app.close();}
+console.log(`${checks.filter(c=>c.pass).length} passed, ${checks.filter(c=>!c.pass).length} failed`);

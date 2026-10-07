@@ -1,6 +1,6 @@
 # 格致
 
-**当前版本：0.0.6 · 2026 年 10 月 7 日**
+**当前版本：0.0.7 · 2026 年 10 月 7 日**
 
 格致已从本地资料管理工具，发展为以讲解、追问和可追溯反馈为核心的 AI 学习工作室。
 
@@ -17,10 +17,12 @@
 | 0.0.4 · 2026-10-06 | 统一数字空间入口与动效，修复矩阵乘积等公式的 PDF 导出。 |
 | 0.0.5 · 2026-10-06 | 采用“六维之窗”标志，软件与安装包图标使用真实透明背景。 |
 | 0.0.6 · 2026-10-07 | 资料按章节 / 页段进入学习流程；实验关联原文与控制变量；六维反馈连接任务、再次讲解和证据地图；保留草稿及阅读位置。 |
+| 0.0.7 · 2026-10-07 | 数字空间加入多轮追问与回应；整段反馈只评价学习者发言；原文引用可高亮定位；草稿、未发送回答与对话跨重启恢复。 |
 
 ## 当前功能与说明
 
 - 五种听众：同学、教师、学生、考官、研究伙伴，采用不同追问策略。
+- 多轮对话：每段最多 12 轮，根据角色选择条件检查、生活迁移、边界挑战或可检验预测；断线后保留回答并重试。
 - 六维反馈：准确性、条件、推理、表达、举例与迁移，附讲解原话、判断原因和下一步建议；证据不足时保留未评分状态。
 - 学习活动：自信度练习、错误侦探、证据地图、迁移挑战与函数 / 受力 / 概率实验。
 - 资料工作区、全文检索、笔记图谱、题库预览导入与组卷，以及 Markdown / PDF / Word 导出。
@@ -28,9 +30,10 @@
 - 当前资料栏支持 Markdown / TXT、DOCX 提取文字与 PDF 页段；选择原文片段后可创建开放探究任务。
 - 实验记录包含资料快照、实际模型运行数据及两轮对照；预测尚未完成实验时不计入实验通过。
 - 六维薄弱项可创建针对性任务；再次讲解展示同一资料、主题与角色下已评分维度的变化；AI 分数不计入独立通过。
+- 数字空间草稿和对话按资料库、角色与资料快照保存在本机；原文引用逐字匹配后可高亮定位。
 
 实现文档：[学习工作室](docs/学习工作室-实现与验证.md) · [数字空间](docs/多角色学习空间-0.0.3.md) · [动效与公式修复](docs/数字空间与动效-0.0.4.md) · [品牌记录](brand/identity-v3.md)。
-本轮说明：[资料驱动的学习闭环 0.0.6](docs/资料驱动学习闭环-0.0.6.md)。
+本轮说明：[多轮学习对话 0.0.7](docs/数字空间多轮对话-0.0.7.md)；上一轮：[资料驱动的学习闭环 0.0.6](docs/资料驱动学习闭环-0.0.6.md)。
 
 AI 反馈属于形成性反馈，目前没有真实学生试用数据，评分尚未经教师校准。扫描 PDF 需要先 OCR；云端 AI 与语音需要相应账号和网络。
 
@@ -46,7 +49,7 @@ npm --prefix apps/desktop run build:renderer
 & .\apps\desktop\node_modules\.bin\electron.cmd .\apps\desktop
 ```
 
-完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.6/`。
+完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.7/`。
 
 核心验证：`node --test apps/desktop/learning.test.mjs apps/desktop/bank-import.test.mjs apps/desktop/companions.test.mjs`；公式验证：`node scripts/latex2typst.test.cjs` 与 `node scripts/verify-math-pdf.mjs`。真实模型测试需额外服务配置，可能产生费用。
 

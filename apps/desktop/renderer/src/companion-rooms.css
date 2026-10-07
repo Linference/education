@@ -1,6 +1,64 @@
 .learning-body.is-room-view{grid-template-columns:minmax(0,1fr)}
 .learning-studio[data-view=teach] .learning-header{margin-bottom:8px}.learning-studio[data-view=teach] .learning-overview{padding:10px 0 14px}.learning-studio[data-view=teach] .room-section-title{margin-bottom:14px}.learning-studio[data-view=teach] .room-section-title h2{font-size:24px}
 .room-report{scroll-margin-top:20px}
+.room-mission {
+  display:flex;justify-content:space-between;align-items:center;gap:16px;
+  margin:0 0 20px;padding:12px 16px;border-left:3px solid var(--role-color);
+  border-radius:0 12px 12px 0;background:color-mix(in srgb,var(--role-color) 6%,var(--bg-primary));
+  font-size:13px;line-height:1.7;
+}
+.room-mission small,.room-draft-status {color:var(--text-muted);font-size:11px;line-height:1.8}
+.room-draft-status {display:block;margin-top:12px}
+.room-dialogue {
+  min-width:0;padding:24px;border:1px solid var(--bd);border-radius:18px;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--role-color) 5%,var(--bg-primary)),var(--bg-primary) 60%);
+}
+.room-dialogue>header {display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:22px}
+.room-dialogue h3 {margin:6px 0 0;font-size:20px;letter-spacing:-.4px}
+.room-dialogue>header>span,.dialogue-turn time {font-size:11px;color:var(--text-muted)}
+.room-dialogue-turns {display:flex;flex-direction:column;gap:18px}
+.dialogue-turn {
+  min-width:0;width:min(90%,680px);box-sizing:border-box;padding:16px 18px;border:1px solid var(--bd);
+  border-radius:15px;overflow-wrap:anywhere;animation:dialogue-enter .24s ease-out both;
+  scroll-margin-top:24px;background:var(--bg-primary);
+}
+.dialogue-turn.learner {align-self:flex-end;background:var(--bg-secondary);border-bottom-right-radius:4px}
+.dialogue-turn.assistant {align-self:flex-start;border-bottom-left-radius:4px;border-left:2px solid var(--role-color)}
+.dialogue-turn>div {display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px}
+.dialogue-turn.assistant strong {color:var(--role-color)}
+.dialogue-turn p {white-space:pre-wrap;font-size:13px;line-height:1.9;margin:10px 0 0}
+.dialogue-question {font-weight:600}
+.dialogue-turn small {display:block;margin-top:10px;font-size:11px;color:var(--text-muted);line-height:1.7}
+.dialogue-turn details {margin-top:12px;font-size:12px;line-height:1.8}
+.dialogue-turn summary {cursor:pointer;color:var(--text-muted)}
+.dialogue-turn blockquote,.room-reference-evidence blockquote {margin:10px 0;padding:8px 12px;border-left:2px solid var(--role-color);background:var(--bg-secondary);font-size:12px;line-height:1.8;white-space:pre-wrap}
+.dialogue-turn mark,.study-source-text mark {background:color-mix(in srgb,var(--role-color,var(--accent)) 25%,transparent);color:inherit;border-radius:3px}
+.room-dialogue>button {margin-top:16px}
+.room-intent-options {display:flex;flex-wrap:wrap;gap:8px;padding-top:24px;margin:16px 0;border-top:1px solid var(--bd)}
+.room-intent-options button {font-size:12px;border:1px solid var(--bd);border-radius:20px;padding:7px 12px;background:var(--bg-primary)}
+.room-intent-options button[aria-pressed=true] {color:var(--role-color);border-color:var(--role-color);background:color-mix(in srgb,var(--role-color) 8%,var(--bg-primary))}
+.room-dialogue>label {display:block;font-size:13px;font-weight:600}
+.room-dialogue textarea {display:block;box-sizing:border-box;width:100%;margin-top:10px;padding:12px 14px;border:1px solid var(--bd);border-radius:12px;background:var(--bg-secondary);color:var(--text-normal);font:inherit;font-weight:400;line-height:1.8;resize:vertical;min-height:100px}
+.room-dialogue textarea:focus {outline:2px solid color-mix(in srgb,var(--role-color) 60%,transparent);outline-offset:2px}
+.room-thinking {display:flex;align-items:center;gap:5px;padding:20px 0;font-size:12px;color:var(--text-muted)}
+.room-thinking i {width:5px;height:5px;border-radius:50%;background:var(--role-color);animation:room-think 1.2s ease-in-out infinite}
+.room-thinking i:nth-child(2) {animation-delay:.15s}.room-thinking i:nth-child(3) {animation-delay:.3s}
+.room-thinking span {margin-left:8px}
+.room-reference-evidence {margin:12px 0;padding:12px;border:1px solid color-mix(in srgb,var(--role-color) 25%,var(--bd));border-radius:10px}
+.room-reference-evidence small {font-size:11px;color:var(--text-muted)}
+.role-portrait.state-thinking .role-voice-ring {opacity:.45;animation:room-think 2s ease-in-out infinite}
+.role-portrait.state-listening .role-voice-ring {opacity:.7;animation:room-listen 1.5s ease-in-out infinite}
+.room-status[data-busy=true] {color:var(--role-color)}
+@keyframes dialogue-enter {from {opacity:0;transform:translateY(8px)}to {opacity:1;transform:translateY(0)}}
+@keyframes room-think {50% {opacity:.25;transform:translateY(-2px)}}
+@keyframes room-listen {50% {scale:1.15;opacity:.35}}
+@media(max-width:800px) {
+  .room-dialogue {padding:16px}.room-mission,.room-dialogue>header {flex-wrap:wrap}
+  .dialogue-turn {width:96%;padding:12px 14px}.room-history button {flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce) {
+  .dialogue-turn,.room-thinking i,.role-portrait.state-thinking .role-voice-ring,.role-portrait.state-listening .role-voice-ring {animation:none}
+}
 .learning-tabs{grid-template-columns:repeat(6,minmax(0,1fr))}
 .room-section-title{margin-bottom:24px}.room-section-title h2{font-size:28px;letter-spacing:-.8px;margin:8px 0}.room-section-title p,.companion-lobby>p{color:var(--text-muted);line-height:1.7}
 .companion-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:18px}

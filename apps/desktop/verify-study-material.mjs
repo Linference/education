@@ -36,7 +36,7 @@ try{
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setSize(1500,950);w.webContents.setBackgroundThrottling(false);});
   await page.waitForFunction(()=>Boolean(window.__gezhiTest));
   await app.evaluate(({ipcMain,app})=>{
-    for(const name of ['companions:roles','companions:history','companions:evaluate','companions:stop'])ipcMain.removeHandler(name);
+    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply'])ipcMain.removeHandler('companions:'+name);
     const localRequire=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/main/index.cjs');
     const {registerCompanions}=localRequire(app.getAppPath()+'/main/companion-ipc.cjs');let round=0;
     registerCompanions(ipcMain,app,{getBridge:async()=>({async *runHeadless({task}){
