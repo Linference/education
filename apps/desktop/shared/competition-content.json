@@ -1,0 +1,21 @@
+{
+  "source": "# Force and acceleration\n\nNewton's second law relates net force, mass and acceleration: F_net = ma. For constant mass, acceleration is proportional to net force. Net force means the vector sum of all forces. If net force is zero, acceleration is zero; velocity can still be nonzero.\n\nExample: a 4 kg object under a net force of 20 N has an acceleration of 5 m/s^2. For the model experiment, use applied force F=20 N, mass m=4 kg, and friction coefficient μ=0. The net force is then 20 N.\n\nSource: original Gezhi teaching example, MIT licensed. This is a demonstration, not a real student trial.\n",
+  "topic": "Why does net force change acceleration?",
+  "opening": "A force makes an object move faster. I think force directly determines its speed.",
+  "revised": "Net force determines acceleration, not speed. With constant mass, a larger net force causes a larger acceleration. If net force is zero, acceleration is zero, but the object may keep moving at constant velocity.",
+  "roles": [
+    {"id":"peer","name":"Kai","title":"Peer","mission":"Clarify an idea together","question":"When you say 'faster', do you mean velocity or a change in velocity?"},
+    {"id":"teacher","name":"Teacher Lin","title":"Teacher","mission":"Check each condition and reasoning step","question":"Does net force determine velocity, or the rate at which velocity changes?"},
+    {"id":"student","name":"Mira","title":"New learner","mission":"Explain it to someone new","question":"If the force disappears, why can the object keep moving?"},
+    {"id":"examiner","name":"Examiner Zhou","title":"Examiner","mission":"Defend an idea against counterexamples","question":"Can an object have zero net force and nonzero velocity?"},
+    {"id":"researcher","name":"Yuan","title":"Research partner","mission":"Make a prediction we can test","question":"If we double mass while holding net force constant, what should happen to acceleration?"}
+  ],
+  "dimensions": [
+    {"id":"accuracy","label":"Concept accuracy","criterion":"Distinguish acceleration from velocity."},
+    {"id":"conditions","label":"Conditions","criterion":"State the assumptions, units and boundaries."},
+    {"id":"reasoning","label":"Reasoning","criterion":"Connect each step to a reason."},
+    {"id":"clarity","label":"Clarity","criterion":"Explain terms to this particular listener."},
+    {"id":"examples","label":"Examples","criterion":"Give an example, counterexample or test."},
+    {"id":"transfer","label":"Transfer","criterion":"Apply the idea when conditions change."}
+  ]
+}

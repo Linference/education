@@ -9,6 +9,7 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const api = {
+  competition:{workspace:()=>ipcRenderer.invoke('competition:workspace')},
   dshSetup: {
     status: () => ipcRenderer.invoke('dsh:setupStatus'),
     install: () => ipcRenderer.invoke('dsh:install'),
@@ -16,6 +17,10 @@ const api = {
     complete: () => ipcRenderer.invoke('dsh:completeSetup'),
   },
   companions: {
+    review:p=>ipcRenderer.invoke('companions:review',p),
+    reviews:p=>ipcRenderer.invoke('companions:reviews',p),
+    disclosure:p=>ipcRenderer.invoke('companions:disclosure',p),
+    saveDisclosure:p=>ipcRenderer.invoke('companions:saveDisclosure',p),
     startSession: p => ipcRenderer.invoke('companions:startSession',p),
     reply: p => ipcRenderer.invoke('companions:reply',p),
     session: p => ipcRenderer.invoke('companions:session',p),

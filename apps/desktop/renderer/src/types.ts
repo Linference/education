@@ -75,6 +75,7 @@ export interface DocResult {
 }
 
 export interface GezhiApi {
+  competition:{workspace():Promise<{ok:boolean;path?:string;file?:string;error?:string}>};
   companions: import('./lib/companion-types').CompanionApi;
   dshSetup: {
     status(): Promise<{ ok: boolean; installed: boolean; installerBundled: boolean; completed: boolean; error?: string }>;

@@ -1,6 +1,6 @@
 # 格致
 
-**当前版本：0.0.7 · 2026 年 10 月 7 日**
+**当前版本：0.0.8 · 2026 年 10 月 7 日**
 
 格致已从本地资料管理工具，发展为以讲解、追问和可追溯反馈为核心的 AI 学习工作室。
 
@@ -18,6 +18,7 @@
 | 0.0.5 · 2026-10-06 | 采用“六维之窗”标志，软件与安装包图标使用真实透明背景。 |
 | 0.0.6 · 2026-10-07 | 资料按章节 / 页段进入学习流程；实验关联原文与控制变量；六维反馈连接任务、再次讲解和证据地图；保留草稿及阅读位置。 |
 | 0.0.7 · 2026-10-07 | 数字空间加入多轮追问与回应；整段反馈只评价学习者发言；原文引用可高亮定位；草稿、未发送回答与对话跨重启恢复。 |
+| 0.0.8 · 2026-10-07 | 英文比赛展示、离线备用示范、实时英文 AI 对话、六维人工复核、AI 使用披露与英文证据导出。 |
 
 ## 当前功能与说明
 
@@ -31,9 +32,12 @@
 - 实验记录包含资料快照、实际模型运行数据及两轮对照；预测尚未完成实验时不计入实验通过。
 - 六维薄弱项可创建针对性任务；再次讲解展示同一资料、主题与角色下已评分维度的变化；AI 分数不计入独立通过。
 - 数字空间草稿和对话按资料库、角色与资料快照保存在本机；原文引用逐字匹配后可高亮定位。
+- 比赛展示入口提供纯英文界面、五角色离线示范和联网 AI；隔离英语资料库在退出时回到原资料库。
+- 六维人工复核记录评分理由，按报告去重统计一致率与平均绝对差；复核身份为自声明，尚未校准。
+- AI 使用披露保留真实版本、用途与学生工作；聚合证据导出为英文 MD / PDF，未填写字段明确标为不完整。
 
 实现文档：[学习工作室](docs/学习工作室-实现与验证.md) · [数字空间](docs/多角色学习空间-0.0.3.md) · [动效与公式修复](docs/数字空间与动效-0.0.4.md) · [品牌记录](brand/identity-v3.md)。
-本轮说明：[多轮学习对话 0.0.7](docs/数字空间多轮对话-0.0.7.md)；上一轮：[资料驱动的学习闭环 0.0.6](docs/资料驱动学习闭环-0.0.6.md)。
+本轮说明：[比赛评审与人工复核 0.0.8](docs/比赛展示与人工复核-0.0.8.md)；前序：[多轮学习对话 0.0.7](docs/数字空间多轮对话-0.0.7.md)、[资料驱动的学习闭环 0.0.6](docs/资料驱动学习闭环-0.0.6.md)。
 
 AI 反馈属于形成性反馈，目前没有真实学生试用数据，评分尚未经教师校准。扫描 PDF 需要先 OCR；云端 AI 与语音需要相应账号和网络。
 
@@ -49,7 +53,7 @@ npm --prefix apps/desktop run build:renderer
 & .\apps\desktop\node_modules\.bin\electron.cmd .\apps\desktop
 ```
 
-完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.7/`。
+完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.8/`。
 
 核心验证：`node --test apps/desktop/learning.test.mjs apps/desktop/bank-import.test.mjs apps/desktop/companions.test.mjs`；公式验证：`node scripts/latex2typst.test.cjs` 与 `node scripts/verify-math-pdf.mjs`。真实模型测试需额外服务配置，可能产生费用。
 

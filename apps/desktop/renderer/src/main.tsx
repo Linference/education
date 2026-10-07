@@ -5,6 +5,7 @@ import "./styles.css";
 import "./workbench.css";
 import "./learning.css";
 import './companion-rooms.css';
+import './competition.css';
 import './motion.css';
 import './demo-english';
 import App from "./App";

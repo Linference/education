@@ -6,6 +6,7 @@ const { assertInsideVault } = require('./vault-fs.cjs');
 const { loadBridge } = require('./ai.cjs');
 const learning = require('./lib/learning.cjs');
 const dialogue = require('./lib/companion-dialogue.cjs');
+const review = require('./lib/assessment-review.cjs');
 function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
   let db, sourceDb, active = null;
   const open = () => {
@@ -14,6 +15,7 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
       db = new (require('node:sqlite').DatabaseSync)(path.join(app.getPath('userData'), 'companions.db'));
       db.exec('CREATE TABLE IF NOT EXISTS reports(id TEXT PRIMARY KEY,vault TEXT NOT NULL,role TEXT NOT NULL,at TEXT NOT NULL,data TEXT NOT NULL); CREATE INDEX IF NOT EXISTS reports_vault ON reports(vault,at);');
       dialogue.initialize(db);
+      review.initialize(db);
     }
     return db;
   };
@@ -30,6 +32,17 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
     return /Insufficient Balance|QUOTA/i.test(message)?'当前 AI 服务余额或额度不足，请检查 DeepSeek Harness 账号。输入和对话已保留。':/unauthorized|not authenticated|login required/i.test(message)?'AI 登录已过期，请打开 DeepSeek Harness 登录后重试。':message;
   };
   const local = fn => (_e,p={})=>{try{return fn(vault(p),p);}catch(e){return{ok:false,error:friendly(e)};}};
+  ipcMain.handle('companions:review',local((current,p)=>{
+    const row=open().prepare('SELECT data FROM reports WHERE vault=? AND id=?').get(current,p.reportId);
+    if(!row)throw Error('The report is not in this library.');
+    return{ok:true,review:review.save(open(),current,p,JSON.parse(row.data))};
+  }));
+  ipcMain.handle('companions:reviews',local((current,p)=>{
+    const reviews=review.list(open(),current,p.reportId);
+    return{ok:true,reviews,summary:review.summary(reviews)};
+  }));
+  ipcMain.handle('companions:disclosure',local((current)=>({ok:true,...review.disclosure(open(),current)})));
+  ipcMain.handle('companions:saveDisclosure',local((current,p)=>({ok:true,...review.saveDisclosure(open(),current,p)})));
   ipcMain.handle('companions:startSession',local((current,p)=>({ok:true,session:dialogue.startSession(open(),current,p,sourceFor(current,p.sourceId))})));
   ipcMain.handle('companions:session',local((current,p)=>{
     const session=dialogue.getSession(open(),current,p.sessionId);
@@ -65,7 +78,7 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
       }
       if(controller.signal.aborted)throw Error('追问已停止或超时，回答已保留。');
       if(vault(p)!==current)throw Error('资料库已切换，本次追问未写入新资料库。');
-      const reply=dialogue.normalizeReply(final||text,reserved.session.referenceText);
+      const reply=dialogue.normalizeReply(final||text,reserved.session.referenceText,reserved.session.locale);
       return{ok:true,session:dialogue.finishReply(open(),current,p.sessionId,p.requestId,reply)};
     }catch(e){let session;try{if(current&&reserved&&!reserved.completed)session=dialogue.failReply(open(),current,p.sessionId,p.requestId);}catch{}
       return{ok:false,error:friendly(e),session};
@@ -83,7 +96,7 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
     try {
       const currentVault = vault(p);
       const session=p.sessionId?dialogue.getSession(open(),currentVault,p.sessionId):null;
-      if(session){if(session.request?.state==='pending')throw Error('请先完成或停止当前追问。');p={...p,roleId:session.roleId,topic:session.topic,transcript:dialogue.learnerText(session),sourceId:session.sourceRef?.id,context:session.referenceText,referenceName:session.referenceName};}
+      if(session){if(session.request?.state==='pending')throw Error('请先完成或停止当前追问。');p={...p,roleId:session.roleId,locale:session.locale||'zh',topic:session.topic,transcript:dialogue.learnerText(session),sourceId:session.sourceRef?.id,context:session.referenceText,referenceName:session.referenceName};}
       if (typeof p.topic !== 'string' || !p.topic.trim() || p.topic.length > 200) throw new Error('请填写讲解主题（不超过 200 字）');
       if (typeof p.transcript !== 'string' || p.transcript.trim().length < 10 || p.transcript.length > 12000) throw new Error('请提供 10 至 12000 字的讲解');
       let sourceRef = null, previous = null;
@@ -111,8 +124,8 @@ function registerCompanions(ipcMain, app, { getBridge = loadBridge } = {}) {
       if (controller.signal.aborted) throw new Error('评估已停止或超时，未保存评分。');
       // Switching libraries while awaiting a response must never write to the new library.
       if (vault(p) !== currentVault) throw new Error('资料库已切换，本次评估未保存。');
-      const assessment = rubric.normalize(final || text, p.transcript,sourceRef?.text||p.context||'');
-      const report = { id: randomUUID(), roleId: p.roleId, topic: p.topic, transcript: p.transcript, referenceName: String(p.referenceName || '').slice(0,200), at: new Date().toISOString(), ...assessment };
+      const assessment = rubric.normalize(final || text, p.transcript,sourceRef?.text||p.context||'',p.locale);
+      const report = { id: randomUUID(), roleId: p.roleId,locale:p.locale==='en'?'en':'zh', topic: p.topic, transcript: p.transcript, referenceName: String(p.referenceName || '').slice(0,200), at: new Date().toISOString(), ...assessment };
       Object.assign(report, { sourceRef, referenceName: sourceRef ? sourceRef.name + ' · ' + sourceRef.section : report.referenceName, previousId: previous?.id || null,
         comparison: previous ? assessment.dimensions.flatMap(d => { const before = previous.dimensions.find(x => x.id === d.id)?.score; return typeof before === 'number' && typeof d.score === 'number' ? [{ id: d.id, before, after: d.score, delta: d.score-before }] : []; }) : [] });
       open().prepare('INSERT INTO reports VALUES(?,?,?,?,?)').run(report.id,currentVault,p.roleId,report.at,JSON.stringify(report));

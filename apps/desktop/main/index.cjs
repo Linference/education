@@ -37,6 +37,7 @@ const { registerBank } = require("./bank-ipc.cjs");
 const { registerLearning } = require("./learning-ipc.cjs");
 const { registerCompanions } = require('./companion-ipc.cjs');
 const { registerDshSetup } = require('./dsh-setup-ipc.cjs');
+const { registerCompetition } = require('./competition-ipc.cjs');
 const { extractDocText, extractPptText } = require("./lib/doc-extract.cjs");
 const { parsePptxFile } = require("./lib/pptx.cjs");
 const { parseSheetFile } = require("./lib/xlsx.cjs");
@@ -365,6 +366,7 @@ function registerIpc() {
   registerLearning(ipcMain, app);
   registerCompanions(ipcMain, app);
   registerDshSetup(ipcMain, app);
+  registerCompetition(ipcMain, app);
 }
 
 /** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */

@@ -25,6 +25,7 @@ import GraphView from "./components/GraphView";
 import BankView from "./components/BankView";
 import LearningStudio, { type StudioRequest } from "./components/LearningStudio";
 import DshOnboarding from './components/DshOnboarding';
+import CompetitionCenter from './components/CompetitionCenter';
 import { useSurfaceMotion } from './lib/useSurfaceMotion';
 import logoMark from "./assets/gezhi-mark-v3.png";
 
@@ -232,6 +233,8 @@ export default function App() {
    * 图谱与题库做成"换视图"而不是弹窗：它们要看的内容量大，弹窗挤不下。
    */
   const [mainView, setMainView] = useState<"files" | "graph" | "bank" | "learning">("files");
+  const [presentationOpen,setPresentationOpen]=useState(false);
+  const presentationBackup=useRef<{vault:VaultInfo;path:string|null;view:typeof mainView}|null>(null);
   const centerMotion = useSurfaceMotion<HTMLDivElement>(mainView);
   const [studioRequest, setStudioRequest] = useState<StudioRequest>({ view: 'teach' });
   const openStudio = (request: StudioRequest = { view: 'teach' }) => {
@@ -1202,6 +1205,9 @@ export default function App() {
   return (
     <div className="app">
       <DshOnboarding />
+      {presentationOpen&&<CompetitionCenter vault={vault?.path||null} referencePath={activeTab?.path} referenceText={activeTab?drafts.get(activeTab.path)??activeTab.text:null}
+        onClose={()=>{setPresentationOpen(false);const previous=presentationBackup.current;presentationBackup.current=null;if(previous)void (async()=>{await loadVault(previous.vault);if(previous.path)await openFileByPath(previous.path);setMainView(previous.view);})().catch(e=>setStatus(e.message));}}
+        onSample={async()=>{if(dirty.size)throw Error('Save your edited documents before opening the isolated library.');const r=await window.gezhi.competition.workspace();if(!r.ok||!r.path||!r.file)throw Error(r.error||'The demo library could not be opened.');if(vault?.path===r.path){await openFileByPath(r.file);return;}if(vault&&!presentationBackup.current)presentationBackup.current={vault,path:activePath,view:mainView};const v=await window.gezhi.vault.info(r.path);if(!v.ok)throw Error(v.error);await loadVault(v);await openFileByPath(r.file);}}/>}
       {/* 标题栏 */}
       <div className="titlebar">
         {/* 四向交织标志：透明底，主题切换时使用单色反白。 */}
@@ -1352,6 +1358,7 @@ export default function App() {
           <button className={'ribbon-btn' + (mainView === 'learning' ? ' active' : '')} aria-current={mainView === 'learning' ? 'page' : undefined} onClick={() => mainView === 'learning' ? setMainView('files') : openStudio()} title="学习工作室（角色空间 / 自信度 / 错误侦探 / 学习证据 / 迁移挑战 / 概念实验）" aria-label="学习工作室">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 2 22 8v8l-10 6L2 16V8Z" /><path d="m2 8 10 6 10-6M12 14v8M7 5l10 6" /></svg>
           </button>
+          <button className="ribbon-btn" aria-label="比赛英文展示" title="比赛英文展示 · 离线备用 · 人工复核与 AI 使用记录" onClick={()=>setPresentationOpen(true)}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 3h10v5a5 5 0 0 1-10 0ZM7 5H3v2a4 4 0 0 0 4 4M17 5h4v2a4 4 0 0 1-4 4M12 13v6M7 21h10M9 19h6"/></svg></button>
           <button
             className={`ribbon-btn${mainView === "graph" ? " active" : ""}`}
             onClick={() => setMainView((v) => (v === "graph" ? "files" : "graph"))}
@@ -1565,7 +1572,7 @@ export default function App() {
         <div ref={centerMotion} className="center motion-surface">
           <div style={{display:mainView==='learning'?'flex':'none',flex:'1 1 auto',minHeight:0,minWidth:0}}>
             <LearningStudio key={vault?.path || 'no-vault'} vaultPath={vault?.path ?? null} request={studioRequest}
-              visible={mainView==='learning'} referencePath={activeTab?.path} referenceName={activeTab?.name} referenceText={activeTab ? drafts.get(activeTab.path) ?? activeTab.text : null}
+              visible={mainView==='learning'&&!presentationOpen} referencePath={activeTab?.path} referenceName={activeTab?.name} referenceText={activeTab ? drafts.get(activeTab.path) ?? activeTab.text : null}
               onBrowse={() => setMainView('files')} onOpen={(p) => { setMainView('files'); void openFileByPath(p); }} onOpenVault={() => void openVaultDialog()} onBank={() => setMainView('bank')} />
           </div>
           {mainView === "learning" ? null : mainView === "graph" ? (

@@ -18,7 +18,9 @@ function extractParameters(kind, text) {
   };
   const labels = { a: 'a', h: 'h', k: 'k', x: 'x', force: '(?:F|拉力)', mass: '(?:m|质量)', friction: '(?:μ|摩擦系数)', p: 'p', n: 'n' };
   for (const [key, [min, max]] of Object.entries(ranges[kind] || {})) {
-    const found = new RegExp('(?:^|[^A-Za-z])' + labels[key] + '\\s*[=＝]\\s*([+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+))(?![\\d.])', 'i').exec(normalized);
+    // A sentence-ending period is punctuation; another decimal component or
+    // an unsupported exponent must not be truncated into a plausible value.
+    const found = new RegExp('(?:^|[^A-Za-z])' + labels[key] + '\\s*[=＝]\\s*([+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+))(?!\\d|\\.\\d|\\.{2,}\\d|[eE][+-]?\\d)', 'i').exec(normalized);
     if (!found) continue;
     const value = Number(found[1]);
     if (value >= min && value <= max && (key !== 'n' || Number.isInteger(value))) result[key] = value;

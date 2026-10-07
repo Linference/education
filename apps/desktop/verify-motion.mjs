@@ -17,7 +17,7 @@ const checks=[],errors=[];const pass=name=>{checks.push(name);console.log('[PASS
 try {
  await app.evaluate(({BrowserWindow,ipcMain,app})=>{
   const win=BrowserWindow.getAllWindows()[0];win.setSize(1440,1000);win.webContents.setBackgroundThrottling(false);win.hide();
-  for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply'])ipcMain.removeHandler('companions:'+name);
+  for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply','review','reviews','disclosure','saveDisclosure'])ipcMain.removeHandler('companions:'+name);
   const require=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/package.json');
   const rubric=require(app.getAppPath()+'/shared/companion-rubric.cjs');
   require(app.getAppPath()+'/main/companion-ipc.cjs').registerCompanions(ipcMain,app,{getBridge:async()=>({async *runHeadless(){await new Promise(resolve=>setTimeout(resolve,650));yield {type:'final',text:JSON.stringify({summary:'界面动效测试反馈，用于验证展示与记录。',dimensions:rubric.DIMENSIONS.map(d=>({id:d.id,score:2,evidence:'矩阵乘法需要满足维度条件',reason:'这是界面测试依据。',nextStep:'补充一个数值例子。'})),questions:['矩阵和向量的维度如何匹配？'],referenceLimit:'界面测试替身，不是学习成效数据。'})};}})});

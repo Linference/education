@@ -1,6 +1,6 @@
 {
   "name": "gezhi",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "private": true,
   "type": "module",
   "description": "格致 —— 本地优先的个人学习操作系统（知识库 / AI 陪练 / 题库组卷 / 日历计划）",
@@ -38,6 +38,8 @@
     "ui:verify:study": "node apps/desktop/verify-study-material.mjs",
     "rooms:test": "node --test apps/desktop/room-dialogue.test.mjs",
     "ui:verify:rooms": "node apps/desktop/verify-room-dialogue.mjs",
+    "competition:test": "node --test apps/desktop/assessment-review.test.mjs",
+    "ui:verify:competition": "node apps/desktop/verify-competition-center.mjs",
     "ui:verify:learning": "node apps/desktop/verify-learning.mjs",
     "verify": "node scripts/verify-all.mjs",
     "verify:quick": "node scripts/verify-all.mjs --quick",

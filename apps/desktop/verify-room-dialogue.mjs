@@ -21,7 +21,7 @@ async function launch(){
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setSize(1540,1000);w.webContents.setBackgroundThrottling(false);});
   await page.waitForFunction(()=>Boolean(window.__gezhiTest));
   await app.evaluate(({ipcMain,app})=>{
-    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply'])ipcMain.removeHandler('companions:'+name);
+    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply','review','reviews','disclosure','saveDisclosure'])ipcMain.removeHandler('companions:'+name);
     const localRequire=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/main/index.cjs');
     const {registerCompanions}=localRequire(app.getAppPath()+'/main/companion-ipc.cjs');
     const qa=globalThis.__roomQA={mode:'ok',prompts:[],turn:0};

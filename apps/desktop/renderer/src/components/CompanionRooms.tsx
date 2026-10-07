@@ -4,6 +4,7 @@ import type {CompanionReport,CompanionRole,DialogueIntent,RoomDraft,RoomSession,
 import type {LearningMode,StudySource} from '../lib/learning-types';
 import RolePortrait from './RolePortrait';
 import AssessmentRadar from './AssessmentRadar';
+import AssessmentReview from './AssessmentReview';
 import RoomDialogue,{MISSIONS} from './RoomDialogue';
 import {useAvatarVoice} from './useAvatarVoice';
 import {useMicRecorder} from './useMicRecorder';
@@ -139,6 +140,7 @@ export default function CompanionRooms({vault,referenceName,referenceText,studyS
       <AssessmentRadar dimensions={report.dimensions}/><div className="assessment-dimensions">{report.dimensions.map((d,i)=><section key={d.id} style={{'--motion-order':i} as CSSProperties}><h3>{d.label}<span>{d.score===null?'未展示':d.score+' / 4'}</span></h3>{d.evidence&&<blockquote>“{d.evidence}”<button onClick={()=>locate(d.evidence)}>定位讲解原话</button></blockquote>}<p>{d.reason}</p>
         {d.referenceVerified&&report.sourceRef?<div className="room-reference-evidence"><small>原文引用已逐字匹配</small><blockquote>{d.referenceEvidence}</blockquote><button onClick={()=>openReference(report.sourceRef!,d.referenceEvidence!)}>在资料中定位</button></div>:<p className="learning-muted">尚无匹配的原文引用，需核对判断依据。</p>}
         <div className="assessment-next"><strong>下一步</strong> {d.nextStep}</div><div className="learning-actions"><button disabled={busy} onClick={()=>retryExplanation(report,d.label+'：'+d.nextStep)}>围绕这一项再讲</button><button disabled={busy||!report.sourceRef} onClick={()=>onTask?.(d.id==='transfer'?'transfer':d.id==='conditions'?'detective':'practice',d.label+'：'+d.nextStep,report.sourceRef)}>做针对性任务</button></div></section>)}</div>
+      <AssessmentReview key={report.id} vault={vault} report={report}/>
       <div className="room-followups"><h3>{role.name}的追问</h3>{report.questions.map((q,i)=><p key={i}>{i+1}. {q}</p>)}</div><p className="learning-muted">{report.referenceLimit}</p><button disabled={busy} onClick={()=>retryExplanation(report)}>按建议再讲一遍</button>
     </article>}
     {sessions.length>0&&<section className="room-history"><h3>这个空间的对话记录</h3>{sessions.map(s=><button key={s.id} disabled={busy||mic.recording} onClick={()=>void resume(s.id)}><span>{s.topic} · {s.turnCount} 段对话</span><small>{new Date(s.at).toLocaleString('zh-CN')}</small></button>)}</section>}

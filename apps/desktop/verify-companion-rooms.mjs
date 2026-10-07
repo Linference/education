@@ -20,7 +20,7 @@ try{
   if(!live)await app.evaluate(async({ipcMain,app},root)=>{
     const require=process.getBuiltinModule('module').createRequire(app.getAppPath()+'/package.json');
     root=app.getAppPath();
-    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply'])ipcMain.removeHandler('companions:'+name);
+    for(const name of ['roles','history','evaluate','stop','startSession','session','sessions','saveDraft','loadDraft','reply','review','reviews','disclosure','saveDisclosure'])ipcMain.removeHandler('companions:'+name);
     const rubric=require(root+'/shared/companion-rubric.cjs');
     require(root+'/main/companion-ipc.cjs').registerCompanions(ipcMain,app,{getBridge:async()=>({async *runHeadless(){await new Promise(r=>setTimeout(r,150));yield {type:'final',text:JSON.stringify({summary:'你说明了顶点，但应补充开口方向与条件。',dimensions:rubric.DIMENSIONS.map((d,i)=>({id:d.id,score:i===4?null:2,evidence:'顶点是 (h,k)',reason:'检查你实际说出的条件。',nextStep:'给出 a 小于零的反例。'})),questions:['a 小于零时还存在最小值吗？','怎样用一个例子解释？'],referenceLimit:'AI 测试替身，用于界面与持久化验证。'})};}})});
   },HERE);

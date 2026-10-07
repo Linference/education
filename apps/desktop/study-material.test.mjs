@@ -35,6 +35,13 @@ test('changed source, position or draft origin creates a different immutable sna
   assert.notEqual(a.id,material.makeSource({...section,startLine:4,endLine:5},{filePath:'v/n.md',name:'n.md'}).id);
   assert.notEqual(a.id,material.makeSource(section,{filePath:'v/n.md',name:'n.md',origin:'draft'}).id);
 });
+test('English sentence punctuation preserves explicit zero friction without truncating malformed decimals or exponents',()=>{
+  assert.deepEqual(material.extractParameters('force','F=20 N, m=4 kg, μ=0.'),{force:20,mass:4,friction:0});
+  assert.deepEqual(material.extractParameters('probability','p=0.3. n=2.'),{p:.3,n:2});
+  assert.deepEqual(material.extractParameters('quadratic','a=1.2.3, h=1e2, k=1..2'),{});
+  const c=require('./shared/competition-content.json'),source=material.makeSource(material.sectionsFromText(c.source,'Force-and-acceleration.md')[0],{filePath:'demo.md',name:'demo.md'});
+  assert.deepEqual(source.labs[0].parameters,{force:20,mass:4,friction:0});
+});
 test('Word extraction is usable as learning context',async()=>{
   const file=path.join(root,'sample.docx');fs.writeFileSync(file,await Packer.toBuffer(new Document({sections:[{children:[new Paragraph('独立事件：p=0.5，n=2。')]}]})));
   const r=await material.readMaterial({filePath:file});assert.match(r.sources[0].text,/独立事件/);assert.equal(r.sources[0].labs[0].kind,'probability');
