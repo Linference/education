@@ -1,24 +1,27 @@
-// scan-mojibake 的跳过规则验证
+// Skip-rule verification for scan-mojibake.
 //
-// 为什么需要这个测试：
-//   内置 LibreOffice 后仓库里多了 9000+ 个第三方文件，
-//   它们里面有"看着像乱码"的字符表常量（如 idna 的 uts46data.py
-//   按 Unicode 区段罗列汉字），会被误报成"双重编码损坏"。
-//   所以要跳过 vendor/ 与 dist/installer。
+// Why this test exists:
+//   After bundling LibreOffice the repo gained 9000+ third-party files,
+//   and they contain character-table constants that "look like mojibake"
+//   (e.g. idna's uts46data.py lists Han characters by Unicode block),
+//   which would be falsely reported as "double-encoding corruption".
+//   So vendor/ and dist/installer must be skipped.
 //
-// ★ 但跳过规则本身很容易写错，这个测试锁定两件事：
-//   1. 该跳的确实跳了（否则误报）
-//   2. **该扫的没被误跳**（否则真正的损坏会漏检 —— 更危险）
+// ★ But the skip rules are easy to get wrong, so this test locks down two things:
+//   1. What should be skipped really is skipped (otherwise false positives)
+//   2. **What should be scanned is not wrongly skipped** (otherwise real
+//      corruption is missed — the more dangerous failure)
 //
-// 还覆盖一个隐性坑：第一版写成 /[\\/]vendor[\\/]/，
-// 要求 vendor 前后都有分隔符，**相对路径不匹配**。
-// 实际扫描传绝对路径所以"看起来没问题"，但这是隐性依赖。
+// It also covers a hidden trap: the first version wrote /[\\/]vendor[\\/]/,
+// requiring a separator on both sides of vendor, which **does not match a
+// relative path**. The real scan passes absolute paths so it "looked fine",
+// but that is an implicit dependency.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 与 scan-mojibake.mjs 保持一致的构造方式
+// Construct the skip rules the same way scan-mojibake.mjs does
 const SEG = (name) => new RegExp(`(^|[\\\\/])${name}[\\\\/]`);
 const SKIP = [
   SEG("node_modules"),
@@ -36,19 +39,19 @@ const rel = (p) => path.join(...p);
 const abs = (p) => path.resolve(__dirname, "..", ...p);
 
 const CASES = [
-  // [路径片段, 期望是否跳过, 说明]
-  [["vendor", "soffice", "program", "lib", "idna", "uts46data.py"], true, "内置 LibreOffice 的第三方文件"],
-  [["dist", "installer", "win-unpacked", "resources", "x.py"], true, "打包产物"],
-  [["node_modules", "x", "y.js"], true, "依赖"],
-  [["apps", "desktop", "renderer", "src", "App.tsx"], false, "★ 我们自己的源码，必须扫"],
-  [["scripts", "scan-mojibake.mjs"], false, "★ 我们自己的脚本，必须扫"],
-  [["docs", "01-架构.md"], false, "★ 我们自己的文档，必须扫"],
-  [["README.md"], false, "★ 根目录文件，必须扫"],
+  // [path segments, expect skip?, description]
+  [["vendor", "soffice", "program", "lib", "idna", "uts46data.py"], true, "Third-party files from the bundled LibreOffice"],
+  [["dist", "installer", "win-unpacked", "resources", "x.py"], true, "Packaging artifacts"],
+  [["node_modules", "x", "y.js"], true, "Dependencies"],
+  [["apps", "desktop", "renderer", "src", "App.tsx"], false, "★ Our own source code; must be scanned"],
+  [["scripts", "scan-mojibake.mjs"], false, "★ Our own script; must be scanned"],
+  [["docs", "01-架构.md"], false, "★ Our own document; must be scanned"],
+  [["README.md"], false, "★ Root-level file; must be scanned"],
 ];
 
 let bad = 0;
-console.log("=== scan-mojibake 跳过规则验证（绝对 + 相对路径）===\n");
-console.log("  路径形态                                 期望   绝对  相对");
+console.log("=== scan-mojibake skip-rule verification (absolute + relative paths) ===\n");
+console.log("  Path                                    Expect  Abs   Rel");
 console.log("  " + "─".repeat(68));
 
 for (const [parts, wantSkip, why] of CASES) {
@@ -60,11 +63,11 @@ for (const [parts, wantSkip, why] of CASES) {
   const okR = hitR === wantSkip;
   if (!okA || !okR) bad++;
   const mark = (ok) => (ok ? "✔" : "✖");
-  console.log(`  ${String(parts.join("\\")).slice(0, 38).padEnd(40)} ${(wantSkip ? "跳过" : "保留").padEnd(6)} ${mark(okA)}     ${mark(okR)}   ${why}`);
+  console.log(`  ${String(parts.join("\\")).slice(0, 38).padEnd(40)} ${(wantSkip ? "skip" : "keep").padEnd(6)} ${mark(okA)}     ${mark(okR)}   ${why}`);
 }
 
-console.log(`\n=== 结果：${bad === 0 ? `全部 ${CASES.length} 条通过` : `${bad} 条不符`} ===`);
+console.log(`\n=== Result: ${bad === 0 ? `all ${CASES.length} cases passed` : `${bad} case(s) failed`} ===`);
 if (bad) {
-  console.log("  该跳的没跳 → 会误报；该扫的被跳 → 会漏检真实损坏。两种都必须修。");
+  console.log("  Missed a skip → false positives; wrongly skipped → real corruption missed. Both must be fixed.");
 }
 process.exit(bad === 0 ? 0 : 1);

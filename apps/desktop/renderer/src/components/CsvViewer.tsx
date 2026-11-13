@@ -125,15 +125,15 @@ export default function CsvViewer({ text, name, delimiter: forced }: Props) {
         }}
       >
         <span>
-          <b>{rows.length.toLocaleString()}</b> 行 × {colCount} 列
+          <b>{rows.length.toLocaleString()}</b> rows × {colCount} columns
         </span>
         <span style={{ color: "var(--text-faint)" }}>
-          分隔符 {delimiter === "\t" ? "Tab" : delimiter} · 解析 {parsed.ms}ms · {sizeMB} MB
+          Delimiter {delimiter === "\t" ? "Tab" : delimiter} · parsed in {parsed.ms}ms · {sizeMB} MB
         </span>
         <input
           value={query}
           onChange={(e) => { setQuery(e.target.value); setScrollTop(0); wrapRef.current?.scrollTo(0, 0); }}
-          placeholder="在表格里查找…"
+          placeholder="Find in the table…"
           style={{
             marginLeft: "auto", width: 200, fontSize: 12.5, padding: "3px 8px",
             border: "1px solid var(--bd-strong)", borderRadius: 5,
@@ -142,7 +142,7 @@ export default function CsvViewer({ text, name, delimiter: forced }: Props) {
         />
         {query && (
           <span style={{ color: "var(--accent)" }}>
-            {filtered.length.toLocaleString()} 行匹配
+            {filtered.length.toLocaleString()} matching rows
           </span>
         )}
       </div>
@@ -167,7 +167,7 @@ export default function CsvViewer({ text, name, delimiter: forced }: Props) {
                 overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}
             >
-              {header[i] ?? `列${i + 1}`}
+              {header[i] ?? `Column ${i + 1}`}
             </div>
           ))}
         </div>
@@ -180,7 +180,7 @@ export default function CsvViewer({ text, name, delimiter: forced }: Props) {
         style={{ flex: "1 1 auto", overflow: "auto", position: "relative" }}
       >
         {filtered.length === 0 ? (
-          <div className="tree-empty">没有匹配的行</div>
+          <div className="tree-empty">No matching rows</div>
         ) : (
           <div style={{ height: filtered.length * ROW_H, position: "relative" }}>
             <div style={{ position: "absolute", top: first * ROW_H, left: 0, right: 0 }}>
@@ -236,8 +236,8 @@ export default function CsvViewer({ text, name, delimiter: forced }: Props) {
           background: "var(--bg-secondary)",
         }}
       >
-        虚拟滚动：只渲染可见的 {slice.length} 行（共 {filtered.length.toLocaleString()} 行）
-        {first > 0 && <> · 已滚过 {first.toLocaleString()} 行</>}
+        Virtual scrolling: only the {slice.length} visible rows are rendered (of {filtered.length.toLocaleString()})
+        {first > 0 && <> · {first.toLocaleString()} rows scrolled past</>}
       </div>
     </div>
   );

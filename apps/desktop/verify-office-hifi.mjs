@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Word / Excel 高保真查看验证
+// Word / Excel high-fidelity viewing verification
 //
-// 扩展动机：内置 LibreOffice 后，只有 PPT 用上它是浪费。
-//   · .docx 原来的原生渲染器只画文字与表格，**图片和复杂排版丢失**
-//   · .xlsx 原来**根本没有查看器**（只识别不渲染）
+// Motivation for extending this: after bundling LibreOffice, only PPT using it was wasteful.
+//   · .docx's old native renderer only drew text and tables; **images and complex layout were lost**
+//   · .xlsx previously **had no viewer at all** (recognized but not rendered)
 //
-// 要证明：
-//   1. .docx 走高保真（PDF 画布），而不是原生渲染器
-//   2. .xlsx 能打开（原来是"不支持的格式"）
-//   3. 关掉开关后 .docx 退回原生渲染器（功能可退）
-//   4. 没有引擎时不崩
+// What to prove:
+//   1. .docx goes through high fidelity (PDF canvas), not the native renderer
+//   2. .xlsx can open (previously "不支持的格式" (unsupported format))
+//   3. after turning off the switch, .docx falls back to the native renderer (feature can be rolled back)
+//   4. no crash when the engine is missing
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,7 +26,7 @@ function check(name, ok, detail = "") {
   console.log(`  [${ok ? "PASS" : "FAIL"}] ${name}${detail ? "  " + detail : ""}`);
 }
 
-/** 找用户真实的样本 */
+/** Find the user's real samples */
 function findSample(exts, maxMB = 30) {
   const found = {};
   const walk = (dir, depth) => {
@@ -41,7 +41,7 @@ function findSample(exts, maxMB = 30) {
       try {
         const sz = fs.statSync(p).size;
         if (sz > 10 * 1024 && sz < maxMB * 1024 * 1024) found[ext] = p;
-      } catch { /* 忽略 */ }
+      } catch { /* ignore */ }
     }
   };
   for (const r of ["D:\\Users\\LINKIT\\Desktop", "D:\\Users\\LINKIT\\Documents"]) walk(r, 0);
@@ -49,14 +49,14 @@ function findSample(exts, maxMB = 30) {
 }
 
 const samples = findSample([".docx", ".xlsx", ".doc"]);
-console.log("=== Word / Excel 高保真验证 ===\n");
+console.log("=== Word / Excel high-fidelity verification ===\n");
 for (const [k, v] of Object.entries(samples)) {
   console.log(`  ${k}: ${path.basename(v)} (${(fs.statSync(v).size / 1024 / 1024).toFixed(1)} MB)`);
 }
 console.log();
 
 if (!samples[".docx"] || !samples[".xlsx"]) {
-  console.log("缺样本文件，跳过（造假样本证明不了什么）");
+  console.log("missing sample files, skipping (fabricated samples prove nothing)");
   process.exit(0);
 }
 
@@ -79,7 +79,7 @@ const page = await app.firstWindow();
 const errs = [];
 page.on("pageerror", (e) => errs.push(String(e)));
 
-/** 等 PDF 画布出现（转换要几秒） */
+/** Wait for the PDF canvas to appear (conversion takes a few seconds) */
 async function waitForPdf(maxMs = 90000) {
   let waited = 0;
   let st = null;
@@ -106,34 +106,34 @@ try {
   console.log("── Word (.docx) ──");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), localDocx);
   const docxState = await waitForPdf();
-  check("★ .docx 走高保真（PDF 画布，不是原生渲染器）", docxState.canvas,
-    docxState.canvas ? "" : `首屏：${docxState.body.replace(/\n/g, " | ").slice(0, 100)}`);
-  // ⚠️ 必须先点开「信息」页签 —— 那条信息只在信息面板里显示。
-  //    第一次没点，直接查 document.body.innerText 查不到，是假失败。
+  check("★ .docx uses high fidelity (PDF canvas, not the native renderer)", docxState.canvas,
+    docxState.canvas ? "" : `first screen: ${docxState.body.replace(/\n/g, " | ").slice(0, 100)}`);
+  // ⚠️ Must first open the "信息" (Info) tab — that text only shows in the Info panel.
+  //    If you don't click it first and query document.body.innerText directly, it won't be found (a false failure).
   await page.locator("button", { hasText: "信息" }).first().click();
   await page.waitForTimeout(600);
   const docxInfo = await page.evaluate(() => document.body.innerText);
-  check("★ 信息面板注明由 .docx 转换（不冒充原始 PDF）",
+  check("★ Info panel notes it was converted from .docx (doesn't impersonate the original PDF)",
     docxInfo.includes("由 .docx 转换"),
-    docxInfo.includes("高保真") ? "（有高保真字样）" : "信息面板里没有转换说明");
+    docxInfo.includes("高保真") ? "(has 高保真 (high-fidelity) text)" : "Info panel has no conversion note");
 
   // ---- 2. .xlsx ----
   console.log("\n── Excel (.xlsx) ──");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), localXlsx);
   const xlsxState = await waitForPdf();
-  check("★ .xlsx 能打开（原来是「不支持的格式」）", xlsxState.canvas,
-    xlsxState.canvas ? "" : `首屏：${xlsxState.body.replace(/\n/g, " | ").slice(0, 100)}`);
+  check("★ .xlsx can open (previously '不支持的格式' (unsupported format))", xlsxState.canvas,
+    xlsxState.canvas ? "" : `first screen: ${xlsxState.body.replace(/\n/g, " | ").slice(0, 100)}`);
 
-  // ---- 3. 旧版 .doc ----
+  // ---- 3. legacy .doc ----
   if (fs.existsSync(localDoc)) {
-    console.log("\n── 旧版 .doc ──");
+    console.log("\n── legacy .doc ──");
     await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), localDoc);
     const docState = await waitForPdf();
-    check("★ 旧版 .doc 也走高保真", docState.canvas, "");
+    check("★ legacy .doc also uses high fidelity", docState.canvas, "");
   }
 
-  // ---- 4. 关掉开关 → .docx 退回原生渲染器 ----
-  console.log("\n── 关闭开关后应退回原生渲染器 ──");
+  // ---- 4. turning off the switch → .docx falls back to the native renderer ----
+  console.log("\n── after turning off the switch, should fall back to the native renderer ──");
   await page.locator('.ribbon-btn[title*="高保真"]').first().click();
   await page.waitForTimeout(400);
   const localDocx2 = path.join(vault, "文档2.docx");
@@ -142,21 +142,21 @@ try {
   await page.waitForTimeout(4000);
   const fallback = await page.evaluate(() => ({
     canvas: Boolean(document.querySelector("canvas")),
-    // 原生渲染器的标志：有 docx 容器
+    // native renderer marker: has a docx container
     native: Boolean(document.querySelector(".docx-viewer, .docx-body")) || document.body.innerText.length > 100,
   }));
-  check("★ 关掉开关后 .docx 退回原生渲染器（不再有 PDF 画布）", !fallback.canvas,
-    `画布=${fallback.canvas}`);
+  check("★ after turning off the switch, .docx falls back to the native renderer (no more PDF canvas)", !fallback.canvas,
+    `canvas=${fallback.canvas}`);
 
   await page.screenshot({ path: path.join(OUT, "ui-office-hifi.png") });
-  check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("renderer process has no JS errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
   await app.close();
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((x) => x.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== result: ${passed}/${results.length} passed ===`);
 for (const x of results) if (!x.pass) console.log(`  FAIL ${x.name}: ${x.detail}`);
-console.log(`\n截图：产出/ui-office-hifi.png`);
+console.log(`\nscreenshot: 产出/ui-office-hifi.png`);
 process.exit(passed === results.length ? 0 : 1);

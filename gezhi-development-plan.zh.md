@@ -142,8 +142,8 @@ Noto Serif SC  → NotoSerifSC-VF.ttf   Weight: 200-900，Default: 200
 | 层 | 选型 | 理由 / 备注 |
 | --- | --- | --- |
 | 桌面壳 | **Electron + electron-vite + React 19 + TypeScript** | 界面技术栈就是 Web；PDF.js、CodeMirror、图谱库全都为浏览器而生；缺点（体积）已被「本就要打包 Python/TeX」抵消。[Tauri vs Electron 的现实差异](https://devtoolpicks.com/blog/tauri-vs-electron-indie-hackers-2026) |
-| **智能内核** | **DeepSeek Harness（DSH）headless 子进程 + NDJSON 事件流** | 已实测跑通（3.1s、8 类事件）；复用其账号、沙箱、会话、压缩、skills、MCP、离线语音。详见 [`docs/01-智能层选型-DSH作为Agent内核.md`](docs/01-智能层选型-DSH作为Agent内核.md) |
-| 文本编辑内核 | **CodeMirror 6**（6.43.13 / MIT）**已通过中文组合输入实测** | **决定性依据是中文输入法**:CodeMirror 的 IME 相关 issue **全部 closed**（含 Live Preview 核心路径上的组合输入乱码 #1650/#1654/#1688，已独立复核状态与关闭时间）；而 **Monaco 的 #2199（中文 IME 与补全冲突）、#4805（IME 时 decoration 不刷新）仍 open**，恰好卡在格致要用的补全与装饰上；TipTap #7271（中文 IME 重复字符）也仍 open。**本机用 CDP 输入法接口实测 8/8 通过**（含在 `[[ ]]`、`$公式$`、`#标签` 内部的组合输入与撤销粒度），详见 [`poc/ime/测试结论.md`](poc/ime/测试结论.md)。⚠️ **代价要计入排期:Live Preview 装饰、wikilink 原子化、自动补全全部自研,约 2–4 人月**；⚠️ **`[[` 自动补全与 IME 的交互尚未验证**（正是 Monaco 挂掉的地方），是 P1 必须专项验证的风险点 |
+| **智能内核** | **DeepSeek Harness（DSH）headless 子进程 + NDJSON 事件流** | 已实测跑通（3.1s、8 类事件）；复用其账号、沙箱、会话、压缩、skills、MCP、离线语音。详见 [`docs/01-intelligence-layer-dsh-as-agent-core.md`](docs/01-intelligence-layer-dsh-as-agent-core.md) |
+| 文本编辑内核 | **CodeMirror 6**（6.43.13 / MIT）**已通过中文组合输入实测** | **决定性依据是中文输入法**:CodeMirror 的 IME 相关 issue **全部 closed**（含 Live Preview 核心路径上的组合输入乱码 #1650/#1654/#1688，已独立复核状态与关闭时间）；而 **Monaco 的 #2199（中文 IME 与补全冲突）、#4805（IME 时 decoration 不刷新）仍 open**，恰好卡在格致要用的补全与装饰上；TipTap #7271（中文 IME 重复字符）也仍 open。**本机用 CDP 输入法接口实测 8/8 通过**（含在 `[[ ]]`、`$公式$`、`#标签` 内部的组合输入与撤销粒度），详见 [`poc/ime/test-conclusions.md`](poc/ime/test-conclusions.md)。⚠️ **代价要计入排期:Live Preview 装饰、wikilink 原子化、自动补全全部自研,约 2–4 人月**；⚠️ **`[[` 自动补全与 IME 的交互尚未验证**（正是 Monaco 挂掉的地方），是 P1 必须专项验证的风险点 |
 | Markdown 解析 | **双解析器分工**:编辑路径 `@lezer/markdown`；索引路径 `micromark` + `mdast-util-from-markdown`；渲染路径 `markdown-it` | `【事实】` `@lezer/markdown` README 明确承认为换取增量解析**不校验链接引用**（`[a][b]` 即使 `[b]` 未声明也当链接）→ **链接图索引绝不能依赖 Lezer，否则图谱里会长出幽灵边**。风险：双方言漂移 → 把 wikilink 识别规则抽成两路共用的独立模块 |
 | wikilink 解析 | **必须自写插件** | `【事实】` 现成 npm 包全部停滞：`remark-wiki-link`(2023-10)、`markdown-it-wikilinks`(2023-08)、`micromark-extension-wiki-link`(**2021-01**)。反面是好事：别名/嵌入/块引用的语义本就是产品逻辑 |
 | 图谱内核 | **`d3-force` 布局（Web Worker）+ 自研分层 Canvas 2D 渲染**；备选 sigma.js、Cytoscape.js/G6 | `【事实】` Obsidian 官方文档原文：图谱用 `<canvas>` 和 WebGL —— **它没用任何图谱库**；其设置面板的 Center/Repel/Link/Link distance **四旋钮逐一对应 `forceCenter`/`forceManyBody`/`forceLink.strength`/`forceLink.distance`**（同一套力模型），而 `Text fade threshold` 与 `Animate` **在任何现成库里都没有等价物**。切换条件见下 |
@@ -364,7 +364,7 @@ Noto Serif SC  → NotoSerifSC-VF.ttf   Weight: 200-900，Default: 200
 - [ ] 新建 20 篇笔记、30 个 `[[双链]]`、5 个标签，重启后全部保留、布局还原。
 - [ ] **中文输入法连续输入 200 字无丢字、无光标跳动**（这是选型的第一优先级，必须真机手测）。
 - [ ] **把 PoC 的自动化 IME 测试改成 CI 回归测试并跑通**（`poc/ime/cdp_ime_final.py` 已可用；升级 CodeMirror 版本时必跑，用于立刻发现组合输入行为退化）。
-- [ ] **`[[` 自动补全与 IME 共存** —— ✅ 已在 PoC 阶段专项验证通过（R13，5/5），见 [`poc/ime/R13结论-补全与输入法.md`](poc/ime/R13结论-补全与输入法.md)。**P1 落地时必须遵守规约：所有补全源首行判 `context.view?.composing`**，并把这套测试接进 CI。
+- [ ] **`[[` 自动补全与 IME 共存** —— ✅ 已在 PoC 阶段专项验证通过（R13，5/5），见 [`poc/ime/r13-conclusion-autocomplete-and-ime.md`](poc/ime/r13-conclusion-autocomplete-and-ime.md)。**P1 落地时必须遵守规约：所有补全源首行判 `context.view?.composing`**，并把这套测试接进 CI。
 - [ ] 输入 5000 字文档，滚动与输入不卡（帧率 ≥ 50fps）。
 - [ ] 删文件进 `.gezhi/trash`，可一键恢复。
 - [ ] `[[` 补全在中文标题与中英混排标题下都能正确过滤。
@@ -452,7 +452,7 @@ DSH 的 Agent 循环：读源文件 → 生成 Markdown → 调用格致注册�
 功能：
 - **格致侧**：导出面板（Markdown / Word / PDF / 带样式 HTML，多选但**默认为空**，必须用户点选）、模板管理（讲义、试卷、报告）、导出结果进 `产出/` 并回链、导出前预览、失败时的可读错误。
 - **DSH 侧**：注册格致技能（`export-docx` / `export-pdf`），让 Agent 能自主调用；复用 DSH 的 `office-skills` 产出 docx/xlsx/pptx，其 `scripts/check_office.py` 直接用来做产物校验。
-- **不重复造**：DSH 已随包提供 Python 3.12 + python-docx/openpyxl/python-pptx/Pillow/lxml/XlsxWriter 与 `libreoffice-kit`（`【实测】`，见 `docs/00-环境勘察报告.md`）→ **格致不需要自己搭 Python 环境**。
+- **不重复造**：DSH 已随包提供 Python 3.12 + python-docx/openpyxl/python-pptx/Pillow/lxml/XlsxWriter 与 `libreoffice-kit`（`【实测】`，见 `docs/00-environment-survey.md`）→ **格致不需要自己搭 Python 环境**。
 - ⚠️ **待补**：`Markdown → docx` 的管线目前只有 Python 侧（python-docx），需要写一个"Markdown AST → docx 元素"的转换器（标题层级、列表、表格、公式图片化、代码块、提示框样式）。这是 P5 的主要工作量。
 
 验收：
@@ -677,7 +677,7 @@ DSH 的 Agent 循环：读源文件 → 生成 Markdown → 调用格致注册�
 | R10 | **范围失控** | 永远做不完 | 严格按 M1→M10；每阶段可停可演示；P11 不排期 |
 | R11 | **AI 生成文档的中文排版** | 交付物难看 | 模板先行（P5 之前先定模板），每类导出都有「样板对照」验收 |
 | R12 | **比赛/答辩说不清原创性** | 评审风险 | 文档中明确：DSH 为 MIT 许可引擎（复用），格致自研为知识库/题库组卷/费曼评分/日历规划/语音对练/界面与数据模型 |
-| R13 | **`[[` 自动补全与中文输入法的交互** —— 这是 Monaco 挂掉的地方（#2199），也是格致最核心的编辑体验 | 补全与 IME 抢事件，导致输入重复或候选词被打断 | ✅ **已验证并已解决**（5/5 通过，见 [`poc/ime/R13结论-补全与输入法.md`](poc/ime/R13结论-补全与输入法.md)）。**实测发现 CodeMirror 的 `autocompletion` 在 `view.composing === true` 时仍会调用补全源** —— 必须在每个自定义补全源首行写 `if (context.view?.composing) return null;`。**这条升级为编码规约：新写任何补全源，第一行就是这个判断。** |
+| R13 | **`[[` 自动补全与中文输入法的交互** —— 这是 Monaco 挂掉的地方（#2199），也是格致最核心的编辑体验 | 补全与 IME 抢事件，导致输入重复或候选词被打断 | ✅ **已验证并已解决**（5/5 通过，见 [`poc/ime/r13-conclusion-autocomplete-and-ime.md`](poc/ime/r13-conclusion-autocomplete-and-ime.md)）。**实测发现 CodeMirror 的 `autocompletion` 在 `view.composing === true` 时仍会调用补全源** —— 必须在每个自定义补全源首行写 `if (context.view?.composing) return null;`。**这条升级为编码规约：新写任何补全源，第一行就是这个判断。** |
 
 ---
 
@@ -702,7 +702,7 @@ DSH 的 Agent 循环：读源文件 → 生成 Markdown → 调用格致注册�
 2. 写 `packages/db/schema.sql`（§4.2 全表）+ 建库脚本 + **trigram 断言测试**。
 3. 写 `packages/dsh-bridge`：`spawnDsh({task, sessionId, cwd})` 返回异步事件流；单测用真实 `dsh headless --json` 跑一次。
 4. 起 Electron 空壳 + 三栏布局 + 库选择器。
-5. 把 [`docs/00-环境勘察报告.md`](docs/00-环境勘察报告.md) 的待验证项逐个消掉（`better-sqlite3`、`sqlite-vec`、腾讯云账号）。
+5. 把 [`docs/00-environment-survey.md`](docs/00-environment-survey.md) 的待验证项逐个消掉（`better-sqlite3`、`sqlite-vec`、腾讯云账号）。
 6. 吊销并轮换明文 API Key，接入 `safeStorage`。
 7. 两行命令消掉不确定项：`node -e "console.log(require('@fullcalendar/core/locales/zh-cn'))"`（确认 FullCalendar 7 是否内置简中 locale）、`node -e "console.log(require('node:sqlite').DatabaseSync ? 'ok' : 'no')"`（确认 SQLite ≥ 3.51.3，避 WAL-reset 漏洞）。
 
@@ -712,29 +712,29 @@ DSH 的 Agent 循环：读源文件 → 生成 Markdown → 调用格致注册�
 
 | 文件 | 内容 |
 | --- | --- |
-| [`docs/00-环境勘察报告.md`](docs/00-环境勘察报告.md) | 本机工具链、已有素材、工程约束（实测） |
-| [`docs/01-智能层选型-DSH作为Agent内核.md`](docs/01-智能层选型-DSH作为Agent内核.md) | 为什么以及如何把 DSH 当 Agent 内核（含事件流实测） |
-| [`docs/02-存储与检索实测.md`](docs/02-存储与检索实测.md) | `node:sqlite` / FTS5 / 中文分词实测结论 |
-| [`docs/03-DSH集成实测-写作助手.md`](docs/03-DSH集成实测-写作助手.md) | DSH 受控读写 Vault 的实测（工具调用事件、diff 素材、编码坑） |
+| [`docs/00-environment-survey.md`](docs/00-environment-survey.md) | 本机工具链、已有素材、工程约束（实测） |
+| [`docs/01-intelligence-layer-dsh-as-agent-core.md`](docs/01-intelligence-layer-dsh-as-agent-core.md) | 为什么以及如何把 DSH 当 Agent 内核（含事件流实测） |
+| [`docs/02-storage-and-retrieval-measurements.md`](docs/02-storage-and-retrieval-measurements.md) | `node:sqlite` / FTS5 / 中文分词实测结论 |
+| [`docs/03-dsh-integration-writing-assistant.md`](docs/03-dsh-integration-writing-assistant.md) | DSH 受控读写 Vault 的实测（工具调用事件、diff 素材、编码坑） |
 | `docs/templates/dsh-headless-profile.dump.yml` | DSH headless profile 完整插件树（379 行，实测导出） |
 | `docs/templates/dsh-headless-events.sample.ndjson` | DSH headless 事件流样本 |
 | `docs/templates/_probe_node_sqlite.cjs`、`_probe_fts_cjk.cjs` | 可复跑的存储探针 |
-| [`research/01-编辑器与图谱调研.md`](research/01-编辑器与图谱调研.md) | 编辑器内核 IME 证据链、图谱引擎对比、Obsidian 交互拆解、Vault 路径与 6 份 JSON 示例、许可红旗、布局/命令面板选型（**已完成，1083 行**） |
-| [`research/01b-编辑器与图谱内核实测.md`](research/01b-编辑器与图谱内核实测.md) | CodeMirror 6 / sigma / graphology / KaTeX 的**本机装机实测**与 sigma 主进程不可加载的坑（**已完成**） |
-| [`research/02-文档内核与打包调研.md`](research/02-文档内核与打包调研.md) | PDF/docx 内核、三条导出管线、依赖打包策略、桌面壳取舍（**已完成**） |
+| [`research/01-editor-and-graph-research.md`](research/01-editor-and-graph-research.md) | 编辑器内核 IME 证据链、图谱引擎对比、Obsidian 交互拆解、Vault 路径与 6 份 JSON 示例、许可红旗、布局/命令面板选型（**已完成，1083 行**） |
+| [`research/01b-editor-and-graph-core-benchmark.md`](research/01b-editor-and-graph-core-benchmark.md) | CodeMirror 6 / sigma / graphology / KaTeX 的**本机装机实测**与 sigma 主进程不可加载的坑（**已完成**） |
+| [`research/02-document-engine-and-packaging-research.md`](research/02-document-engine-and-packaging-research.md) | PDF/docx 内核、三条导出管线、依赖打包策略、桌面壳取舍（**已完成**） |
 | `research/03-AI-Agent集成调研.md` | Agent 编排、DeepSeek 对接、MCP、安全（大部分已由 docs/01 覆盖） |
-| [`research/04-教材与题库数据源调研.md`](research/04-教材与题库数据源调研.md) | 教材来源与合法性、免鉴权 API 实测规模、OCR/版面分析/双索引管道、题源三分类、组卷与导出、存储分层、字段级 schema（**已完成，1369 行 / 116 个实测 URL**） |
-| [`research/05-数字人与费曼评分调研.md`](research/05-数字人与费曼评分调研.md) | 费曼 rubric / JSON Schema / 缺口诊断、腾讯云 ASR-TTS 实测参数、GIF 数字人四方案、延迟预算、隐私合规（**已完成，1011 行**） |
+| [`research/04-textbook-and-question-bank-sources.md`](research/04-textbook-and-question-bank-sources.md) | 教材来源与合法性、免鉴权 API 实测规模、OCR/版面分析/双索引管道、题源三分类、组卷与导出、存储分层、字段级 schema（**已完成，1369 行 / 116 个实测 URL**） |
+| [`research/05-avatars-and-feynman-scoring-research.md`](research/05-avatars-and-feynman-scoring-research.md) | 费曼 rubric / JSON Schema / 缺口诊断、腾讯云 ASR-TTS 实测参数、GIF 数字人四方案、延迟预算、隐私合规（**已完成，1011 行**） |
 | `research/06-日历与计划模块调研.md` | 日历库选型（FullCalendar MIT 边界）、计划数据模型、AI 拆解 schema、提醒双路径、ECharts（**已完成，896 行**） |
-| [`2026全球青少年人工智能未來創新競賽_澳門中學生賽區_章程摘要.md`](2026全球青少年人工智能未來創新競賽_澳門中學生賽區_章程摘要.md) | 比赛章程摘要（若要以此作品参赛可复用） |
+| [`competition-charter-summary-macau-secondary-2026.zh.md`](competition-charter-summary-macau-secondary-2026.zh.md) | 比赛章程摘要（若要以此作品参赛可复用） |
 
 **PoC（可运行代码）**
 
 | 文件 | 内容 |
 | --- | --- |
-| [`poc/ime/测试结论.md`](poc/ime/测试结论.md) | **中文输入法自动测试结论（8/8 通过）** —— 含"测到了什么/测不到什么"的诚实边界说明，以及过程中我自己踩的 4 个坑 |
-| [`poc/ime/测试清单.md`](poc/ime/测试清单.md) | 真人手测清单（15–20 分钟，6 组用例，含"关掉装饰再测一遍"的对照实验） |
+| [`poc/ime/test-conclusions.md`](poc/ime/test-conclusions.md) | **中文输入法自动测试结论（8/8 通过）** —— 含"测到了什么/测不到什么"的诚实边界说明，以及过程中我自己踩的 4 个坑 |
+| [`poc/ime/test-checklist.md`](poc/ime/test-checklist.md) | 真人手测清单（15–20 分钟，6 组用例，含"关掉装饰再测一遍"的对照实验） |
 | [`poc/ime/cdp_ime_final.py`](poc/ime/cdp_ime_final.py) | CDP 输入法自动测试（最终版，可直接改造成 CI 回归） |
 | [`poc/ime/cdp_undo_test2.py`](poc/ime/cdp_undo_test2.py) | 撤销粒度专项测试 |
 | [`poc/ime/src/main.js`](poc/ime/src/main.js) | CodeMirror 6 + Live Preview 装饰 + 6 项自动检查的最小实现 |
-| [`poc/ime/启动PoC.ps1`](poc/ime/启动PoC.ps1) | 一键启动（装依赖 → 起服务 → 开 Chrome） |
+| [`poc/ime/start-poc.ps1`](poc/ime/start-poc.ps1) | 一键启动（装依赖 → 起服务 → 开 Chrome） |

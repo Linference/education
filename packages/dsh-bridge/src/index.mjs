@@ -1,23 +1,23 @@
-// 格致 · DSH 桥
+// Gezhi · DSH bridge
 //
-// 职责：把 `dsh headless --json <任务>` 封装成一个可控的异步事件流。
-// 设计依据全部来自实测（见 docs/01、docs/03）：
-//   - 必须走 dsh.cmd 包装器：直接调 Electron 主程序时，含空格的路径会被拆开
-//   - stdout 必须显式按 UTF-8 解码，否则中文乱码
-//   - NDJSON 里可能有被 ANSI 转义污染的行 → 解析要宽容，失败只计数不抛
-//   - cwd 就是沙箱边界（DSH 的 sandbox-policy.workspaceRoot = process.cwd()）
-//   - 会话续聊靠 --session-id
+// Responsibility: wrap `dsh headless --json <task>` as a controllable asynchronous event stream.
+// All design decisions come from measurements (see docs/01, docs/03):
+//   - Must go through the dsh.cmd wrapper: calling the Electron main program directly splits paths containing spaces
+//   - stdout must be explicitly decoded as UTF-8, otherwise Chinese is garbled
+//   - NDJSON may contain lines polluted by ANSI escapes -> parse leniently, count failures instead of throwing
+//   - cwd is the sandbox boundary (DSH's sandbox-policy.workspaceRoot = process.cwd())
+//   - Session continuation relies on --session-id
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 
-/** DSH 事件类型（实测全集）。未知类型一律忽略，保证向前兼容。 */
+/** DSH event types (the complete set we measured). Unknown types are always ignored to keep forward compatibility. */
 export const DSH_EVENT_TYPES = ["session", "status", "thinking", "text", "final", "tool_call", "tool_result"];
 
 const ANSI_RE = /\u001b\[[0-9;?]*[A-Za-z]/g;
 
-/** 定位 dsh 可执行文件。 */
+/** Locate the dsh executable. */
 export function resolveDshBin() {
   const candidates = [];
   if (process.env.GEZHI_DSH_BIN) candidates.push(process.env.GEZHI_DSH_BIN);
@@ -32,38 +32,38 @@ export function resolveDshBin() {
     try {
       if (fs.existsSync(c)) return c;
     } catch {
-      /* 忽略 */
+      /* ignore */
     }
   }
-  // 退路：交给 PATH
+  // Fallback: hand it to PATH
   return "dsh";
 }
 
 /**
- * 把 dsh.cmd 换成它真正调用的东西。
+ * Replace dsh.cmd with what it actually invokes.
  *
- * 为什么要这么做（两条实测教训）：
- *   1. Node 24 起不允许直接 spawn `.cmd` 文件（报 EINVAL）；
- *      旧办法是 shell:true，但那会让用户输入的任务文本经过 cmd.exe 解析，
- *      文本里出现 & | > 等字符就可能被当成命令执行 —— 对一个"把学生的话
- *      原样发给 AI"的应用来说这是不可接受的注入面。
- *   2. dsh.cmd 内部其实就是：设 ELECTRON_RUN_AS_NODE=1，用 Electron 主程序跑 cli.js。
- *      我们完全可以直接照做，绕开 shell。
+ * Why this is done (two measured lessons):
+ *   1. Since Node 24, spawning `.cmd` files directly is not allowed (it reports EINVAL);
+ *      the old workaround was shell:true, but that makes user-supplied task text go through cmd.exe parsing,
+ *      so characters like & | > in the text may be executed as commands — an unacceptable injection surface
+ *      for an application that "sends the student's words to the AI verbatim".
+ *   2. dsh.cmd internally just sets ELECTRON_RUN_AS_NODE=1 and runs cli.js with the Electron main program.
+ *      We can do exactly the same ourselves, bypassing the shell.
  */
 export function resolveLaunchSpec(bin = resolveDshBin()) {
   const lower = String(bin).toLowerCase();
 
-  // 直接给了 js 入口
+  // A js entry point was given directly
   if (lower.endsWith(".js") || lower.endsWith(".mjs")) {
     return { exe: process.execPath, args: [bin], env: {} };
   }
 
-  // 给了 dsh.cmd → 直接照抄它内部干的事（见 dsh.cmd 原文）：
+  // dsh.cmd was given -> copy exactly what it does internally (see the original dsh.cmd):
   //   set ELECTRON_RUN_AS_NODE=1
   //   "%~dp0..\..\..\..\DeepSeek Harness.exe" --expose-internals "%~dp0..\..\..\app.asar\dsh\...\cli.js" %*
-  // 注意 %~dp0 已经是 bin\ 结尾，所以：
-  //   ..\..\..\..      → 从 bin 往上四级 = runtime  ← 不是三级，这里容易数错
-  //   ..\..\..         → 往上三级 = runtime\cli
+  // Note that %~dp0 already ends with bin\, so:
+  //   ..\..\..\..      -> four levels up from bin = runtime  <- not three, easy to miscount here
+  //   ..\..\..         -> three levels up = runtime\cli
   if (lower.endsWith(".cmd") || lower.endsWith(".bat")) {
     const cliBinDir = path.dirname(bin);                    // ...\runtime\cli\bin
     const appExe = path.resolve(cliBinDir, "..", "..", "..", "..", "DeepSeek Harness.exe");
@@ -71,8 +71,8 @@ export function resolveLaunchSpec(bin = resolveDshBin()) {
       cliBinDir, "..", "..", "..", "app.asar", "dsh", "node_modules",
       "@deepseek-ai", "dsh-desktop-host", "lib", "cli.js"
     );
-    // 不能用 fs.existsSync 判断 cli.js：它在 asar 归档里，Node 看不见，只有 Electron 能读。
-    // 所以判断 asar 这个**目录**是否存在。
+    // Cannot use fs.existsSync on cli.js: it is inside the asar archive, invisible to Node; only Electron can read it.
+    // So check whether the asar **directory** exists.
     const asarMarker = path.resolve(cliBinDir, "..", "..", "..", "app.asar");
     if (fs.existsSync(appExe) && fs.existsSync(asarMarker)) {
       return {
@@ -88,7 +88,7 @@ export function resolveLaunchSpec(bin = resolveDshBin()) {
   return { exe: bin, args: [], env: {} };
 }
 
-/** 解析一行 NDJSON。宽容模式：坏行返回 null。 */
+/** Parse one NDJSON line. Lenient mode: a bad line returns null. */
 export function parseEventLine(line) {
   const cleaned = String(line).replace(ANSI_RE, "").trim();
   if (!cleaned || !cleaned.startsWith("{")) return null;
@@ -101,18 +101,18 @@ export function parseEventLine(line) {
 }
 
 /**
- * 跑一次 headless 任务。
+ * Run one headless task.
  *
  * @param {object} opts
- * @param {string}   opts.task       任务文本
- * @param {string}   [opts.cwd]      工作目录（= 沙箱边界，务必设成当前 Vault）
- * @param {string}   [opts.sessionId] 续聊已有会话
- * @param {string}   [opts.profile]  默认 headless
- * @param {AbortSignal} [opts.signal] 取消
- * @returns {AsyncGenerator<object>} 逐个产出解析后的事件
+ * @param {string}   opts.task       Task text
+ * @param {string}   [opts.cwd]      Working directory (= sandbox boundary; always set it to the current vault)
+ * @param {string}   [opts.sessionId] Continue an existing session
+ * @param {string}   [opts.profile]  Defaults to headless
+ * @param {AbortSignal} [opts.signal] Cancel
+ * @returns {AsyncGenerator<object>} Yields parsed events one at a time
  */
 export async function* runHeadless({ task, cwd = process.cwd(), sessionId, profile = "headless", signal, bin } = {}) {
-  if (signal?.aborted) throw new Error('任务已停止');
+  if (signal?.aborted) throw new Error('Task already stopped');
   const spec = resolveLaunchSpec(bin);
   const args = [...spec.args, "--profile", profile, "headless", "--json"];
   if (sessionId) args.push("--session-id", sessionId);
@@ -122,11 +122,11 @@ export async function* runHeadless({ task, cwd = process.cwd(), sessionId, profi
     cwd,
     windowsHide: true,
     env: { ...process.env, ...spec.env },
-    // 只有反解失败时才走 shell；正常情况下任务文本不经过 cmd.exe
+    // Only fall back to the shell when resolution fails; normally the task text never goes through cmd.exe
     shell: Boolean(spec.viaShell),
-    stdio: ["ignore", "pipe", "pipe"], // 不要用 exec + pipe 捕获（受限沙箱下会 EPERM）
+    stdio: ["ignore", "pipe", "pipe"], // do not use exec + pipe capture (it gives EPERM in restricted sandboxes)
   });
-  child.stdout.setEncoding("utf8"); // 必须显式 UTF-8，否则中文乱码
+  child.stdout.setEncoding("utf8"); // must be explicitly UTF-8, otherwise Chinese is garbled
   child.stderr.setEncoding("utf8");
 
   let stderrBuf = "";
@@ -176,11 +176,11 @@ export async function* runHeadless({ task, cwd = process.cwd(), sessionId, profi
       const line = queue.shift();
       const ev = parseEventLine(line);
       if (ev) yield ev;
-      // 坏行直接丢弃；调用方可以通过 collectRun 拿到统计
+      // Bad lines are dropped; callers can get statistics via collectRun
     }
     const info = await finished;
     if (info.code !== 0) {
-      throw new Error(`dsh 退出码 ${info.code}\n${info.stderr.slice(-800)}`);
+      throw new Error(`dsh exited with code ${info.code}\n${info.stderr.slice(-800)}`);
     }
   } finally {
     signal?.removeEventListener("abort", onAbort);
@@ -189,7 +189,7 @@ export async function* runHeadless({ task, cwd = process.cwd(), sessionId, profi
 }
 
 /**
- * 跑一次任务并汇总结果（常用场景：要最终答案 + 用量 + 工具调用记录）。
+ * Run one task and summarize the result (a common case: wanting the final answer + usage + tool-call records).
  */
 export async function collectRun({ task, cwd, sessionId, signal, bin } = {}) {
   const result = {
@@ -242,7 +242,7 @@ export async function collectRun({ task, cwd, sessionId, signal, bin } = {}) {
 }
 
 /**
- * 长期会话句柄：便于在格致里做"同一个学生的同一门课"这种连续对话。
+ * Long-lived session handle: makes continuous conversations like "the same student's same course" easy in Gezhi.
  */
 export class DshSession extends EventEmitter {
   constructor({ cwd, sessionId = null, bin } = {}) {
@@ -280,7 +280,7 @@ export class DshSession extends EventEmitter {
   }
 }
 
-/** 健康检查：DSH 是否可用、版本信息。 */
+/** Health check: whether DSH is usable, plus version information. */
 export async function healthCheck({ bin } = {}) {
   const spec = resolveLaunchSpec(bin);
   return new Promise((resolve) => {

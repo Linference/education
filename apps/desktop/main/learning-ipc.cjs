@@ -19,14 +19,14 @@ function registerLearning(ipcMain, app) {
     byIds: p => { bankDb ||= bank.openBankDb(path.join(app.getPath('userData'), 'bank.db')); return bank.getQuestionsByIds(bankDb, p); },
   };
   const wrap = fn => async (_event, p = {}) => {
-    try { if (typeof p.vault !== 'string') throw new Error('请先打开资料库'); const real = assertInsideVault(p.vault, { mustExist: true }); if (!fs.statSync(real).isDirectory()) throw new Error('资料库路径无效'); return await fn({ ...p, vault: real }); }
+    try { if (typeof p.vault !== 'string') throw new Error('Please open a library first'); const real = assertInsideVault(p.vault, { mustExist: true }); if (!fs.statSync(real).isDirectory()) throw new Error('Invalid library path'); return await fn({ ...p, vault: real }); }
     catch (e) { return { ok: false, error: e.message }; }
   };
   ipcMain.handle('learning:catalog', wrap(p => learning.catalog(open(), bankOps, p.vault, p.includeActivityId, p.includeExamples === true)));
   ipcMain.handle('learning:material', wrap(async p => {
     const filePath = assertInsideVault(p.path, { mustExist: true });
     const relative = path.relative(p.vault, filePath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('资料不在指定资料库中。');
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('The material is not in the specified library.');
     const result = await material.readMaterial({ filePath, draftText: p.draftText, pageStart: p.pageStart, pageEnd: p.pageEnd });
     // A library switch while parsing must not save under the new library.
     assertInsideVault(p.vault, { mustExist: true });
@@ -55,13 +55,13 @@ function registerLearning(ipcMain, app) {
   ipcMain.handle('learning:annotate', wrap(async p => {
     if (p.observation === undefined) return learning.annotate(open(), p);
     const row = open().prepare('SELECT * FROM learning_attempts WHERE vault=? AND id=?').get(p.vault, p.id);
-    if (!row || row.mode !== 'lab') throw new Error('实验记录不存在。');
+    if (!row || row.mode !== 'lab') throw new Error('Lab record not found.');
     const data = JSON.parse(row.data), models = await import(pathToFileURL(path.join(__dirname, '../shared/lab-models.mjs')).href);
     let measurement;
     if (data.labKind === 'quadratic' && p.measurement?.revealed === true) measurement = { kind: 'quadratic', y: models.quadratic(data.params.x, data.params), vertex: { x: data.params.h, y: data.params.k }, revealed: true };
     if (data.labKind === 'force' && p.measurement?.time === 3) measurement = { kind: 'force', time: 3, ...models.motion(data.params, 3) };
     if (data.labKind === 'probability' && Number.isInteger(p.measurement?.count) && p.measurement.count >= 1 && p.measurement.count <= 10000 && Number.isInteger(data.sampleSeed)) measurement = { kind: 'probability', theoretical: models.probability(data.params), seedStart: data.sampleSeed, ...models.sampleTrials(data.params, p.measurement.count, data.sampleSeed) };
-    if (!measurement) throw new Error('请先完成图像验证、运动运行或概率抽样，再保存观察。');
+    if (!measurement) throw new Error('Complete the graph verification, motion run, or probability sampling before saving the observation.');
     const result = learning.annotate(open(), p);
     Object.assign(result.attempt, { measurement, labVerified: true });
     const saved = JSON.parse(open().prepare('SELECT data FROM learning_attempts WHERE vault=? AND id=?').get(p.vault, p.id).data);
@@ -73,21 +73,21 @@ function registerLearning(ipcMain, app) {
     const models = await import(pathToFileURL(path.join(__dirname, '../shared/lab-models.mjs')).href);
     const params = models.parameters(p.kind, p.params);
     const sourceRef = p.sourceId ? learning.sourceById(open(), p.vault, p.sourceId) : null;
-    if (!sourceRef && p.example !== true) throw new Error('请先选择学习资料，或显式启用内置示例。');
-    if (sourceRef && !sourceRef.labs.some(l => l.kind === p.kind)) throw new Error('当前资料没有匹配这个实验模型，请选择相关章节。');
+    if (!sourceRef && p.example !== true) throw new Error('Select learning material first, or explicitly enable the built-in example.');
+    if (sourceRef && !sourceRef.labs.some(l => l.kind === p.kind)) throw new Error('The current material has no match for this lab model; please choose the relevant section.');
     if (p.previousLabId) {
       const prior = open().prepare('SELECT data FROM learning_attempts WHERE vault=? AND id=? AND mode=?').get(p.vault, p.previousLabId, 'lab');
       const data = prior && JSON.parse(prior.data);
-      if (!data?.labVerified || data.labKind !== p.kind || (data.sourceRef?.id || null) !== (sourceRef?.id || null)) throw new Error('对照实验需要同一资料下已完成的一轮实验。');
-      if (Object.keys(params).filter(key => params[key] !== data.params[key]).length !== 1) throw new Error('对照实验必须只改变一个参数。');
+      if (!data?.labVerified || data.labKind !== p.kind || (data.sourceRef?.id || null) !== (sourceRef?.id || null)) throw new Error('A control experiment requires a completed round of the experiment under the same material.');
+      if (Object.keys(params).filter(key => params[key] !== data.params[key]).length !== 1) throw new Error('A control experiment must change exactly one parameter.');
     }
-    const titles = { quadratic: '函数预测', force: '受力与加速度预测', probability: '独立事件概率预测' };
-    const concept = { quadratic: '二次函数', force: '牛顿第二定律', probability: '独立事件' }[p.kind];
+    const titles = { quadratic: 'Predict the function', force: 'Predict the acceleration', probability: 'Predict the probability' };
+    const concept = { quadratic: 'Quadratic functions', force: "Newton's second law", probability: 'Independent events' }[p.kind];
     let answer, prompt, explanation;
-    if (p.kind === 'quadratic') { answer = models.quadratic(params.x, params); prompt = 'y = ' + params.a + ' × (x − (' + params.h + '))² + (' + params.k + ')。预测 x = ' + params.x + ' 时的 y 值。'; explanation = '将 x 代入顶点式，先计算括号与平方，再乘 a、加 k，得到 y = ' + answer + '。a = 0 时退化为常函数。'; }
-    if (p.kind === 'force') { const m = models.motion(params); answer = m.acceleration; prompt = '水平拉力 ' + params.force + ' N，质量 ' + params.mass + ' kg，摩擦系数 ' + params.friction + '，物体从静止开始。预测加速度（m/s²，保留两位小数）。'; explanation = '简化模型：静摩擦和滑动摩擦系数相同，g = 9.8 m/s²。摩擦力为 min(F, μmg) = ' + m.friction.toFixed(2) + ' N；合力为 ' + m.netForce.toFixed(2) + ' N；a = F合/m = ' + answer.toFixed(2) + ' m/s²。'; }
-    if (p.kind === 'probability') { answer = models.probability(params) * 100; prompt = '一次事件成功概率为 ' + params.p + '，独立重复 ' + params.n + ' 次。预测至少成功一次的概率（填写百分数数值，例如 75）。'; explanation = '用对立事件计算：P(至少一次) = 1 − (1 − p)ⁿ = ' + answer.toFixed(2) + '%。抽样频率会波动，不保证随每次增加样本都更接近理论值。'; }
-    const a = { id: 'lab:' + randomUUID(), mode: 'lab', concept, title: titles[p.kind], prompt, answer, explanation, options: [], grading: 'numeric', tolerance: 0.05, source: learning.content.source, labKind: p.kind, params, hint: '先写出关系式，检查输入量的单位，再代入计算。' };
+    if (p.kind === 'quadratic') { answer = models.quadratic(params.x, params); prompt = 'y = ' + params.a + ' × (x − (' + params.h + '))² + (' + params.k + '). Predict y at x = ' + params.x + '.'; explanation = 'Substitute x into the vertex form: compute the bracket and its square, then multiply by a and add k, giving y = ' + answer + '. When a = 0 the function degenerates to a constant.'; }
+    if (p.kind === 'force') { const m = models.motion(params); answer = m.acceleration; prompt = 'A horizontal pull of ' + params.force + ' N, a mass of ' + params.mass + ' kg, a friction coefficient of ' + params.friction + ', starting from rest. Predict the acceleration (m/s², to two decimal places).'; explanation = 'Simplified model: static and kinetic friction coefficients are equal, g = 9.8 m/s². The friction force is min(F, μmg) = ' + m.friction.toFixed(2) + ' N; the net force is ' + m.netForce.toFixed(2) + ' N; a = Fnet/m = ' + answer.toFixed(2) + ' m/s².'; }
+    if (p.kind === 'probability') { answer = models.probability(params) * 100; prompt = 'An event succeeds with probability ' + params.p + ', repeated independently ' + params.n + ' times. Predict the probability of at least one success (enter a percentage, e.g. 75).'; explanation = 'Use the complement: P(at least once) = 1 − (1 − p)ⁿ = ' + answer.toFixed(2) + '%. The sample frequency fluctuates; adding samples does not guarantee closer agreement with the theoretical value every time.'; }
+    const a = { id: 'lab:' + randomUUID(), mode: 'lab', concept, title: titles[p.kind], prompt, answer, explanation, options: [], grading: 'numeric', tolerance: 0.05, source: learning.content.source, labKind: p.kind, params, hint: 'First write the relation, check the units of the inputs, then substitute and compute.' };
     Object.assign(a, { sourceRef, source: sourceRef ? sourceRef.name + ' · ' + sourceRef.section : learning.content.source,
       sampleSeed: randomInt(0, 0x100000000), previousLabId: p.previousLabId || null });
     if (process.env.GEZHI_DEMO_EN === '1') {
@@ -107,12 +107,12 @@ function registerLearning(ipcMain, app) {
   ipcMain.handle('learning:schedule', wrap(p => {
     const s = learning.summary(open(), bankOps, p.vault);
     const node = s.evidence.find(n => n.id === p.concept);
-    if (!node || !node.total) throw new Error('完成一次练习后，才可以安排复测。');
+    if (!node || !node.total) throw new Error('Complete an exercise before scheduling a retest.');
     calDb ||= cal.openCalendarDb(path.join(app.getPath('userData'), 'calendar.db'));
     const previous = open().prepare('SELECT task_id FROM learning_reviews WHERE vault=? AND concept=?').get(p.vault, p.concept);
     if (previous) { const task = calDb.prepare('SELECT id FROM cal_tasks WHERE id=? AND vault=? AND done_at IS NULL').get(previous.task_id, p.vault); if (task) return { ok: true, id: task.id, duplicate: true }; }
     const dueAt = new Date(Date.now() + 86400000).toISOString();
-    const r = cal.addTask(calDb, { vault: p.vault, title: '复测：' + node.id, kind: 'review', dueAt, estMinutes: 10, source: 'manual', goal: '学习证据地图：' + node.reason });
+    const r = cal.addTask(calDb, { vault: p.vault, title: 'Retest: ' + node.id, kind: 'review', dueAt, estMinutes: 10, source: 'manual', goal: 'Learning evidence map: ' + node.reason });
     if (!r.ok) return r;
     open().prepare('INSERT OR REPLACE INTO learning_reviews VALUES(?,?,?)').run(p.vault, node.id, r.id);
     return { ...r, dueAt };

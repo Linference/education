@@ -3,7 +3,7 @@
   "version": "0.0.8",
   "private": true,
   "type": "module",
-  "description": "格致 —— 本地优先的个人学习操作系统（知识库 / AI 陪练 / 题库组卷 / 日历计划）",
+  "description": "Gezhi — a local-first personal learning operating system (knowledge base / AI tutor / question bank assembly / calendar planning)",
   "packageManager": "pnpm@11.7.0",
   "engines": {
     "node": ">=22.5.0"

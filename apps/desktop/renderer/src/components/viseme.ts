@@ -129,7 +129,7 @@ export function markdownToSpeech(md: string): string {
   let s = md;
 
   // 代码块整段丢掉（念代码没有意义，而且很长）
-  s = s.replace(/```[\s\S]*?```/g, "（代码略）");
+  s = s.replace(/```[\s\S]*?```/g, "(code omitted)");
   // 行内代码去掉反引号，保留内容（像是函数名，念出来有意义）
   s = s.replace(/`([^`]+)`/g, "$1");
   // 图片：读 alt

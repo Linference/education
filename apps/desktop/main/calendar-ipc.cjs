@@ -1,7 +1,8 @@
-// 日历 / 计划的 IPC
+// Calendar / plan IPC
 //
-// 数据库落在 %APPDATA%\gezhi\calendar.db（与索引库同目录）。
-// 存库目录里不行 —— 库可能在 OneDrive 下，WAL 文件会引发同步冲突。
+// The database lives at %APPDATA%\gezhi\calendar.db (same directory as the
+// index database). It must not live in the library directory — the library may
+// be under OneDrive, and WAL files would cause sync conflicts.
 const path = require("node:path");
 const cal = require("./lib/calendar.cjs");
 
@@ -14,13 +15,15 @@ function registerCalendar(ipcMain, getWindow, app) {
   };
 
   /**
-   * 统一的包装。
+   * Uniform wrapper.
    *
-   * ★ 为什么必须包一层：ipcMain.handle 遇到未捕获异常时，
-   *   渲染进程收到的是模糊的 "could not be cloned" 之类，
-   *   而且返回对象里若有不可克隆的值会变成**空对象 {}** ——
-   *   断言 !r.ok 会通过、r.error 是 undefined，错误信息全丢。
-   *   （文件操作那边踩过这个坑，这里一开始就包好。）
+   * ★ Why this layer is necessary: on an uncaught exception, ipcMain.handle
+   *   sends the renderer something vague like "could not be cloned", and any
+   *   non-cloneable value in the returned object becomes an **empty {}** —
+   *   the assertion !r.ok passes and r.error is undefined, losing the whole
+   *   error message.
+   *   (The file operations code already hit this pitfall, so wrap it from the
+   *   start.)
    */
   const wrap = (fn) => (_e, arg) => {
     try {
@@ -32,7 +35,7 @@ function registerCalendar(ipcMain, getWindow, app) {
     }
   };
 
-  // 一次拿齐当前库的全部日历数据（界面初始化用，减少来回）
+  // Fetch all of the current library's calendar data at once (for UI init, to reduce round trips)
   ipcMain.handle("cal:load", wrap(({ vault, from, to }) => {
     const d = open();
     return {
@@ -55,11 +58,11 @@ function registerCalendar(ipcMain, getWindow, app) {
   ipcMain.handle("cal:addCountdown", wrap((p) => cal.addCountdown(open(), p)));
   ipcMain.handle("cal:deleteCountdown", wrap((p) => cal.deleteCountdown(open(), p)));
 
-  /** 数据库信息（体积面板/排查用） */
+  /** Database info (for the size panel / troubleshooting) */
   ipcMain.handle("cal:info", wrap(() => {
     const fs = require("node:fs");
     let size = 0;
-    try { size = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0; } catch { /* 忽略 */ }
+    try { size = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0; } catch { /* ignore */ }
     return { ok: true, path: dbPath, size, exists: size > 0 };
   }));
 }

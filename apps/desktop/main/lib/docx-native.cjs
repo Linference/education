@@ -283,7 +283,7 @@ function markdownToDocx(markdown, opts = {}) {
   if (inFence && fenceBuf.length) flushFence();
 
   if (children.length === 0) {
-    children.push(new Paragraph({ children: [run("（文档内容为空）")] }));
+    children.push(new Paragraph({ children: [run("(The document is empty)")] }));
   }
 
   return new Document({
@@ -314,9 +314,9 @@ async function exportDocxNative({ markdown, outputPath, title, author }) {
     const buf = await Packer.toBuffer(doc);
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
     fs.writeFileSync(outputPath, buf);
-    return { ok: true, path: outputPath, size: buf.length, engine: "docx(npm,纯JS)" };
+    return { ok: true, path: outputPath, size: buf.length, engine: "docx(npm,pure JS)" };
   } catch (e) {
-    return { ok: false, error: `生成 Word 失败：${e.message}` };
+    return { ok: false, error: `Failed to generate Word: ${e.message}` };
   }
 }
 

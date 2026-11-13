@@ -408,7 +408,7 @@ document.getElementById("envline").textContent =
   `视口 ${window.innerWidth}×${window.innerHeight} ｜ ` +
   `用中文输入法在下方编辑器打字，日志会记录每一次组合输入`;
 
-log("key", "PoC 就绪。建议测试顺序见同目录 测试清单.md");
+log("key", "PoC 就绪。建议测试顺序见同目录 test-checklist.md");
 
 // 把 view 暴露到 window，供自动化测试（CDP 输入法脚本）定位光标与读取状态。
 // 仅 PoC 需要；正式产品里不要这么做，应通过 IPC 暴露受控接口。

@@ -1,113 +1,113 @@
-# LibreOffice（随包分发）
+# LibreOffice (bundled distribution)
 
-格致内置的 Office 文档转换引擎。用途：把 PPT / Word / Excel / 旧版 `.doc` / `.ppt`
-转换成 PDF，交给格致已有的 PDF 查看器显示 —— **视觉 100% 还原**。
+The Office document conversion engine built into Gezhi. Purpose: convert PPT / Word / Excel / legacy `.doc` / `.ppt`
+into PDF and hand it to Gezhi's existing PDF viewer for display — **100% visual fidelity**.
 
-## 为什么需要它
+## Why it is needed
 
-纯文字提取对手写课件没有意义。实测数据：
+Plain-text extraction is meaningless for handwritten courseware. Measured data:
 
-| 文件 | 体积 | 提取出的文字 | 说明 |
+| File | Size | Extracted text | Note |
 |---|---|---|---|
-| `part4_linear algebra.pptx` | 219 MB | 197 页 / 10,647 字 | **每页仅 54 字**，内容全在图片里 |
-| `01.概述、线性代数和NDArray.pptx` | 15.3 MB | 33 页 / 2,029 字 | **15 MB 只提出 2 KB 文字** |
+| `part4_linear algebra.pptx` | 219 MB | 197 pages / 10,647 characters | **only 54 characters per page**, content is all in images |
+| `01.概述、线性代数和NDArray.pptx` | 15.3 MB | 33 pages / 2,029 characters | **15 MB yields only 2 KB of text** |
 
-也就是说，打开这类文件时用户看到的是一串文字，而不是幻灯片。
-LibreOffice 转换后，排版、图片、公式、背景全部还原。
+In other words, when opening such files the user sees a string of text instead of slides.
+After LibreOffice conversion, layout, images, formulas, and backgrounds are all restored.
 
-实测转换耗时（随包版本）：
+Measured conversion time (bundled version):
 
-| 文件 | 耗时 | 结果 |
+| File | Time | Result |
 |---|---|---|
-| 高中物理竞赛-热学部分.**ppt**（旧版） | 10.4s | 37 页，排版/背景/公式全还原 |
-| 4.数据排序.pptx | 19.4s | 29 页 |
-| part4_linear algebra.pptx（219 MB） | 37.7s | 197 页 |
+| 高中物理竞赛-热学部分.**ppt** (legacy) | 10.4s | 37 pages, layout/background/formulas fully restored |
+| 4.数据排序.pptx | 19.4s | 29 pages |
+| part4_linear algebra.pptx (219 MB) | 37.7s | 197 pages |
 
-## 版本与来源
+## Version and source
 
-- 版本：LibreOffice 26.8.0（Windows x86-64）
-- 来源：<https://download.documentfoundation.org/libreoffice/stable/>
-- 获取方式：`msiexec /a` 解包（administrative install，未安装进系统）
+- Version: LibreOffice 26.8.0 (Windows x86-64)
+- Source: <https://download.documentfoundation.org/libreoffice/stable/>
+- Acquisition method: `msiexec /a` extraction (administrative install, not installed into the system)
 
-## 许可：MPL-2.0
+## License: MPL-2.0
 
-LibreOffice 以 **Mozilla Public License v. 2.0** 分发。
+LibreOffice is distributed under the **Mozilla Public License v. 2.0**.
 
-**为什么可以随格致分发**：MPL-2.0 是**弱 copyleft**，且是**文件级**的 ——
-它要求"对 MPL 覆盖文件的修改"需要以 MPL 公开，但**不要求**调用它的
-其他程序（格致）也采用 MPL。格致与 LibreOffice 的关系是：
+**Why it can be distributed with Gezhi**: MPL-2.0 is a **weak copyleft** and is **file-level** —
+it requires that "modifications to MPL-covered files" be published under MPL, but it **does not require**
+other programs that call it (Gezhi) to adopt MPL. The relationship between Gezhi and LibreOffice is:
 
-- 格致**不修改** LibreOffice 的任何源码
-- 格致把它作为**独立进程**启动（`soffice.exe --headless --convert-to pdf`）
-- 两者之间只通过命令行参数与文件交互
+- Gezhi **does not modify** any LibreOffice source code
+- Gezhi launches it as a **separate process** (`soffice.exe --headless --convert-to pdf`)
+- The two interact only through command-line arguments and files
 
-这与 AGPL 有本质区别（AGPL 对网络分发有传染性）。项目的依赖许可门禁
-（`scripts/check-licenses.mjs`）允许 MPL-2.0，阻止 AGPL/SSPL/Commons Clause。
+This is fundamentally different from AGPL (AGPL has network-distribution copyleft). The project's dependency license gate
+(`scripts/check-licenses.mjs`) allows MPL-2.0 and blocks AGPL/SSPL/Commons Clause.
 
-许可文件已随包携带：
-- `license.txt` —— MPL-2.0 全文 + 第三方代码声明
-- `LICENSE.html` —— 同上（HTML 版）
-- `NOTICE` —— Apache-2.0 部分的署名要求
-- `CREDITS.fodt` —— 贡献者名单
+License files are bundled:
+- `license.txt` — full MPL-2.0 text + third-party code notices
+- `LICENSE.html` — same as above (HTML version)
+- `NOTICE` — attribution requirements for the Apache-2.0 portions
+- `CREDITS.fodt` — list of contributors
 
-## 裁剪说明
+## Trimming notes
 
-原始安装包解包后 **1523 MB**（19,457 个文件）。为控制体积做了裁剪，
-最终 **1014 MB**（9,112 个文件），LZMA 压缩后约 **198 MB**。
+After extraction, the original installation package is **1523 MB** (19,457 files). It was trimmed to control size,
+finally **1014 MB** (9,112 files), and about **198 MB** after LZMA compression.
 
-砍掉的（**每一项都验证过转换仍正常**）：
+What was removed (**each item was verified to still convert correctly**):
 
-| 目录 | 体积 | 内容 |
+| Directory | Size | Contents |
 |---|---|---|
-| `share/extensions` | 462 MB | 拼写检查词典与语言包（转换不需要纠错） |
-| `help` | 11 MB | 离线帮助手册 |
-| `share/gallery` | 13 MB | 剪贴画 |
-| `share/template` | 8 MB | 文档模板 |
-| `share/autotest` / `autotext` | 3 MB | 自动图文集 |
-| `share/wizards` | 5 MB | 向导 |
-| `readmes` | 2 MB | 说明文件 |
-| `share/xslt` | 4 MB | XSLT 样式 |
-| `share/palette` | 1 MB | 调色板 |
+| `share/extensions` | 462 MB | Spell-check dictionaries and language packs (conversion does not need correction) |
+| `help` | 11 MB | Offline help manual |
+| `share/gallery` | 13 MB | Clip art |
+| `share/template` | 8 MB | Document templates |
+| `share/autotest` / `autotext` | 3 MB | AutoText |
+| `share/wizards` | 5 MB | Wizards |
+| `readmes` | 2 MB | Readme files |
+| `share/xslt` | 4 MB | XSLT styles |
+| `share/palette` | 1 MB | Color palettes |
 
-### ⚠️ 不能砍的：`share/config`
+### ⚠️ What cannot be removed: `share/config`
 
-**砍掉 `share/config` 后转换会失败**，报错：
+**Removing `share/config` makes conversion fail**, with the error:
 
 ```
 Error: source file could not be loaded
 ```
 
-原因是那里放着文件类型识别（type detection）与导出过滤器注册所需的配置。
-这个坑实测踩过一次 —— 脚本 `prepare-vendor.cjs` 裁完立刻跑转换才发现的。
+The reason is that it holds the configuration needed for file type detection and export filter registration.
+This pitfall was hit once in hands-on testing — it was only discovered when the `prepare-vendor.cjs` script ran a conversion immediately after trimming.
 
-**教训**：裁剪 LibreOffice 不能只看体积。每砍一刀都要重跑一次真实转换，
-因为砍错的表现是"静默失败"，不是报错崩溃。
+**Lesson**: trimming LibreOffice cannot be judged by size alone. Every cut must be followed by rerunning a real conversion,
+because a wrong cut manifests as "silent failure", not a crash with an error.
 
-## 代码位置
+## Code locations
 
-- `apps/desktop/main/lib/soffice.cjs` —— 探测与转换（含串行队列）
-- `apps/desktop/main/convert-ipc.cjs` —— IPC 封装
-- `apps/desktop/verify-soffice-convert.cjs` —— 验收测试
+- `apps/desktop/main/lib/soffice.cjs` — detection and conversion (including a serial queue)
+- `apps/desktop/main/convert-ipc.cjs` — IPC wrapper
+- `apps/desktop/verify-soffice-convert.cjs` — acceptance test
 
-## 调用方式（给维护者）
+## Invocation (for maintainers)
 
 ```
 soffice.exe
   --headless --norestore --invisible --nolockcheck --nodefault --nofirststartwizard
-  -env:UserInstallation=file:///<每次独立的 profile 目录>
+  -env:UserInstallation=file:///<separate profile directory each time>
   --convert-to pdf:impress_pdf_Export
-  --outdir <输出目录>
-  <源文件>
+  --outdir <output directory>
+  <source file>
 ```
 
-三个必须注意的点：
+Three points that must be observed:
 
-1. **`-env:UserInstallation` 必须每次独立** —— 同一 profile 不能并发启动，
-   并发时第二个会静默失败或挂住
-2. **判定成功不能只看退出码** —— 转换失败时 LibreOffice 可能仍返回 0，
-   必须检查"输出目录里有非空 PDF"
-3. **`--norestore` 与 `--nofirststartwizard` 不能省** ——
-   否则可能弹出恢复对话框/首次运行向导，自动化会永久挂住
+1. **`-env:UserInstallation` must be separate each time** — the same profile cannot be launched concurrently;
+   with concurrency, the second one silently fails or hangs
+2. **Success cannot be judged by exit code alone** — LibreOffice may still return 0 when conversion fails;
+   you must check that "the output directory contains a non-empty PDF"
+3. **`--norestore` and `--nofirststartwizard` cannot be omitted** —
+   otherwise a recovery dialog / first-run wizard may pop up, and automation will hang forever
 
-已知限制：`--convert-to` 的 `FilterOptions`（压缩参数）在命令行里**不生效**。
-所以 219 MB 图片型课件转出的 PDF 约 260 MB，加载需要几秒。
+Known limitation: `--convert-to`'s `FilterOptions` (compression parameters) **do not take effect** on the command line.
+So a 219 MB image-based courseware converts to a PDF of about 260 MB, which takes a few seconds to load.

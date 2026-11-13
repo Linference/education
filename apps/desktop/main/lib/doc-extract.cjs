@@ -1,44 +1,46 @@
-// .doc（Word 97-2003 二进制格式）文本提取
+// Text extraction for .doc (Word 97-2003 binary format)
 //
-// 为什么自己写：
-//   `.doc` 是 OLE 复合文档（Compound File Binary），不是 zip、也不是 XML。
-//   npm 上能用的库要么依赖老旧、要么已经停止维护，而格式本身是**公开且有明确
-//   规范**的（MS-CFB + MS-DOC），可以自己解析。
+// Why we wrote it ourselves:
+//   `.doc` is an OLE compound document (Compound File Binary), not a zip, and not XML.
+//   The usable libraries on npm are either stale or unmaintained, while the format
+//   itself is **public and has a clear spec** (MS-CFB + MS-DOC), so we can parse it
+//   ourselves.
 //
-// 解析链路（每一层都实测验证过）：
-//   1. OLE 容器：读头 → 解析 FAT / MiniFAT / 目录项 → 取出流
-//   2. WordDocument 流：读 FIB（File Information Block）拿到关键偏移
-//   3. 文本：FIB 末尾的**分片表（piece table）**决定每段文本用哪种编码：
-//        bit15 = 1 → 该段是 CP1252 单字节（中文用这个存 GBK 变体）
-//        bit15 = 0 → 该段是 UTF-16LE
-//      这是 .doc 提取最容易错的地方 —— 不区分编码就会得到乱码。
+// Parsing pipeline (every layer has been verified against real files):
+//   1. OLE container: read header -> parse FAT / MiniFAT / directory entries -> extract streams
+//   2. WordDocument stream: read the FIB (File Information Block) to get the key offsets
+//   3. Text: the **piece table** at the end of the FIB decides which encoding each segment uses:
+//        bit15 = 1 -> this segment is single-byte CP1252 (Chinese is stored as a GBK variant here)
+//        bit15 = 0 -> this segment is UTF-16LE
+//      This is the easiest place to get .doc extraction wrong -- not distinguishing the
+//      encodings produces mojibake.
 //
-// ⚠️ 只做**文本提取**（够预览用）。不做版式还原：
-//    .doc 的排版信息（字体、表格、图片）在二进制里以复杂结构存储，
-//    完整还原等于重写一个 Word。预览只需要"能读"。
+// ⚠️ This only does **text extraction** (enough for preview). No layout reconstruction:
+//    .doc layout information (fonts, tables, images) is stored in complex binary structures,
+//    and fully reconstructing it is equivalent to rewriting Word. Preview only needs "readable".
 //
-// 参考资料：MS-CFB（复合文件格式）、MS-DOC（Word 二进制格式）。
+// References: MS-CFB (Compound File format), MS-DOC (Word binary format).
 
 const fs = require("node:fs");
 
-// ---------------------------------------------------------------- OLE 容器
+// ---------------------------------------------------------------- OLE container
 
 const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 const ENDOFCHAIN = 0xfffffffe;
 const FREESECT = 0xffffffff;
 
 /**
- * 解析 OLE 复合文档，返回 { streams: Map<name, Buffer> }。
+ * Parse an OLE compound document, returning { streams: Map<name, Buffer> }.
  *
- * 结构要点：
- *   - 头 512 字节，含扇区大小、FAT 位置、目录起始扇区
- *   - 大流用 FAT（每扇区 512 或 4096 字节）
- *   - **小于 4096 字节的流用 MiniFAT**（存在 root 项的数据里）
- *     —— 漏了 MiniFAT 会导致小流读不出来，这是最常见的实现错误
+ * Structure highlights:
+ *   - The header is 512 bytes, containing sector size, FAT location, and directory start sector
+ *   - Large streams use the FAT (each sector is 512 or 4096 bytes)
+ *   - **Streams smaller than 4096 bytes use the MiniFAT** (stored in the root entry's data)
+ *     -- missing the MiniFAT makes small streams unreadable; this is the most common implementation bug
  */
 function readOle(buf) {
   if (buf.length < 512 || !buf.subarray(0, 8).equals(OLE_MAGIC)) {
-    throw new Error("不是 OLE 复合文档（魔数不匹配）");
+    throw new Error("Not an OLE compound document (magic number mismatch)");
   }
 
   const sectorShift = buf.readUInt16LE(0x1e);
@@ -56,26 +58,26 @@ function readOle(buf) {
 
   const dataStart = 512;
 
-  /** 第 n 个扇区在文件里的偏移 */
+  /** Offset of the n-th sector within the file */
   const sectorOffset = (n) => dataStart + n * sectorSize;
 
   const readSector = (n) => {
     const off = sectorOffset(n);
     if (off + sectorSize > buf.length) {
-      // 截断的文件：返回剩下的部分而不是崩，尽量多提取内容
+      // Truncated file: return the remaining bytes instead of crashing, to extract as much as possible
       return buf.subarray(off, Math.min(off + sectorSize, buf.length));
     }
     return buf.subarray(off, off + sectorSize);
   };
 
-  // ---- DIFAT：先读头里内嵌的 109 个 FAT 扇区号，再看扩展 DIFAT ----
+  // ---- DIFAT: first read the 109 FAT sector numbers embedded in the header, then follow the extended DIFAT ----
   const fatSectorIds = [];
   for (let i = 0; i < 109; i++) {
     const v = buf.readUInt32LE(0x4c + i * 4);
     if (v === FREESECT || v === ENDOFCHAIN) break;
     fatSectorIds.push(v);
   }
-  // 扩展 DIFAT
+  // Extended DIFAT
   let difat = difatStart;
   let guard = 0;
   while (difat !== ENDOFCHAIN && difat !== FREESECT && guard++ < numDifatSectors + 8) {
@@ -96,9 +98,9 @@ function readOle(buf) {
     const sec = readSector(sid);
     for (let i = 0; i + 4 <= sec.length; i += 4) fat.push(sec.readUInt32LE(i));
   }
-  if (fat.length === 0) throw new Error("FAT 为空，文件可能损坏");
+  if (fat.length === 0) throw new Error("FAT is empty, the file may be corrupt");
 
-  /** 沿 FAT 链把扇区拼成 Buffer */
+  /** Follow the FAT chain and concatenate sectors into a Buffer */
   const readChain = (start, size = null) => {
     const parts = [];
     let cur = start;
@@ -116,7 +118,7 @@ function readOle(buf) {
   const miniFatEntries = [];
   for (let i = 0; i + 4 <= miniFat.length; i += 4) miniFatEntries.push(miniFat.readUInt32LE(i));
 
-  // ---- 目录项 ----
+  // ---- Directory entries ----
   const dirRaw = readChain(dirStartSector);
   const entries = [];
   for (let off = 0; off + 128 <= dirRaw.length; off += 128) {
@@ -128,11 +130,11 @@ function readOle(buf) {
     const size = dirRaw.readUInt32LE(off + 120);
     entries.push({ name, type, startSector, size });
   }
-  if (entries.length === 0) throw new Error("目录为空");
+  if (entries.length === 0) throw new Error("Directory is empty");
 
   const root = entries.find((e) => e.type === 5) ?? entries[0];
 
-  // MiniStream：小流的内容都放在 root 项指向的流里
+  // MiniStream: the content of all small streams lives in the stream pointed to by the root entry
   const miniStream = root.size > 0 ? readChain(root.startSector, root.size) : Buffer.alloc(0);
 
   const readMiniChain = (start, size) => {
@@ -147,49 +149,49 @@ function readOle(buf) {
     return Buffer.concat(parts).subarray(0, size);
   };
 
-  // ---- 取流 ----
+  // ---- Extract streams ----
   const streams = new Map();
   for (const e of entries) {
-    if (e.type !== 2) continue;                       // 2 = 流
+    if (e.type !== 2) continue;                       // 2 = stream
     try {
       const isSmall = e.size < miniStreamCutoff;
       const data = isSmall && miniStream.length > 0
         ? readMiniChain(e.startSector, e.size)
         : readChain(e.startSector, e.size);
       streams.set(e.name, data);
-      // Word 的流名可能是 "WordDocument" 或带控制字符前缀，宽松匹配
+      // Word's stream name may be "WordDocument" or carry a control-character prefix, so match loosely
       if (/WordDocument/i.test(e.name)) streams.set("WordDocument", data);
     } catch {
-      // 单个流读失败不影响其它流
+      // A single stream failing to read must not affect the other streams
     }
   }
 
   return { streams, sectorSize, miniSectorSize, entryCount: entries.length };
 }
 
-// ---------------------------------------------------------------- .doc 文本
+// ---------------------------------------------------------------- .doc text
 
 /**
- * 从 WordDocument 流里提取正文文本。
+ * Extract body text from the WordDocument stream.
  *
- * FIB 关键字段（偏移都是相对 WordDocument 流开头）：
- *   0x0000  wIdent（应为 0xA5EC）
- *   0x0002  nFib（版本号）
- *   0x000A  flags：bit 9（0x0200）表示用 1Table 还是 0Table
- *   0x0018  fcMin（旧版字段，现代 .doc 里可能不准）
+ * Key FIB fields (offsets are relative to the start of the WordDocument stream):
+ *   0x0000  wIdent (should be 0xA5EC)
+ *   0x0002  nFib (version number)
+ *   0x000A  flags: bit 9 (0x0200) indicates whether 1Table or 0Table is used
+ *   0x0018  fcMin (legacy field, may be inaccurate in modern .doc)
  *   0x001C  fcMac
- *   0x004C  ccpText（正文字符数）
- *   0x00FA  fcClx（分片表在 Table 流里的偏移）
- *   0x00FE  lcbClx（分片表长度）
+ *   0x004C  ccpText (number of body characters)
+ *   0x00FA  fcClx (offset of the piece table in the Table stream)
+ *   0x00FE  lcbClx (length of the piece table)
  */
 function extractTextFromDoc(streams) {
   const wd = streams.get("WordDocument");
-  if (!wd || wd.length < 0x200) throw new Error("缺少 WordDocument 流或流太短");
+  if (!wd || wd.length < 0x200) throw new Error("Missing WordDocument stream or stream too short");
 
   const wIdent = wd.readUInt16LE(0);
   if (wIdent !== 0xa5ec && wIdent !== 0xa5dc) {
-    // 不是标准 Word 文档，但可能仍是 OLE 里别的东西 —— 尝试纯文本兜底
-    throw new Error(`WordDocument 标识不对（0x${wIdent.toString(16)}）`);
+    // Not a standard Word document, but could still be something else in the OLE -- fall back to plain-text scanning
+    throw new Error(`Unexpected WordDocument identifier (0x${wIdent.toString(16)})`);
   }
 
   const flags = wd.readUInt16LE(0x0a);
@@ -199,7 +201,7 @@ function extractTextFromDoc(streams) {
   const fcClx = wd.readUInt32LE(0x01a2);
   const lcbClx = wd.readUInt32LE(0x01a6);
 
-  // ---- 有分片表：走正规路径（支持混合编码）----
+  // ---- Has a piece table: take the regular path (supports mixed encodings) ----
   if (table && lcbClx > 0 && fcClx + lcbClx <= table.length) {
     const pieces = readPieceTable(table, fcClx, lcbClx);
     if (pieces.length > 0) {
@@ -214,23 +216,24 @@ function extractTextFromDoc(streams) {
     }
   }
 
-  // ---- 没有分片表：退化到"扫描整个流里的可打印文本" ----
+  // ---- No piece table: fall back to "scan the entire stream for printable text" ----
   //
-  // 这条路不精确，但比打不开好。有些 .doc（尤其是由别的软件生成、
-  // 或下载后被工具改过的）FIB 字段不准，分片表读不出来。
+  // This path is imprecise, but better than failing to open the file. Some .doc
+  // files (especially ones generated by other software, or modified by tools after
+  // download) have inaccurate FIB fields, so the piece table cannot be read.
   const fallback = scanForText(wd);
   if (fallback.trim().length > 0) return { text: fallback, method: "scan-fallback" };
 
-  throw new Error("无法从 WordDocument 流里提取文本");
+  throw new Error("Unable to extract text from the WordDocument stream");
 }
 
-/** 读分片表（piece table，存在 Table 流的 Clx 结构里） */
+/** Read the piece table (stored in the Clx structure of the Table stream) */
 function readPieceTable(table, fcClx, lcbClx) {
   const clx = table.subarray(fcClx, fcClx + lcbClx);
-  // Clx = 若干 Prc（0x01 开头）+ 一个 Pcdt（0x02 开头）
+  // Clx = several Prc entries (starting with 0x01) + one Pcdt (starting with 0x02)
   let i = 0;
   while (i < clx.length && clx[i] === 0x01) {
-    // Prc: 1 字节标记 + 2 字节 cbGrpprl + 内容
+    // Prc: 1-byte marker + 2-byte cbGrpprl + content
     const cb = clx.readUInt16LE(i + 1);
     i += 3 + cb;
   }
@@ -240,7 +243,7 @@ function readPieceTable(table, fcClx, lcbClx) {
   const plc = clx.subarray(i + 5, i + 5 + lcb);
   if (plc.length < 4) return [];
 
-  // PlcPcd: (n+1) 个 CP（4 字节）+ n 个 Pcd（8 字节）
+  // PlcPcd: (n+1) CPs (4 bytes each) + n Pcds (8 bytes each)
   const n = Math.floor((plc.length - 4) / 12);
   if (n <= 0) return [];
 
@@ -253,8 +256,8 @@ function readPieceTable(table, fcClx, lcbClx) {
     const off = pcdBase + k * 8;
     if (off + 8 > plc.length) break;
     const fcRaw = plc.readUInt32LE(off + 2);
-    const compressed = (fcRaw & 0x40000000) !== 0;   // bit30：1 = 单字节编码
-    // 压缩时 fc 要除以 2（低 30 位是"字符位置"，乘 2 才是字节偏移）
+    const compressed = (fcRaw & 0x40000000) !== 0;   // bit30: 1 = single-byte encoding
+    // When compressed, fc must be divided by 2 (the low 30 bits are a "character position"; multiply by 2 to get the byte offset)
     const fc = compressed ? (fcRaw & 0x3fffffff) / 2 : fcRaw & 0x3fffffff;
     const cpStart = cps[k];
     const cpEnd = cps[k + 1];
@@ -265,12 +268,13 @@ function readPieceTable(table, fcClx, lcbClx) {
 }
 
 /**
- * 解码"压缩"分片（单字节编码）。
+ * Decode a "compressed" piece (single-byte encoding).
  *
- * MS-DOC 规范说这是 CP1252，但**中文 .doc 实际用的是 GBK 系编码**
- * （Windows 简体中文环境下 Word 会把汉字按系统代码页存成单字节/双字节混排）。
- * Node 内置 TextDecoder 支持 gbk，直接用它。
- * 实测：用 latin1 解会得到乱码，用 gbk 才对。
+ * The MS-DOC spec calls this CP1252, but **Chinese .doc files actually use a GBK-family
+ * encoding** (on a Simplified Chinese Windows system, Word stores Han characters using
+ * the system code page as a mix of single-byte and double-byte sequences).
+ * Node's built-in TextDecoder supports gbk, so use it directly.
+ * Verified in practice: decoding with latin1 yields mojibake; gbk is correct.
  */
 function decodeCp1252ish(buf) {
   try {
@@ -280,10 +284,10 @@ function decodeCp1252ish(buf) {
   }
 }
 
-/** 兜底：在流里扫描连续的可读文本（中英文都认） */
+/** Fallback: scan the stream for consecutive runs of readable text (both Chinese and English) */
 function scanForText(wd) {
   const chunks = [];
-  // 按 UTF-16LE 扫
+  // Scan as UTF-16LE
   let cur = [];
   for (let i = 0; i + 1 < wd.length; i += 2) {
     const c = wd.readUInt16LE(i);
@@ -301,62 +305,64 @@ function scanForText(wd) {
 function isReadableCode(c) {
   if (c === 0x0d || c === 0x0a || c === 0x09) return true;
   if (c >= 0x20 && c <= 0x7e) return true;            // ASCII
-  if (c >= 0x4e00 && c <= 0x9fff) return true;        // CJK 基本区
-  if (c >= 0x3000 && c <= 0x303f) return true;        // CJK 标点
-  if (c >= 0xff00 && c <= 0xffef) return true;        // 全角
-  if (c >= 0x2010 && c <= 0x203b) return true;        // 通用标点
+  if (c >= 0x4e00 && c <= 0x9fff) return true;        // CJK Unified Ideographs (basic block)
+  if (c >= 0x3000 && c <= 0x303f) return true;        // CJK punctuation
+  if (c >= 0xff00 && c <= 0xffef) return true;        // fullwidth forms
+  if (c >= 0x2010 && c <= 0x203b) return true;        // general punctuation
   return false;
 }
 
-// ---------------------------------------------------------------- 对外接口
+// ---------------------------------------------------------------- Public API
 
 /**
- * 提取 .doc 文本。
+ * Extract text from a .doc file.
  * @returns {{ok: true, text: string, method: string} | {ok: false, error: string}}
  */
 function extractDocText(filePath) {
   try {
     const buf = fs.readFileSync(filePath);
-    // ⚠️ 只挡"真的空文件"。
-    //    第一版写了 `length < 512 → 报错`，理由是"OLE 头就要 512 字节"，
-    //    但那样会误杀合法的**小 RTF / 小纯文本**（几十字节完全正常）。
-    //    判断格式应该看**内容特征**（魔数、开头几个字节），不是看大小。
-    if (buf.length < 8) return { ok: false, error: "文件为空或过小" };
+    // ⚠️ Only reject files that are genuinely empty.
+    //    The first version used `length < 512 -> error`, reasoning that "the OLE
+    //    header alone is 512 bytes", but that falsely rejected legitimate **small
+    //    RTF / small plain-text** files (a few dozen bytes is perfectly normal).
+    //    Format detection should look at **content signatures** (magic number, first
+    //    few bytes), not at the size.
+    if (buf.length < 8) return { ok: false, error: "File is empty or too small" };
 
-    // 情况一：其实是 OLE 复合文档（真正的 .doc）
+    // Case 1: it is actually an OLE compound document (a real .doc)
     if (buf.subarray(0, 8).equals(OLE_MAGIC)) {
       const { streams } = readOle(buf);
       const r = extractTextFromDoc(streams);
       return { ok: true, text: cleanText(r.text), method: r.method };
     }
 
-    // 情况二：文件名叫 .doc 但内容其实是 RTF（很常见：Word 另存为 RTF 后改名）
+    // Case 2: the file is named .doc but the content is actually RTF (very common: Word saved as RTF and then renamed)
     const head = buf.subarray(0, 5).toString("latin1");
     if (head.startsWith("{\\rtf")) {
       return { ok: true, text: cleanText(rtfToText(buf.toString("latin1"))), method: "rtf" };
     }
 
-    // 情况三：其实是 docx（zip）改名 —— 交给上层按 docx 处理
+    // Case 3: it is actually a docx (zip) renamed -- hand it to the upper layer to process as docx
     if (buf[0] === 0x50 && buf[1] === 0x4b) {
-      return { ok: false, error: "__IS_DOCX__", hint: "这个文件其实是 .docx 格式（只是扩展名写成 .doc），按 docx 打开即可" };
+      return { ok: false, error: "__IS_DOCX__", hint: "This file is actually in .docx format (only the extension says .doc); just open it as docx" };
     }
 
-    // 情况四：纯文本改名
+    // Case 4: plain text renamed
     const asText = buf.toString("utf8");
     if (!asText.includes("\u0000") && /[\u4e00-\u9fff\w]/.test(asText.slice(0, 500))) {
       return { ok: true, text: cleanText(asText), method: "plaintext" };
     }
 
-    return { ok: false, error: "无法识别的 .doc 内容（既不是 OLE 复合文档，也不是 RTF/docx/纯文本）" };
+    return { ok: false, error: "Unrecognized .doc content (not an OLE compound document, nor RTF/docx/plain text)" };
   } catch (e) {
     return { ok: false, error: e.message };
   }
 }
 
-/** RTF → 纯文本（只做够预览用的简化处理） */
+/** RTF -> plain text (only the simplified processing needed for preview) */
 function rtfToText(rtf) {
   let s = rtf;
-  // 去掉分组与不可见目标
+  // Remove groups and invisible destinations
   s = s.replace(/\\\*\\[a-zA-Z]+/g, "");
   s = s.replace(/\\u(-?\d+)\s?\??/g, (_m, n) => String.fromCharCode(((Number(n) % 65536) + 65536) % 65536));
   s = s.replace(/\\'([0-9a-fA-F]{2})/g, (_m, h) => {
@@ -369,62 +375,63 @@ function rtfToText(rtf) {
   return s;
 }
 
-/** 清理：统一换行、压掉多余空行、去掉 Word 的控制字符 */
+/** Clean up: normalize newlines, collapse extra blank lines, strip Word control characters */
 function cleanText(t) {
   return t
     .replace(/\r\n?/g, "\n")
-    .replace(/\u000b/g, "\n")          // 垂直制表 = Word 的手动换行
-    .replace(/\u000c/g, "\n")          // 分页符
-    .replace(/\u0007/g, "\t")          // 单元格分隔
+    .replace(/\u000b/g, "\n")          // vertical tab = Word's manual line break
+    .replace(/\u000c/g, "\n")          // page break
+    .replace(/\u0007/g, "\t")          // cell separator
     .replace(/[\u0000-\u0008\u000e-\u001f]/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-// ---------------------------------------------------------------- PPT（旧版）
+// ---------------------------------------------------------------- PPT (legacy)
 
 /**
- * 旧版 .ppt（PowerPoint 97-2003）文本提取。
+ * Legacy .ppt (PowerPoint 97-2003) text extraction.
  *
- * 与 .doc 同样是 OLE 复合文档，但流的组织不同：
- *   - 正文在 **"PowerPoint Document"** 流里（注意有空格）
- *   - 该流由一串**记录（record）**组成，头 8 字节是：
+ * Like .doc it is an OLE compound document, but the stream layout differs:
+ *   - Body text lives in the **"PowerPoint Document"** stream (note the space)
+ *   - That stream is made of a sequence of **records**, each with an 8-byte header:
  *       [0..1]  recVer(4bit) + recInstance(12bit)
  *       [2..3]  recType
  *       [4..7]  recLen
- *   - 文字藏在两类记录里：
- *       TextCharsAtom (4000)  → UTF-16LE 文本
- *       TextBytesAtom (4008)  → 单字节文本（中文通常是 GBK 系）
- *   而且它们**分散在多个 Drawing/Shape 容器里**，所以做法是：
- *   遍历整条记录链，凡是遇到这两类就收集，按出现顺序拼起来。
+ *   - Text hides in two kinds of records:
+ *       TextCharsAtom (4000)  -> UTF-16LE text
+ *       TextBytesAtom (4008)  -> single-byte text (usually a GBK family for Chinese)
+ *   And they are **scattered across multiple Drawing/Shape containers**, so the approach is:
+ *   walk the whole record chain, collect text whenever these two kinds appear, and
+ *   concatenate in order of appearance.
  *
- * 这样做会丢版式、丢图片、丢动画，但**能把文字读出来** ——
- * 对"预览课件写了什么"这个目的够了。
+ * This loses layout, images, and animations, but **it does read the text out** --
+ * which is enough for the purpose of "previewing what a course deck says".
  */
 function extractTextFromPpt(streams) {
-  // 流名可能带前导 \x05 之类，宽松匹配
+  // The stream name may carry a leading \x05 or similar, so match loosely
   let ppt = streams.get("PowerPoint Document");
   if (!ppt) {
     for (const [k, v] of streams) {
       if (/PowerPoint\s*Document/i.test(k.replace(/[\u0000-\u001f]/g, ""))) { ppt = v; break; }
     }
   }
-  if (!ppt || ppt.length < 16) throw new Error("缺少 PowerPoint Document 流");
+  if (!ppt || ppt.length < 16) throw new Error("Missing PowerPoint Document stream");
 
   const REC_TEXT_CHARS = 4000;   // UTF-16LE
-  const REC_TEXT_BYTES = 4008;   // 单字节
+  const REC_TEXT_BYTES = 4008;   // single-byte
 
   const chunks = [];
   let i = 0;
   let guard = 0;
 
-  // 线性扫描：不严格解析嵌套容器（容器头也是记录头，所以线性扫能穿过它们）
+  // Linear scan: we don't strictly parse nested containers (a container header is also a record header, so a linear scan can walk through them)
   while (i + 8 <= ppt.length && guard++ < 4_000_000) {
     const verInst = ppt.readUInt16LE(i);
     const recType = ppt.readUInt16LE(i + 2);
     const recLen = ppt.readUInt32LE(i + 4);
 
-    // 长度不合理 → 说明这里不是记录头，往后挪一个字节重新对齐
+    // Unreasonable length -> this is not a record header, move forward one byte to realign
     if (recLen > ppt.length || i + 8 + recLen > ppt.length) { i += 1; continue; }
 
     if (recType === REC_TEXT_CHARS) {
@@ -432,82 +439,87 @@ function extractTextFromPpt(streams) {
       if (t.trim()) chunks.push(t);
     } else if (recType === REC_TEXT_BYTES) {
       const raw = ppt.subarray(i + 8, i + 8 + recLen);
-      // 单字节记录多为 ASCII 或系统代码页；中文课件里偶见 GBK
+      // Single-byte records are usually ASCII or the system code page; GBK occasionally appears in Chinese course decks
       let t;
       try { t = new TextDecoder("gbk", { fatal: false }).decode(raw); }
       catch { t = raw.toString("latin1"); }
       if (t.trim()) chunks.push(t);
     }
 
-    // 容器记录（recVer === 0xF）内部还有子记录，要继续往里走；
-    // 非容器则整块跳过。统一用"往前走 8 字节"来保证不会漏掉嵌套内容，
-    // 因为子记录紧跟在容器头之后。
+    // A container record (recVer === 0xF) still has child records inside, so keep going inward;
+    // non-containers are skipped as a whole block. We uniformly "advance 8 bytes" to guarantee
+    // nested content is not missed, because child records immediately follow the container header.
     if ((verInst & 0x000f) === 0x000f) {
-      i += 8;                       // 进入容器
+      i += 8;                       // enter container
     } else {
-      i += 8 + recLen;              // 跳过整块
+      i += 8 + recLen;              // skip the whole block
     }
   }
 
-  // 拼接：一条记录常是一行/一段。处理顺序有讲究，见下面的两个坑。
+  // Concatenation: one record is usually one line/paragraph. Order matters; see the two
+  // gotchas below.
 
-  // ★ 插入空行作为"近似分页"的依据。
+  // ★ Insert a blank line as the basis for "approximate pagination".
   //
-  //   为什么：.ppt 的每张幻灯片在记录流里是一段连续文本，段与段之间原本没有分隔。
-  //   直接拼起来就是一大坨，用户没法定位。
-  //   PowerPoint 的精确页码在另一套结构（PersistPtr / SlideListWithText）里，
-  //   再实现一层收益不大。
+  //   Why: in the record stream, each slide of a .ppt is a run of continuous text with no
+  //   separator between slides. Concatenating directly yields one big blob that the user
+  //   cannot navigate.
+  //   PowerPoint's precise page numbers live in a different structure (PersistPtr /
+  //   SlideListWithText), and implementing another layer isn't worth the benefit.
   //
-  //   折中：**在每条文本记录之间插一个空行**，把连续空行压成一个。
-  //   得到的是"按内容分段"的近似页 —— 界面上会**明确标注这是近似**，
-  //   不会让用户以为那就是原始页码。
+  //   Compromise: **insert a blank line between every pair of text records**, then collapse
+  //   consecutive blank lines into one.
+  //   The result is an approximate "content-segmented" page break -- the UI will **clearly
+  //   label it as approximate**, so users won't think it is the original page number.
   //
-  //   ⚠️ 两个坑（都实测踩过）：
-  //     1. 换行符是 `\r` 不是 `\n` —— 必须**先统一再过滤**，否则整块是一行，
-  //        母版样板的 `^...$` 规则匹配不上（30/36 个文件漏过）。
-  //     2. 过滤规则里**不能加 /^\s*$/ 删空行** —— 空行就是分段依据，
-  //        删了之后近似分页退化成 1 段，等于自己把功能删掉了。
+  //   ⚠️ Two gotchas (both hit and verified in practice):
+  //     1. The newline is `\r`, not `\n` -- we must **normalize before filtering**, otherwise
+  //        the whole block becomes one line and the `^...$` master-placeholder rules fail to
+  //        match (30/36 files were missed).
+  //     2. The filter rules must **not include /^\s*$/ to delete blank lines** -- blank lines
+  //        are the pagination signal, and deleting them collapses approximate pagination down
+  //        to 1 segment, effectively deleting the feature ourselves.
 
   const MASTER_PLACEHOLDERS = [
-    // 中文版有两个变体：旧版"单击此处…"、新版"单击以…"（实测都遇到过）
+    // The Chinese version has two variants: the old "单击此处…" and the new "单击以…" (both seen in practice)
     /^单击(此处|以)?编辑母版.*$/,
     /^单击(此处|以)?编辑.*样式$/,
     /^Click to edit Master.*$/i,
     /^第二级$/, /^第三级$/, /^第四级$/, /^第五级$/,
-    /^[·•\-\*]\s*$/,                      // 母版里的项目符号占位
+    /^[·•\-\*]\s*$/,                      // bullet placeholder in the master
   ];
 
   const text = chunks
-    .join("\n\n")                          // ← 记录之间留空行 = 分段依据
-    .replace(/\r\n?/g, "\n")               // ← 必须在过滤之前统一换行
+    .join("\n\n")                          // <- blank line between records = pagination signal
+    .replace(/\r\n?/g, "\n")               // <- must normalize newlines before filtering
     .replace(/\u000b/g, "\n")
     .replace(/[\u0000-\u0008\u000e-\u001f]/g, "")
     .split("\n")
     .filter((l) => !MASTER_PLACEHOLDERS.some((re) => re.test(l.trim())))
     .join("\n")
-    .replace(/[ \t]+\n/g, "\n")            // 行尾空白
-    .replace(/\n{3,}/g, "\n\n")            // 连续空行压成一个
+    .replace(/[ \t]+\n/g, "\n")            // trailing whitespace
+    .replace(/\n{3,}/g, "\n\n")            // collapse consecutive blank lines into one
     .trim();
 
-  if (!text) throw new Error("PowerPoint Document 流里没有找到文字（可能整份都是图片）");
+  if (!text) throw new Error("No text found in the PowerPoint Document stream (the whole file may be images)");
   return { text, chunkCount: chunks.length };
 }
 
-/** 对外：提取 .ppt 文本 */
+/** Public: extract text from a .ppt file */
 function extractPptText(filePath) {
   try {
     const buf = fs.readFileSync(filePath);
-    if (buf.length < 8) return { ok: false, error: "文件为空或过小" };
+    if (buf.length < 8) return { ok: false, error: "File is empty or too small" };
     if (!buf.subarray(0, 8).equals(OLE_MAGIC)) {
-      // 有可能是 pptx 改名
+      // It might be a renamed pptx
       if (buf[0] === 0x50 && buf[1] === 0x4b) {
-        return { ok: false, error: "__IS_PPTX__", hint: "这个文件其实是 .pptx 格式（扩展名写成 .ppt），按 pptx 打开即可" };
+        return { ok: false, error: "__IS_PPTX__", hint: "This file is actually in .pptx format (the extension says .ppt); just open it as pptx" };
       }
-      return { ok: false, error: "不是 OLE 复合文档，无法识别为 .ppt" };
+      return { ok: false, error: "Not an OLE compound document, cannot be recognized as .ppt" };
     }
     const { streams } = readOle(buf);
     const r = extractTextFromPpt(streams);
-    return { ok: true, text: cleanText(r.text), method: `记录流提取（${r.chunkCount} 段）` };
+    return { ok: true, text: cleanText(r.text), method: `record-stream extraction (${r.chunkCount} segments)` };
   } catch (e) {
     return { ok: false, error: e.message };
   }

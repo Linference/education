@@ -140,16 +140,16 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
     if (mic.recording) {
       const r = await mic.stopAndRecognize();
       if (!r.ok) {
-        setHint(`语音识别失败：${r.error ?? "未知原因"}${r.hint ? ` —— ${r.hint}` : ""}`);
+        setHint(`Speech recognition failed: ${r.error ?? "unknown reason"}${r.hint ? ` — ${r.hint}` : ""}`);
         return;
       }
       if (r.empty) {
-        setHint("没听清（可能没说，或者环境太吵）。再说一次试试。");
+        setHint("That was not clear (nothing was said, or the room was too noisy). Try again.");
         return;
       }
       const text = String(r.text ?? "").trim();
       setInput(text);
-      setHint(`已识别（${((r.audioBytes ?? 0) / 1024).toFixed(0)} KB · ${r.ms}ms）：${text}`);
+      setHint(`Recognized (${((r.audioBytes ?? 0) / 1024).toFixed(0)} KB · ${r.ms}ms): ${text}`);
       if (autoSend && text) {
         // 让 setInput 先落地，再发送
         setTimeout(() => { void sendText(text); }, 0);
@@ -167,7 +167,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
   const sendText = useCallback(async (raw: string) => {
     const task = raw.trim();
     if (!task || running) return;
-    if (!vaultPath) { setHint("请先打开一个库 —— AI 只在库目录里工作。"); return; }
+    if (!vaultPath) { setHint("Open a vault first — the AI only works inside the vault folder."); return; }
 
     setInput("");
     setHint(null);
@@ -193,7 +193,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
         if (last?.role !== "assistant") return prev;
         last.streaming = false;
         if (r.finalText) last.text = r.finalText;
-        if (!r.ok) last.error = r.error ?? "运行失败";
+        if (!r.ok) last.error = r.error ?? "Run failed";
         next[next.length - 1] = last;
         return next;
       });
@@ -203,12 +203,12 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
       if (autoSpeak && r.ok) {
         const spoken = markdownToSpeech(answer);
         if (!spoken) {
-          setHint("这次回答没有可朗读的文字内容");
+          setHint("This answer has no text that can be read aloud");
         } else {
           const seq = ++answerSeq.current;
           const clipped = spoken.length > SPEAK_MAX_CHARS ? spoken.slice(0, SPEAK_MAX_CHARS) : spoken;
           if (spoken.length > SPEAK_MAX_CHARS) {
-            setHint(`回答较长，只念了前 ${SPEAK_MAX_CHARS} 字（完整内容看文字）`);
+            setHint(`The answer is long, so only the first ${SPEAK_MAX_CHARS} characters were read (see the text for the rest)`);
           }
           if (seq === answerSeq.current) {
             await voice.speak(clipped, { preferCloud: cloudUsable });
@@ -249,9 +249,9 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
           mood={mic.recording ? "listening" : running ? "thinking" : "idle"}
           status={
             voice.speaking
-              ? (voice.curChar ? `「${voice.curChar}」` : "正在说…")
-              : mic.recording ? "我在听，慢慢说"
-                : running ? "正在想一想…" : "一起把问题想明白"
+              ? (voice.curChar ? `"${voice.curChar}"` : "Speaking…")
+              : mic.recording ? "I am listening, take your time"
+                : running ? "Thinking…" : "Let us think it through together"
           }
         />
       </div>
@@ -264,7 +264,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
       }}>
         <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}>
           <input type="checkbox" checked={autoSpeak} onChange={(e) => setAutoSpeak(e.target.checked)} />
-          自动念回答
+          Read answers aloud
         </label>
         <label
           style={{
@@ -272,7 +272,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
             cursor: cloudReady ? "pointer" : "not-allowed",
             opacity: cloudReady ? 1 : 0.5,
           }}
-          title={cloudReady ? "云端音质更好，且带真实时间戳（口型更准）" : "未配置腾讯云凭据，只能用系统语音"}
+          title={cloudReady ? "Cloud voices sound better and carry real timestamps (more accurate lip sync)" : "No Tencent Cloud credentials configured, so only the system voice is available"}
         >
           <input
             type="checkbox"
@@ -280,17 +280,17 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
             disabled={!cloudReady}
             onChange={(e) => setPreferCloud(e.target.checked)}
           />
-          云端音质
+          Cloud voice
         </label>
         <div style={{ flex: "1 1 auto" }} />
         {voice.speaking ? (
           <button onClick={voice.stop} style={{ color: "var(--red, #dc2626)", fontSize: 11.5 }}>
-            停止朗读
+            Stop reading
           </button>
         ) : (
           msgs.length > 0 && (
             <button onClick={clear} style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
-              清空
+              Clear
             </button>
           )
         )}
@@ -300,12 +300,12 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
       <div ref={scrollerRef} style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0, padding: "8px 10px" }}>
         {msgs.length === 0 && (
           <div style={{ fontSize: 12, color: "var(--text-faint)", lineHeight: 1.9, padding: "6px 0" }}>
-            在这里和数字人说话。它用的是和「AI 助手」同一个大脑（DeepSeek Harness），
-            工作目录就是当前打开的库。
-            <div style={{ marginTop: 6 }}>试试说：</div>
-            <div>· 帮我讲讲这道题的思路</div>
-            <div>· 把这周的复习计划念给我听</div>
-            <div>· 用费曼方法考考我</div>
+            Talk to the companion here. It uses the same kernel as the AI Assistant (DeepSeek Harness),
+            and its working directory is the vault you have open.
+            <div style={{ marginTop: 6 }}>Try saying:</div>
+            <div>· Walk me through how to approach this problem</div>
+            <div>· Read this week's revision plan to me</div>
+            <div>· Quiz me using the Feynman method</div>
           </div>
         )}
 
@@ -328,7 +328,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
               border: m.error ? "1px solid var(--red, #dc2626)" : "1px solid transparent",
             }}>
               {m.error ? (
-                <span style={{ color: "var(--red, #dc2626)" }}>出错了：{m.error}</span>
+                <span style={{ color: "var(--red, #dc2626)" }}>Error: {m.error}</span>
               ) : (
                 <>
                   {m.text || (m.streaming ? "…" : "")}
@@ -346,7 +346,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
                     }}
                     style={{ fontSize: 11, color: "var(--accent)", textDecoration: "underline" }}
                   >
-                    念一遍
+                    Read aloud
                   </button>
                 </div>
               )}
@@ -376,7 +376,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
             if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); }
           }}
           rows={2}
-          placeholder={running ? "正在思考…" : "和数字人说点什么…（Enter 发送）"}
+          placeholder={running ? "Thinking…" : "Say something to the companion… (Enter to send)"}
           disabled={running}
           style={{
             width: "100%", fontSize: 12.5, padding: "6px 8px", marginBottom: 6,
@@ -401,7 +401,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
               fontWeight: 500,
             }}
           >
-            {running ? "思考中…" : "发送"}
+            {running ? "Thinking…" : "Send"}
           </button>
 
           <button
@@ -409,10 +409,10 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
             disabled={!cloudReady || running || mic.busy}
             title={
               !cloudReady
-                ? "语音输入需要腾讯云凭据（识别没有本地回退方案）"
+                ? "Voice input needs Tencent Cloud credentials (there is no local fallback for recognition)"
                 : mic.recording
-                  ? "点一下停止并识别"
-                  : "点一下开始说话"
+                  ? "Click to stop and recognize"
+                  : "Click to start speaking"
             }
             style={{
               flex: "0 0 auto", width: 42, borderRadius: 6, fontSize: 16,
@@ -438,7 +438,7 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
               width: 7, height: 7, borderRadius: "50%", background: "currentColor",
               display: "inline-block",
             }} />
-            正在录音 {mic.seconds} 秒（最长 55 秒）· 说完点一下方块
+            Recording {mic.seconds}s (55 s maximum) · click the square when you are done
           </div>
         )}
 
@@ -448,8 +448,8 @@ export default function AvatarConsole({ vaultPath, cloudReady }: Props) {
           fontSize: 11, color: "var(--text-muted)", cursor: "pointer",
         }}>
           <input type="checkbox" checked={autoSend} onChange={(e) => setAutoSend(e.target.checked)} />
-          识别完自动发送
-          <span style={{ color: "var(--text-faint)" }}>（关掉的话可以先改错字）</span>
+          Send automatically after recognition
+          <span style={{ color: "var(--text-faint)" }}> (turn this off to fix typos first)</span>
         </label>
 
         {mic.error && (

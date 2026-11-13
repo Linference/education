@@ -46,7 +46,7 @@ function sectionsFromText(text, name) {
     }
   });
   flush(lines.length);
-  if (sections.length > 300) throw new Error('章节过多，请拆分资料后再学习。');
+  if (sections.length > 300) throw new Error('Too many sections; split the material before studying.');
   return sections;
 }
 function makeSource(section, { filePath, name, origin = 'file' }) {
@@ -57,17 +57,17 @@ function makeSource(section, { filePath, name, origin = 'file' }) {
 async function readMaterial({ filePath, draftText, pageStart = 1, pageEnd }) {
   const name = path.basename(filePath), ext = path.extname(filePath).toLowerCase();
   const stat = fs.statSync(filePath);
-  if (!stat.isFile() || stat.size > 32 * 1024 * 1024) throw new Error('请选择不超过 32 MB 的资料文件。');
+  if (!stat.isFile() || stat.size > 32 * 1024 * 1024) throw new Error('Please choose a material file no larger than 32 MB.');
   let sections, totalPages, origin = 'file';
   if (['.md', '.markdown', '.txt'].includes(ext)) {
-    if (draftText !== undefined && typeof draftText !== 'string') throw new Error('资料草稿格式无效。');
+    if (draftText !== undefined && typeof draftText !== 'string') throw new Error('Invalid material draft format.');
     const text = draftText ?? fs.readFileSync(filePath, 'utf8');
-    if (text.length > 1_000_000) throw new Error('文字超过 100 万字，请拆分后学习。');
+    if (text.length > 1_000_000) throw new Error('The text exceeds 1,000,000 characters; split it before studying.');
     origin = draftText !== undefined && draftText !== fs.readFileSync(filePath, 'utf8') ? 'draft' : 'file';
     sections = sectionsFromText(text, name);
   } else if (ext === '.docx') {
     const result = await require('mammoth').extractRawText({ path: filePath });
-    if (result.value.length > 1_000_000) throw new Error('文档文字太长，请按章节拆分。');
+    if (result.value.length > 1_000_000) throw new Error('The document text is too long; split it by section.');
     sections = sectionsFromText(result.value, name);
   } else if (ext === '.pdf') {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
@@ -76,7 +76,7 @@ async function readMaterial({ filePath, draftText, pageStart = 1, pageEnd }) {
     try {
       totalPages = doc.numPages;
       const end = pageEnd === undefined ? Math.min(totalPages, pageStart + 19) : pageEnd;
-      if (!Number.isInteger(pageStart) || !Number.isInteger(end) || pageStart < 1 || end < pageStart || end > totalPages || end - pageStart >= 40) throw new Error('PDF 每次读取最多 40 页，请检查起止页码。');
+      if (!Number.isInteger(pageStart) || !Number.isInteger(end) || pageStart < 1 || end < pageStart || end > totalPages || end - pageStart >= 40) throw new Error('PDF reads are limited to 40 pages at a time; check the start and end pages.');
       sections = [];
       for (let number = pageStart; number <= end; number++) {
         const page = await doc.getPage(number), content = await page.getTextContent();
@@ -86,33 +86,33 @@ async function readMaterial({ filePath, draftText, pageStart = 1, pageEnd }) {
           if (lastY !== undefined && Math.abs(lastY - item.transform[5]) > 3) text += '\n';
           text += item.str + (item.hasEOL ? '\n' : ' '); lastY = item.hasEOL ? undefined : item.transform[5];
         }
-        for (const section of sectionsFromText(text, name)) sections.push({ ...section, section: '第 ' + number + ' 页', page: number });
+        for (const section of sectionsFromText(text, name)) sections.push({ ...section, section: 'Page ' + number, page: number });
         page.cleanup();
       }
     } finally { await doc.destroy(); }
-  } else throw new Error('学习资料支持 Markdown、TXT、DOCX 和带文字层的 PDF；其他格式请先转换。');
-  if (!sections.length) throw new Error('没有提取到文字。扫描 PDF 请先进行 OCR。');
+  } else throw new Error('Study materials support Markdown, TXT, DOCX, and text-layer PDF; convert other formats first.');
+  if (!sections.length) throw new Error('No text was extracted. Run OCR first for scanned PDFs.');
   return { sources: sections.map(s => makeSource(s, { filePath, name, origin })), totalPages,
-    warning: ext === '.docx' ? '引用使用 Word 提取文字；公式对象与图片可能无法提取，请核对原文。' : ext === '.pdf' ? '按 PDF 页码引用文字层；公式和阅读顺序可能有损，请核对原页。' : '' };
+    warning: ext === '.docx' ? 'Citations use text extracted from Word; equation objects and images may not be extracted, so check against the original.' : ext === '.pdf' ? 'Citations follow the text layer of the PDF page; equations and reading order may be distorted, so check the original page.' : '' };
 }
 function excerptSource(source, text) {
-  if (typeof text !== 'string' || text.trim().length < 3 || text.length > 7000 || !source.text.includes(text.trim())) throw new Error('请选择当前章节中 3–7000 字的原文。');
-  return { ...makeSource({ section: source.section + ' · 选段', text: text.trim(), startLine: source.startLine, endLine: source.endLine, page: source.page }, { filePath: source.path, name: source.name, origin: source.origin }), parentId: source.id };
+  if (typeof text !== 'string' || text.trim().length < 3 || text.length > 7000 || !source.text.includes(text.trim())) throw new Error('Please select 3–7000 characters of the original text from the current section.');
+  return { ...makeSource({ section: source.section + ' · Selection', text: text.trim(), startLine: source.startLine, endLine: source.endLine, page: source.page }, { filePath: source.path, name: source.name, origin: source.origin }), parentId: source.id };
 }
 function studyActivity(source, mode, focus = '') {
-  if (!['practice', 'detective', 'transfer'].includes(mode)) throw new Error('学习任务类型无效。');
+  if (!['practice', 'detective', 'transfer'].includes(mode)) throw new Error('Invalid study task type.');
   const emphasis = String(focus).trim().slice(0, 1800);
   const definitions = {
-    practice: ['用自己的话解释', '解释本段的核心概念，列出条件，再举一个例子。'],
-    detective: ['用反例检查解释', '写出一个容易误解的说法，找出遗漏的条件，用原文或反例修正它。'],
-    transfer: ['换个情境再应用', '设计一个与原文不同的新情境，说明哪些条件保留、哪些条件改变，并逐步解释能否应用本段概念。'],
+    practice: ['Explain in your own words', '解释本段的核心概念，列出条件，再举一个例子。'],
+    detective: ['Check the explanation with a counterexample', '写出一个容易误解的说法，找出遗漏的条件，用原文或反例修正它。'],
+    transfer: ['Apply it in a new context', '设计一个与原文不同的新情境，说明哪些条件保留、哪些条件改变，并逐步解释能否应用本段概念。'],
   };
   const [title, instruction] = definitions[mode];
   return { id: 'study:' + hash(source.id + mode + emphasis), mode, concept: source.concept, title: source.section + ' · ' + title,
     prompt: instruction + (emphasis ? '\n本次改进重点：' + emphasis : '') + '\n原文：\n' + source.text,
-    options: [], grading: 'self', answer: '核对原文：\n' + source.text,
-    explanation: '这是基于当前资料的开放探究任务。请核对概念、条件和推理；自评不会计入可核验的独立通过。',
-    hint: '把原文中的定义、条件和例子分开，再检查自己的回答是否有对应依据。',
+    options: [], grading: 'self', answer: 'Check against the original:\n' + source.text,
+    explanation: 'This is an open inquiry task based on the current material. Check the concepts, conditions, and reasoning; self-assessment does not count as verifiable independent completion.',
+    hint: 'Separate the definitions, conditions, and examples in the original, then check whether your answer is supported by them.',
     source: source.name + ' · ' + source.section, sourceRef: source, focus: emphasis };
 }
 module.exports = { detectLabs, extractParameters, sectionsFromText, makeSource, readMaterial, excerptSource, studyActivity };

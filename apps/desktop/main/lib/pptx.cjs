@@ -28,7 +28,7 @@ function listZipInBuffer(buf) {
     if (p < 0) break;
     if (buf.readUInt32LE(p) === SIG_EOCD) { eocd = p; break; }
   }
-  if (eocd < 0) throw new Error("不是有效的 zip（找不到 EOCD）");
+  if (eocd < 0) throw new Error("Not a valid zip (EOCD not found)");
 
   const entryCount = buf.readUInt16LE(eocd + 10);
   const cenOffset = buf.readUInt32LE(eocd + 16);
@@ -54,14 +54,14 @@ function listZipInBuffer(buf) {
 /** 从内存 buffer 里取出一个条目的解压后内容 */
 function readEntryFromBuffer(buf, e) {
   const lp = e.offset;
-  if (buf.readUInt32LE(lp) !== SIG_LOCAL) throw new Error("本地文件头签名不对");
+  if (buf.readUInt32LE(lp) !== SIG_LOCAL) throw new Error("Local file header signature mismatch");
   const nameLen = buf.readUInt16LE(lp + 26);
   const extraLen = buf.readUInt16LE(lp + 28);
   const dataStart = lp + 30 + nameLen + extraLen;
   const raw = buf.subarray(dataStart, dataStart + e.compressedSize);
   if (e.method === 0) return Buffer.from(raw);
   if (e.method === 8) return zlib.inflateRawSync(raw);
-  throw new Error(`不支持的压缩方式：${e.method}`);
+  throw new Error(`Unsupported compression method: ${e.method}`);
 }
 
 function unescapeXml(s) {
@@ -142,13 +142,13 @@ function parsePptxFile(filePath) {
     }
 
     if (order.length === 0) {
-      return { ok: false, error: "这个 PPTX 里没有幻灯片", ms: Date.now() - t0 };
+      return { ok: false, error: "This PPTX contains no slides", ms: Date.now() - t0 };
     }
 
     const slides = [];
     for (let i = 0; i < order.length; i++) {
       const lines = extractParagraphs(textOf(order[i]));
-      slides.push({ index: i + 1, title: lines[0] ?? `（第 ${i + 1} 页无文字）`, lines });
+      slides.push({ index: i + 1, title: lines[0] ?? `(slide ${i + 1} has no text)`, lines });
     }
 
     let hasNotes = false;

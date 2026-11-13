@@ -25,7 +25,7 @@ const { markdownToTypst, buildTypstDocument } = require("./md2typst.cjs");
 /**
  * 找 typst 可执行文件。
  *
- * 查找顺序（**先找随包内置的**，再找系统的）：
+ * 查找顺序（**先找随包内置的**，再找系统的): 
  *   1. 环境变量 GEZHI_TYPST（调试用）
  *   2. **随包内置**：resources/typst/typst.exe（全内置安装包的路径）
  *   3. 同目录下的 typst/（打包后 process.resourcesPath 已由调用方传入）
@@ -142,9 +142,9 @@ async function exportPdf({ markdown, sourcePath, outputPath, title, author, temp
     return {
       ok: false,
       error:
-        "找不到 Typst。全内置版的安装包应当自带了它；\n" +
-        "如果你是开发态运行，请先执行：node scripts/vendor-typst.mjs\n" +
-        "（或 winget install Typst.Typst）",
+        "Cannot find Typst. The fully bundled installer should include it;\n" +
+        "If you are running in development, first run: node scripts/vendor-typst.mjs\n" +
+        "(or winget install Typst.Typst)",
     };
   }
 
@@ -160,12 +160,12 @@ async function exportPdf({ markdown, sourcePath, outputPath, title, author, temp
     let assetIndex = 0;
     const imageResolver = src => {
       try {
-        if (/^https?:/i.test(src)) { warnings.push('未嵌入网络图片，请先保存到本地：' + src); return null; }
+        if (/^https?:/i.test(src)) { warnings.push('Network image not embedded; save it locally first: ' + src); return null; }
         const local = src.startsWith('file:') ? fileURLToPath(src) : path.resolve(dir, decodeURIComponent(src));
-        if (!fs.statSync(local).isFile()) throw new Error('不是文件');
+        if (!fs.statSync(local).isFile()) throw new Error('Not a file');
         const fileName = 'image-' + (++assetIndex) + path.extname(local);
         fs.copyFileSync(local, path.join(workDir,fileName)); return fileName;
-      } catch { warnings.push('找不到本地图片：' + src); return null; }
+      } catch { warnings.push('Local image not found: ' + src); return null; }
     };
     const { body, title: autoTitle } = markdownToTypst(markdown, { imageResolver });
     const docTitle = title ?? autoTitle ?? stem;
@@ -209,18 +209,18 @@ ${body}
     // Compilation is asynchronous so the window remains interactive.
     await promisify(execFile)(typstBin,args,{encoding:'utf8',timeout:180000,windowsHide:true,maxBuffer:4*1024*1024});
     if (!fs.existsSync(pdfPath)) {
-      return { ok: false, error: "Typst 报告成功但没有生成 PDF", typPath };
+      return { ok: false, error: "Typst reported success but produced no PDF", typPath };
     }
 
     const size = fs.statSync(pdfPath).size;
     if (size < 1000) {
-      return { ok: false, error: `生成的 PDF 只有 ${size} 字节，疑似失败`, typPath };
+      return { ok: false, error: `The generated PDF is only ${size} bytes, which looks like a failure`, typPath };
     }
 
     retainWork = Boolean(keepTypst);
     return { ok: true, path: pdfPath, size, warnings, typPath: keepTypst ? typPath : null, engine: typstBin };
   } catch (e) {
-    return { ok: false, error: 'PDF 导出失败：' + String(e.stderr || e.message).slice(0,2500) };
+    return { ok: false, error: 'PDF export failed: ' + String(e.stderr || e.message).slice(0,2500) };
   } finally {
     // Delete only the uniquely-created owned temporary directory.
     const tempRoot = fs.realpathSync(os.tmpdir());
@@ -255,10 +255,10 @@ async function exportDocx({ markdown, sourcePath, outputPath, title, scriptPath,
   // 后备：python-docx
   const py = findPython();
   if (!py) {
-    return { ok: false, error: "找不到带 python-docx 的 Python（且未启用内置转换器）" };
+    return { ok: false, error: "No Python with python-docx found (and the built-in converter is disabled)" };
   }
   if (!fs.existsSync(scriptPath)) {
-    return { ok: false, error: `找不到转换脚本：${scriptPath}` };
+    return { ok: false, error: `Conversion script not found: ${scriptPath}` };
   }
 
   const mdTmp = path.join(dir, `${stem}.gezhi-export.md`);
@@ -273,9 +273,9 @@ async function exportDocx({ markdown, sourcePath, outputPath, title, scriptPath,
 
     if (r.status !== 0) {
       const err = String(r.stderr ?? "") + String(r.stdout ?? "");
-      return { ok: false, error: `转换失败（退出码 ${r.status}）：\n${err.slice(0, 2000)}` };
+      return { ok: false, error: `Conversion failed (exit code ${r.status}):\n${err.slice(0, 2000)}` };
     }
-    if (!fs.existsSync(docxPath)) return { ok: false, error: "脚本报告成功但没有生成 docx" };
+    if (!fs.existsSync(docxPath)) return { ok: false, error: "The script reported success but produced no docx" };
 
     return { ok: true, path: docxPath, size: fs.statSync(docxPath).size, engine: py };
   } catch (e) {
@@ -295,12 +295,12 @@ function probeExportCapabilities({ templatePath, docxScriptPath, typstBundled })
       engine: typst,
       bundled: Boolean(typstBundled && fs.existsSync(typstBundled)),
       template: fs.existsSync(templatePath),
-      reason: typst ? null : "未找到 Typst（全内置版应自带；开发态可 winget install Typst.Typst）",
+      reason: typst ? null : "Typst not found (the fully bundled build should include it; in development you can run winget install Typst.Typst)",
     },
     docx: {
       // 纯 JS 转换器是内置的，永远可用 —— 不再依赖 Python
       available: true,
-      engine: "内置（纯 JavaScript）",
+      engine: "Built-in (pure JavaScript)",
       pythonFallback: Boolean(findPython()) && fs.existsSync(docxScriptPath),
       reason: null,
     },

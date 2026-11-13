@@ -1,72 +1,70 @@
-# submission/ — 交件材料（LaTeX 源 + 已编译 PDF）
+# submission/ — Submission materials (LaTeX source + compiled PDFs)
 
-## 当前产物
+## Current outputs
 
-| 文件 | 页数 | 大小 | 规格要求 | 状态 |
+| File | Pages | Size | Specification requirement | Status |
 | --- | --- | --- | --- | --- |
-| `ProjectIntroduction_Gezhi.pdf` | **2** | 292 KB | 建议 ≤2 页，PDF ≤50MB | ✅ 符合 |
-| `ResearchReport_Gezhi.pdf` | **11** | 395 KB | 建议 6–12 页，PDF ≤50MB | ✅ 符合 |
+| `ProjectIntroduction_Gezhi.pdf` | **2** | 292 KB | Recommended ≤2 pages, PDF ≤50MB | ✅ Compliant |
+| `ResearchReport_Gezhi.pdf` | **11** | 395 KB | Recommended 6–12 pages, PDF ≤50MB | ✅ Compliant |
 
-两份都是 A4、**全英文**、按竞赛命名规则命名。A4 是国际通用规格；章程只规定了海报尺寸，未规定文档纸张，A4 可直接提交。
+Both are A4, **all English**, and named according to the competition naming rules. A4 is the international standard; the charter specifies only the poster size and does not specify document paper, so A4 can be submitted directly.
 
-## 重新编译
+## Recompiling
 
 ```powershell
 $mik = 'D:\MiKTeX\miktex\bin\x64'
 cd 'D:\Users\LINKIT\Desktop\格致\submission'
 
-# 每份跑两遍（第二遍是为了解析交叉引用与目录）
+# Run each one twice (the second pass resolves cross-references and the table of contents)
 foreach ($f in 'ProjectIntroduction_Gezhi','ResearchReport_Gezhi') {
   & "$mik\pdflatex.exe" -interaction=nonstopmode "$f.tex" > $null
   & "$mik\pdflatex.exe" -interaction=nonstopmode "$f.tex" > $null
 }
 ```
 
-改完 `.tex` 后**务必重跑两遍**，否则页码引用会显示成 `??`。
+After changing a `.tex` file, **be sure to rerun twice**, otherwise page references will show as `??`.
 
-页数检查：
+Page count check:
 
 ```powershell
 & "$mik\pdfinfo.exe" ResearchReport_Gezhi.pdf | Select-String 'Pages'
 ```
 
-## ⚠️ 提交前必须处理：红色占位符
+## ⚠️ Must be handled before submission: red placeholders
 
-文档里所有**红色粗体** `[TO BE COMPLETED: ...]` 都是必须由你们自己填的真实数据，**不能估算、不能取整、不能推断**。
+All **red bold** `[TO BE COMPLETED: ...]` items in the documents are real data that you must fill in yourselves; **do not estimate, do not round, do not infer**.
 
-| 文件 | 占位符数量 | 说明 |
+| File | Number of placeholders | Description |
 | --- | --- | --- |
-| `ProjectIntroduction_Gezhi.tex` | 3 | 误解库条数、覆盖科目、试用学生人数 |
-| `ResearchReport_Gezhi.tex` | 38 | 受试者信息、测试时长、轮次上限、**全部结果数据**、质性观察、AI 工具披露表 |
+| `ProjectIntroduction_Gezhi.tex` | 3 | Number of misconception-bank items, subjects covered, number of trial students |
+| `ResearchReport_Gezhi.tex` | 38 | Participant information, test duration, round limits, **all result data**, qualitative observations, AI tool disclosure table |
 
-一键找出全部占位符：
+Find all placeholders in one command:
 
 ```powershell
 Select-String -Path *.tex -Pattern '\\fillin\{|\\fillc\{'
 ```
 
-**第 8 节 Results 整节都是占位符**——这一节是评审表里「原型、测试与成效」20% 的直接依据，必须用你们真实跑出来的数据填。填不出数字就写定性结论，**绝不要编造**（章程对虚假数据有明确的取消资格条款）。
+**The entire Section 8 Results is placeholders** — this section directly underpins the 20% "prototype, testing and effectiveness" criterion in the review rubric, and must be filled with data from your actual runs. If you cannot produce numbers, write qualitative conclusions; **never fabricate** (the charter has explicit disqualification clauses for false data).
 
-## 编译告警说明
+## Compilation warning notes
 
-- `Font shape 'T1/lmr/bx/sc' undefined` — 粗体小型大写字母没有对应字形，自动回退，**不影响输出**。
-- `Overfull \hbox (1.8pt)` — 一行超出版心 1.8 磅（约 0.6 毫米），肉眼不可见，**无需处理**。
+- `Font shape 'T1/lmr/bx/sc' undefined` — bold small caps have no corresponding glyph and fall back automatically; **does not affect the output**.
+- `Overfull \hbox (1.8pt)` — one line extends 1.8 points (about 0.6 mm) beyond the text block; invisible to the eye, **no action needed**.
 
-## 预览
+## Preview
 
-`_preview/` 是渲染出来的逐页 PNG，用于快速肉眼检查排版；**不是交付物**，可随时删除。
+`_preview/` contains rendered page-by-page PNGs for quick visual layout checks; **not a deliverable**, can be deleted at any time.
 
-## 还需要另外做的两份材料
+## Two other materials still to produce
 
-本目录只有章程里的第 1、2 份。另外两份（见 `..\交件清单与检查表.md`）：
+This directory contains only items 1 and 2 from the charter. The other two (see `..\submission-checklist.md`):
 
-- **Poster** — 直向 0.8 m × 1.1 m PDF（硬性尺寸，不是 A4）
-- **DemoVideo** — ≤5 分钟，英文旁白/字幕
+- **Poster** — portrait 0.8 m × 1.1 m PDF (fixed dimensions, not A4)
+- **DemoVideo** — ≤5 minutes, English narration/subtitles
 
-## 中文参考版
+## Chinese reference versions
 
-`zh-reference/` 下有两份**与英文版结构一一对应的中文稿**（简介 2 页、报告 10 页），供
-指导老师审阅与队内讨论使用。
+`zh-reference/` contains two **Chinese drafts structurally corresponding one-to-one with the English versions** (2-page introduction, 10-page report), for review by the supervising teacher and for internal team discussion.
 
-> 🚫 **切勿提交中文版。** 章程规定所有材料只接受英文，且「未使用英文」属于可「不予
-> 评审」的情形。详见 `zh-reference/README.md`。
+> 🚫 **Never submit the Chinese versions.** The charter states that all materials are accepted only in English, and "not using English" is a circumstance under which a submission may be "not reviewed". See `zh-reference/README.md` for details.

@@ -1,33 +1,35 @@
 #!/usr/bin/env node
-// 查：格致调用的 DSH 到底用哪个凭据在访问模型
+// Investigate: which credential does the DSH that Gezhi calls use to access the model?
 //
-// 用户问："我都没输入 api，那软件调用的 deepseek 是哪里来的"
+// The user asked: "I never entered an api key, so where does the deepseek the
+// software calls come from?"
 //
-// 需要查清三件事：
-//   1. DSH 的配置在哪、里面有没有配模型与密钥
-//   2. 密钥是明文存在哪，还是从环境变量读
-//   3. 格致自己有没有存过密钥（credentials.enc）
+// Three things need to be established:
+//   1. Where DSH's config lives, and whether it contains a model and a key
+//   2. Whether the key is stored in plaintext somewhere, or read from env vars
+//   3. Whether Gezhi has ever stored a key itself (credentials.enc)
 //
-// ⚠️ 输出时必须**脱敏** —— 只显示前后各 4 位，中间打码。
-//    这个脚本的输出可能被贴到对话里，不能把密钥打出来。
+// ⚠️ Output must be **masked** — show only 4 characters at each end, with the
+//    middle obfuscated. This script's output may be pasted into a chat, so it
+//    must never print the key.
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const { execSync } = require("node:child_process");
 
-/** 脱敏显示：保留首尾各 4 位 */
+/** Masked display: keep 4 characters at each end */
 function mask(s) {
   const t = String(s ?? "");
-  if (!t) return "(空)";
+  if (!t) return "(empty)";
   if (t.length <= 12) return t.slice(0, 2) + "*".repeat(Math.max(1, t.length - 2));
   return t.slice(0, 4) + "*".repeat(Math.min(24, t.length - 8)) + t.slice(-4);
 }
 
-/** 在文件内容里找疑似密钥的字段（只报告字段名与脱敏值） */
+/** Find fields that look like secrets in file content (report only field names and masked values) */
 function scanSecrets(label, txt, maxLen = 20000) {
   const patterns = [
-    [/\b(sk-[A-Za-z0-9_\-]{8,})/g, "sk- 开头的密钥"],
-    [/(["']?(?:api[_-]?key|apikey|token|secret|password|auth)["']?\s*[:=]\s*["']?)([^"'\s,}]{8,})/gi, "配置字段"],
+    [/\b(sk-[A-Za-z0-9_\-]{8,})/g, "key starting with sk-"],
+    [/(["']?(?:api[_-]?key|apikey|token|secret|password|auth)["']?\s*[:=]\s*["']?)([^"'\s,}]{8,})/gi, "config field"],
   ];
   const found = [];
   for (const [re, why] of patterns) {
@@ -47,21 +49,21 @@ function scanSecrets(label, txt, maxLen = 20000) {
     uniq.push(f);
   }
   if (uniq.length) {
-    console.log(`  ★ ${label} 里发现 ${uniq.length} 处疑似凭据（已脱敏）：`);
+    console.log(`  ★ ${label} contains ${uniq.length} suspected credential(s) (masked):`);
     for (const f of uniq.slice(0, 8)) console.log(`      ${f.field}${f.masked}   [${f.why}]`);
   }
   return uniq.length;
 }
 
-console.log("=== 格致访问模型的凭据来源调查 ===\n");
+console.log("=== Investigation: which credentials Gezhi uses to access the model ===\n");
 
-// ---------- 1. DSH 安装位置与配置 ----------
-console.log("── 1. DSH 本体 ──");
+// ---------- 1. DSH install location and config ----------
+console.log("── 1. DSH itself ──");
 const DSH_DIR = "D:\\DeepSeek Harness";
 const DSH_EXE = path.join(DSH_DIR, "DeepSeek Harness.exe");
-console.log(`  可执行文件：${fs.existsSync(DSH_EXE) ? "存在" : "不存在"}  ${DSH_EXE}`);
+console.log(`  Executable: ${fs.existsSync(DSH_EXE) ? "present" : "missing"}  ${DSH_EXE}`);
 
-console.log("\n─ 1b. DSH 目录下与配置有关的文件 ──");
+console.log("\n─ 1b. Config-related files under the DSH directory ──");
 const walk = (dir, depth = 0, acc = []) => {
   if (depth > 3) return acc;
   let es; try { es = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
@@ -71,7 +73,7 @@ const walk = (dir, depth = 0, acc = []) => {
       if (/node_modules|Cache|GPUCache|logs?$/i.test(e.name)) continue;
       walk(p, depth + 1, acc);
     } else if (/\.(json|yaml|yml|toml|ini|env|conf)$/i.test(e.name) || /config|credential|auth|setting/i.test(e.name)) {
-      try { acc.push({ p, size: fs.statSync(p).size }); } catch { /* 忽略 */ }
+      try { acc.push({ p, size: fs.statSync(p).size }); } catch { /* ignore */ }
     }
   }
   return acc;
@@ -80,10 +82,10 @@ const cfgFiles = walk(DSH_DIR);
 for (const f of cfgFiles.slice(0, 20)) {
   console.log(`    ${(f.size / 1024).toFixed(1).padStart(7)} KB  ${f.p.replace(DSH_DIR + "\\", "")}`);
 }
-if (cfgFiles.length > 20) console.log(`    …共 ${cfgFiles.length} 个`);
+if (cfgFiles.length > 20) console.log(`    …${cfgFiles.length} in total`);
 
-// ---------- 2. 用户目录下的 DSH 配置 ----------
-console.log("\n── 2. 用户目录下的 DSH / 格致 配置 ──");
+// ---------- 2. DSH config under the user directory ----------
+console.log("\n── 2. DSH / Gezhi config under the user directory ──");
 const home = os.homedir();
 const CANDIDATES = [
   path.join(home, ".dsh"),
@@ -96,7 +98,7 @@ const CANDIDATES = [
 ];
 let secretHits = 0;
 for (const c of CANDIDATES) {
-  if (!fs.existsSync(c)) { console.log(`  ${c}  （不存在）`); continue; }
+  if (!fs.existsSync(c)) { console.log(`  ${c}  (does not exist)`); continue; }
   console.log(`  ★ ${c}`);
   const files = walk(c, 0);
   for (const f of files.slice(0, 15)) {
@@ -104,41 +106,41 @@ for (const c of CANDIDATES) {
     try {
       const txt = fs.readFileSync(f.p, "utf8");
       secretHits += scanSecrets(path.basename(f.p), txt);
-    } catch { /* 忽略 */ }
+    } catch { /* ignore */ }
   }
-  if (!files.length) console.log("      （没有配置文件）");
+  if (!files.length) console.log("      (no config files)");
 }
 
-// ---------- 3. 环境变量 ----------
-console.log("\n── 3. 环境变量里的凭据 ──");
+// ---------- 3. Environment variables ----------
+console.log("\n── 3. Credentials in environment variables ──");
 const ENV_KEYS = Object.keys(process.env).filter((k) =>
   /API|KEY|TOKEN|SECRET|DEEPSEEK|DSH|OPENAI|ANTHROPIC/i.test(k)
 );
 if (!ENV_KEYS.length) {
-  console.log("  （没有与模型/密钥相关的环境变量）");
+  console.log("  (no model/key-related environment variables)");
 } else {
   for (const k of ENV_KEYS) {
     const v = process.env[k] ?? "";
-    // 只显示看起来像密钥的值，且脱敏
+    // Only show values that look like secrets, and mask them
     const looksSecret = /key|token|secret/i.test(k) && v.length > 8;
     console.log(`  ${k} = ${looksSecret ? mask(v) : v.slice(0, 60)}`);
     if (looksSecret) secretHits++;
   }
 }
 
-// ---------- 4. 格致自己的凭据库 ----------
-console.log("\n── 4. 格致自己的凭据库 ──");
+// ---------- 4. Gezhi's own credential store ----------
+console.log("\n── 4. Gezhi's own credential store ──");
 const gezhiCred = path.join(process.env.APPDATA ?? "", "gezhi", "credentials.enc");
 if (fs.existsSync(gezhiCred)) {
   const st = fs.statSync(gezhiCred);
-  console.log(`  ★ 存在：${gezhiCred}`);
-  console.log(`      ${st.size} 字节，修改于 ${st.mtime.toLocaleString("zh-CN")}`);
-  console.log(`      （加密存储，无法直接读取内容 —— 这是设计如此）`);
+  console.log(`  ★ exists: ${gezhiCred}`);
+  console.log(`      ${st.size} bytes, modified at ${st.mtime.toLocaleString("zh-CN")}`);
+  console.log(`      (encrypted storage; contents cannot be read directly — by design)`);
 } else {
-  console.log(`  不存在（格致没有自己存过任何密钥）`);
-  console.log(`      路径应为：${gezhiCred}`);
+  console.log(`  does not exist (Gezhi has never stored any secret itself)`);
+  console.log(`      Expected path: ${gezhiCred}`);
 }
 
-console.log(`\n=== 小结 ===`);
-console.log(`  在配置文件里发现的疑似凭据处数：${secretHits}`);
-console.log(`  格致自己的凭据库：${fs.existsSync(gezhiCred) ? "有" : "无"}`);
+console.log(`\n=== Summary ===`);
+console.log(`  Suspected credential occurrences found in config files: ${secretHits}`);
+console.log(`  Gezhi's own credential store: ${fs.existsSync(gezhiCred) ? "present" : "absent"}`);

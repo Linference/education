@@ -1,14 +1,15 @@
-// 反向链接面板（谁引用了这篇笔记 / 这篇笔记引用了谁）
+// Backlinks panel (who links to this note / which notes this note links to)
 //
-// 数据来自索引器的 links 表（解析 Markdown 里的 [[wikilink]]）。
+// Data comes from the indexer's links table (parsed from [[wikilink]]s in Markdown).
 //
-// 三个设计要点：
-//   1. **未创建的引用也要显示**：`[[时态]]` 而库里没有「时态.md」是常见情况
-//      （先写链接后建笔记）。这类要标出来并能一键创建 —— 否则用户看着
-//      "引用不存在"却不知道怎么办。
-//   2. 相对路径显示：反链来源在别的目录时，只显示文件名会分不清哪一篇，
-//      所以在标题下补一小行相对路径。
-//   3. 折叠：反链多的笔记（比如 MOC 索引页）会有几十条，默认收起只显示条数。
+// Three design notes:
+//   1. **Show references to notes that do not exist yet**: `[[Tense]]` with no "Tense.md"
+//      in the library is common (write the link first, create the note later). Mark such
+//      references and offer one-click creation — otherwise users see "reference does not
+//      exist" and do not know what to do.
+//   2. Show relative paths: when a backlink source is in another directory, the file name
+//      alone is ambiguous, so add a small relative-path line under the title.
+//   3. Collapse: notes with many backlinks (e.g. an MOC index page) can have dozens; collapse by default and show only the count.
 import { useCallback, useEffect, useState } from "react";
 
 interface BacklinkFile {
@@ -19,17 +20,17 @@ interface BacklinkFile {
 
 interface Props {
   vaultPath: string | null;
-  /** 当前打开的文件路径（null 表示没有打开文件） */
+  /** Path of the currently open file (null means no file open) */
   activePath: string | null;
-  /** 点反链来源 → 打开它 */
+  /** Click a backlink source → open it */
   onOpen: (filePath: string) => void;
-  /** 点"创建这个笔记" → 在库里新建 */
+  /** Click "create this note" → create it in the library */
   onCreate?: (name: string) => void;
-  /** 索引版本号：保存/索引完成后 +1，触发重新拉取 */
+  /** Index version: incremented after save/indexing to trigger a refetch */
   indexVersion?: number;
 }
 
-/** 相对库根显示路径，太长就只留最后两段 */
+/** Show a path relative to the library root; if too long, keep only the last two segments */
 function relPath(abs: string, root: string | null): string {
   if (!root) return "";
   const rel = abs.startsWith(root) ? abs.slice(root.length).replace(/^[\\/]/, "") : abs;
@@ -56,10 +57,10 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
       const links = ol?.ok === false ? [] : (ol.links ?? []);
       setOut(links);
 
-      // 出链里指向"库里不存在的笔记"的，标出来（可一键创建）
+      // Mark outlinks that point to "notes missing from the library" (can be created in one click)
       if (links.length) {
         const names = new Set<string>();
-        // 库里已有的文件主干名（用文件树的数据拿不到全部，这里靠反链接口反查）
+        // Existing file stem names (the file tree does not provide all of them; query via the backlinks API)
         for (const l of links) {
           const probes = await window.gezhi.search.backlinks({ vault: vaultPath, path: l.target });
           void probes;
@@ -77,10 +78,10 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
   useEffect(() => { void load(); }, [load, indexVersion]);
 
   if (!vaultPath) {
-    return <div className="tree-empty">打开一个库后这里显示链接关系</div>;
+    return <div className="tree-empty">Open a vault to see link relationships here</div>;
   }
   if (!activePath) {
-    return <div className="tree-empty">打开一篇笔记后这里显示它的反向链接</div>;
+    return <div className="tree-empty">Open a note to see its backlinks here</div>;
   }
 
   const total = data?.total ?? 0;
@@ -90,16 +91,16 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
       {/* 反向链接 */}
       <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", gap: 6, padding: "10px 12px 4px" }}>
         <span className="section-title" style={{ padding: 0, flex: "1 1 auto" }}>
-          反向链接
+          Backlinks
         </span>
         <span style={{ fontSize: 11, color: "var(--text-faint)" }}>
-          {loading ? "…" : `${total} 处`}
+          {loading ? "…" : `${total} references`}
         </span>
         {total > 0 && (
           <button
             onClick={() => setExpanded((v) => !v)}
             style={{ fontSize: 11, color: "var(--text-faint)" }}
-            title={expanded ? "收起" : "展开"}
+            title={expanded ? "Collapse" : "Expand"}
           >
             {expanded ? "▾" : "▸"}
           </button>
@@ -109,9 +110,9 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
       <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0, paddingBottom: 8 }}>
         {total === 0 && !loading && (
           <div style={{ padding: "4px 12px 10px", fontSize: 12, color: "var(--text-faint)", lineHeight: 1.7 }}>
-            还没有别的笔记引用这一篇。
+            No other notes link to this one yet.
             <br />
-            在其它笔记里写 <code style={{ fontSize: 11 }}>[[{activePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "")}]]</code> 就会出现在这里。
+            Write <code style={{ fontSize: 11 }}>[[{activePath.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "")}]]</code> in another note and it will appear here.
           </div>
         )}
 
@@ -132,7 +133,7 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
                 {f.name}
               </div>
               <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {relPath(f.path, vaultPath)} · 第 {f.refs.map((r) => r.line).join(", ")} 行
+                {relPath(f.path, vaultPath)} · line {f.refs.map((r) => r.line).join(", ")}
               </div>
             </button>
           </div>
@@ -142,8 +143,8 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
         {out.length > 0 && (
           <>
             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 12px 4px" }}>
-              <span className="section-title" style={{ padding: 0, flex: "1 1 auto" }}>出链</span>
-              <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{out.length} 处</span>
+              <span className="section-title" style={{ padding: 0, flex: "1 1 auto" }}>Outlinks</span>
+              <span style={{ fontSize: 11, color: "var(--text-faint)" }}>{out.length} references</span>
             </div>
             {out.map((l, i) => (
               <div key={i} style={{
@@ -152,18 +153,18 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
               }}>
                 <span
                   onClick={() => {
-                    // 出链点击：按名字找库里对应的文件（找到就打开）
+                    // Outlink click: find the matching file in the library by name (open it if found)
                     const stem = l.target;
                     window.gezhi.search.query({ vault: vaultPath, query: stem, limit: 1 })
-                      .then(() => { /* 真正的跳转由上层按名字解析 */ });
+                      .then(() => { /* The actual navigation is resolved by the parent by name */ });
                     onCreate?.(stem);
                   }}
                   style={{ cursor: "pointer", color: "var(--accent)" }}
-                  title="点一下在库里找这篇（找不到可以新建）"
+                  title="Click to find this note in the library (create it if missing)"
                 >
                   {l.label || l.target}
                 </span>
-                <span style={{ fontSize: 10.5, color: "var(--text-faint)", marginLeft: 6 }}>第 {l.line} 行</span>
+                <span style={{ fontSize: 10.5, color: "var(--text-faint)", marginLeft: 6 }}>line {l.line}</span>
               </div>
             ))}
           </>
@@ -171,7 +172,7 @@ export default function BacklinksPanel({ vaultPath, activePath, onOpen, onCreate
 
         {missing.length > 0 && (
           <div style={{ padding: "8px 12px", fontSize: 11.5, color: "var(--orange)" }}>
-            有 {missing.length} 个引用指向尚未创建的笔记
+            {missing.length} references point to notes that do not exist yet
           </div>
         )}
       </div>

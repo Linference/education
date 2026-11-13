@@ -1,78 +1,81 @@
 #!/usr/bin/env node
-// 格致 · 依赖许可门禁
+// Gezhi · dependency license gate
 //
-// 为什么第一天就要有这个东西：
-//   调研发现一批"看起来能用、实际不能用"的库 ——
-//     PyMuPDF      AGPL-3.0（闭源产品要么买授权要么别用）
-//     ezexam       AGPL-3.0（Typst 试卷模板）
-//     tldraw       自定义商业许可，明文禁止生产环境使用
-//     Anytype      "Any Source Available License"（非 OSI 开源）
-//     Nougat 权重  CC-BY-NC-4.0（禁商用）
-//   这些东西一旦混进依赖树，等到要分发时才发现，返工代价极高。
-//   所以把它做成 CI 门禁：凡是新引入的依赖，许可风险在提交那一刻就暴露。
+// Why this must exist from day one:
+//   Research turned up a batch of libraries that "look usable but are not" ——
+//     PyMuPDF      AGPL-3.0 (closed-source products must buy a license or stay away)
+//     ezexam       AGPL-3.0 (Typst exam template)
+//     tldraw       custom commercial license, explicitly forbids production use
+//     Anytype      "Any Source Available License" (not OSI open source)
+//     Nougat weights  CC-BY-NC-4.0 (non-commercial)
+//   Once these get into the dependency tree, you only find out when it is time
+//   to distribute, and rework is extremely costly. So make it a CI gate: any
+//   newly introduced dependency exposes its license risk at commit time.
 //
-// 分级策略：
-//   阻止（fail）—— AGPL / SSPL / 商业限制 / 非商业 / 未声明许可 / 明确禁止生产使用
-//   警告（warn）—— GPL / LGPL（桌面端一般可接受，但需要人确认）
-//   忽略        —— MIT / Apache / BSD / ISC / MPL / 0BSD / Unlicense / CC0 等
+// Severity policy:
+//   block (fail) — AGPL / SSPL / commercial restrictions / non-commercial / undeclared license / explicit production-use ban
+//   warn         — GPL / LGPL (generally acceptable for a desktop app, but needs human review)
+//   ignore       — MIT / Apache / BSD / ISC / MPL / 0BSD / Unlicense / CC0, etc.
 import fs from "node:fs";
 import path from "node:path";
 
-// ------------------------------------------------------------------ 分级规则
+// ------------------------------------------------------------------ Severity rules
 
 const BLOCK_PATTERNS = [
-  { re: /\bAGPL\b|Affero/i, why: "AGPL 对网络分发的闭源产品有传染性" },
-  { re: /\bSSPL\b|Server Side Public License/i, why: "SSPL 非 OSI 开源，限制服务化" },
-  { re: /Commons Clause/i, why: "Commons Clause 禁止商业化" },
-  { re: /non-?commercial|CC-BY-NC|NC-4\.0/i, why: "禁止商业使用" },
-  { re: /Any Source Available/i, why: "非 OSI 开源许可" },
-  { re: /not to use the software in production|no production use/i, why: "明文禁止生产环境使用" },
-  { re: /UNLICENSED|private|proprietary/i, why: "未声明可用许可" },
+  { re: /\bAGPL\b|Affero/i, why: "AGPL is viral for closed-source products distributed over a network" },
+  { re: /\bSSPL\b|Server Side Public License/i, why: "SSPL is not OSI open source; it restricts service use" },
+  { re: /Commons Clause/i, why: "Commons Clause forbids commercialization" },
+  { re: /non-?commercial|CC-BY-NC|NC-4\.0/i, why: "Commercial use forbidden" },
+  { re: /Any Source Available/i, why: "Not an OSI open-source license" },
+  { re: /not to use the software in production|no production use/i, why: "Explicitly forbids production use" },
+  { re: /UNLICENSED|private|proprietary/i, why: "No usable license declared" },
 ];
 
 const WARN_PATTERNS = [
-  { re: /\bLGPL\b/i, why: "LGPL：动态链接一般可接受，静态链接需评估" },
-  { re: /\bGPL\b/i, why: "GPL：需确认是否构成衍生作品" },
-  { re: /\bCPAL\b|\bEUPL\b|\bOSL\b/i, why: "弱 copyleft，需人工确认" },
+  { re: /\bLGPL\b/i, why: "LGPL: dynamic linking is generally acceptable; static linking needs review" },
+  { re: /\bGPL\b/i, why: "GPL: confirm whether it creates a derivative work" },
+  { re: /\bCPAL\b|\bEUPL\b|\bOSL\b/i, why: "Weak copyleft; needs human review" },
 ];
 
 const OK_PATTERNS = [
   /^MIT$/i, /^MIT-0$/i, /Apache-2\.0/i, /^BSD/i, /^ISC$/i, /^MPL-2\.0/i,
   /^0BSD$/i, /Unlicense/i, /^CC0/i, /^Zlib$/i,
   /^Python-2\.0$/i,
-  // PSF-2.0 是 Python-2.0 许可的正式 SPDX 标识符（同一个许可的两种写法）。
-  // 实测 argparse@3 用的就是 PSF-2.0 —— 它比 MIT 还宽松，允许闭源商用。
+  // PSF-2.0 is the official SPDX identifier for the Python-2.0 license (two spellings of the same license).
+  // Measured: argparse@3 uses PSF-2.0 — it is even more permissive than MIT and allows closed-source commercial use.
   /^PSF-2\.0$/i,
   /^BlueOak/i, /^Artistic/i, /BSD-3-Clause OR MIT/i,
-  /^WTFPL$/i,          // 比 MIT 还宽松，只是名字不严肃
-  /^CC-BY-4\.0$/i,     // 署名即可，非 copyleft
+  /^WTFPL$/i,          // more permissive than MIT, just not a serious name
+  /^CC-BY-4\.0$/i,     // attribution only, not copyleft
 ];
 
 /**
- * 求值 SPDX 表达式。
+ * Evaluate an SPDX expression.
  *
- * npm 的 license 字段经常是**表达式**而不是单一标识符：
- *   "WTFPL OR ISC"       → 二选一，有一个宽松就整体可用
- *   "(MIT OR CC0-1.0)"   → 同上，带括号
- *   "MIT AND CC0-1.0"    → 两者都要满足
+ * npm's license field is often an **expression** rather than a single identifier:
+ *   "WTFPL OR ISC"       → either one; if any is permissive the whole is usable
+ *   "(MIT OR CC0-1.0)"   → same as above, with parentheses
+ *   "MIT AND CC0-1.0"    → both must be satisfied
  *
- * 为什么必须支持：第一版只做整串正则匹配，于是把
- * "WTFPL OR ISC" / "(MIT OR CC0-1.0)" 这类**明显可用**的许可也拦下来了。
- * 门禁太笨的真实后果是：没人愿意用它，最后被 --no-verify 绕过 —— 等于没有门禁。
- * 所以"宁可误报"要有度：**误报要能被快速消化**，否则规则会被整体抛弃。
+ * Why support is mandatory: the first version only matched whole strings with
+ * regexes, so it blocked obviously usable licenses such as "WTFPL OR ISC" /
+ * "(MIT OR CC0-1.0)". The real consequence of a too-dumb gate is that nobody
+ * wants to use it and it ends up bypassed with --no-verify — as good as no gate.
+ * So "better a false positive" has limits: **false positives must be quick to
+ * digest**, otherwise the rules get abandoned wholesale.
  */
 function evalSpdx(expr) {
   const s = String(expr ?? "").trim();
-  if (!s || s === "(未声明)") return "block";
+  if (!s || s === "(undeclared)") return "block";
 
   const flat = s.replace(/[()]/g, " ").trim();
 
-  // AND：最严格成分决定整体
+  // AND: the strictest component decides the whole
   if (/\sAND\s/i.test(flat)) {
     const parts = flat.split(/\s+AND\s+/i).map(evalSpdx);
     return parts.includes("block") ? "block" : parts.includes("warn") ? "warn" : "ok";
   }
-  // OR：最宽松成分决定整体（任一可用即可）
+  // OR: the most permissive component decides the whole (any usable one is enough)
   if (/\sOR\s/i.test(flat)) {
     const parts = flat.split(/\s+OR\s+/i).map(evalSpdx);
     return parts.includes("ok") ? "ok" : parts.includes("warn") ? "warn" : "block";
@@ -84,16 +87,16 @@ function evalSpdx(expr) {
   return "block";
 }
 
-// 已知且已确认过的库（有据可查的例外，写清理由）
+// Known and already-confirmed libraries (documented exceptions with reasons)
 const KNOWN_EXCEPTIONS = [
   {
     name: "@deepseek-ai/*",
     allow: true,
-    why: "DSH 本体：按计划作为可复用引擎（MIT），不打包其内部依赖清单",
+    why: "DSH itself: planned as a reusable engine (MIT); its internal dependency list is not bundled",
   },
 ];
 
-// ------------------------------------------------------------------ 扫描
+// ------------------------------------------------------------------ Scanning
 
 function findPackageJsonFiles(root) {
   const out = [];
@@ -109,7 +112,7 @@ function findPackageJsonFiles(root) {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       if (skip.has(e.name)) {
-        // 但要单独处理 node_modules：把里面每个包的 package.json 收进来
+        // But handle node_modules separately: collect every package's package.json inside
         if (e.name === "node_modules") {
           collectInstalled(path.join(dir, e.name), out);
         }
@@ -142,7 +145,7 @@ function collectInstalled(nmDir, out, depth = 0) {
     try {
       if (fs.statSync(pj).isFile()) out.push(pj);
     } catch {
-      /* 忽略 */
+      /* ignore */
     }
     const nested = path.join(nmDir, e.name, "node_modules");
     if (fs.existsSync(nested)) collectInstalled(nested, out, depth + 1);
@@ -155,7 +158,7 @@ function licenseOf(pkg) {
   if (Array.isArray(pkg.licenses) && pkg.licenses.length) {
     return pkg.licenses.map((l) => l.type ?? "?").join(" OR ");
   }
-  return "(未声明)";
+  return "(undeclared)";
 }
 
 function classify(name, license) {
@@ -163,37 +166,37 @@ function classify(name, license) {
     const re = new RegExp("^" + ex.name.replace(/\*/g, ".*") + "$");
     if (re.test(name)) return { level: "ok", why: ex.why };
   }
-  // 交给 SPDX 表达式求值（支持 "A OR B" / "A AND B"）
+  // Hand off to the SPDX expression evaluator (supports "A OR B" / "A AND B")
   const level = evalSpdx(license);
   if (level === "ok") return { level: "ok", why: "" };
   if (level === "warn") {
     const w = WARN_PATTERNS.find((p) => p.re.test(license));
-    return { level: "warn", why: w ? w.why : "弱 copyleft，需人工确认" };
+    return { level: "warn", why: w ? w.why : "Weak copyleft; needs human review" };
   }
   const b = BLOCK_PATTERNS.find((p) => p.re.test(license));
   return {
     level: "block",
-    why: b ? b.why : "许可无法识别，默认按阻止处理（请确认后加入 OK_PATTERNS 并写明理由）",
+    why: b ? b.why : "Unrecognized license; blocked by default (verify it, then add it to OK_PATTERNS with a written reason)",
   };
 }
 
-// ------------------------------------------------------------------ 主流程
+// ------------------------------------------------------------------ Main flow
 
 const root = process.cwd();
 const args = process.argv.slice(2);
-const strict = args.includes("--strict"); // strict 模式下警告也算失败
+const strict = args.includes("--strict"); // in strict mode warnings also count as failures
 const targets = args.filter((a) => !a.startsWith("--"));
 const scanRoots = targets.length ? targets : [root];
 
-console.log("=== 格致 · 依赖许可门禁 ===");
-console.log(`  扫描根目录：${scanRoots.join(", ")}`);
-console.log(`  模式：${strict ? "严格（警告即失败）" : "标准（警告不失败）"}`);
+console.log("=== Gezhi · dependency license gate ===");
+console.log(`  Scan roots: ${scanRoots.join(", ")}`);
+console.log(`  Mode: ${strict ? "strict (warnings fail)" : "standard (warnings do not fail)"}`);
 console.log("");
 
 const files = [];
 for (const r of scanRoots) files.push(...findPackageJsonFiles(r));
 const unique = [...new Set(files)];
-console.log(`  发现 package.json：${unique.length} 个`);
+console.log(`  package.json files found: ${unique.length}`);
 
 const blocked = [];
 const warned = [];
@@ -217,22 +220,22 @@ for (const f of unique) {
   else okCount.n++;
 }
 
-console.log("\n  许可分布：");
+console.log("\n  License distribution:");
 for (const [lic, n] of [...inventory.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15)) {
   console.log(`    ${String(n).padStart(4)}  ${lic}`);
 }
 
 if (warned.length) {
-  console.log(`\n  ⚠ 警告 ${warned.length} 个（不阻止，但需要人确认）：`);
+  console.log(`\n  ⚠ Warnings: ${warned.length} (not blocked, but need human review):`);
   for (const w of warned.slice(0, 40)) {
     console.log(`    - ${w.name}@${w.version}  ${w.license}`);
     console.log(`      ${w.why}`);
   }
-  if (warned.length > 40) console.log(`    …另有 ${warned.length - 40} 个`);
+  if (warned.length > 40) console.log(`    …plus ${warned.length - 40} more`);
 }
 
 if (blocked.length) {
-  console.log(`\n  ✖ 阻止 ${blocked.length} 个：`);
+  console.log(`\n  ✖ Blocked: ${blocked.length}:`);
   const uniqByName = new Map();
   for (const b of blocked) uniqByName.set(b.name, b);
   for (const b of uniqByName.values()) {
@@ -245,6 +248,6 @@ if (blocked.length) {
 const failed = blocked.length > 0 || (strict && warned.length > 0);
 console.log("");
 console.log(
-  `=== 结果：通过 ${okCount.n}｜警告 ${warned.length}｜阻止 ${blocked.length} → ${failed ? "失败" : "通过"} ===`
+  `=== Result: ok ${okCount.n} | warnings ${warned.length} | blocked ${blocked.length} → ${failed ? "FAILED" : "PASSED"} ===`
 );
 process.exit(failed ? 1 : 0);

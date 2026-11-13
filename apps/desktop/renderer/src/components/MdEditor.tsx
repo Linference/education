@@ -1,15 +1,15 @@
-// Markdown 编辑器（CodeMirror 6）
+// Markdown editor (CodeMirror 6)
 //
-// 为什么选 CodeMirror 而不是 Monaco：
-//   中文输入法的组合输入在 CodeMirror 里是**已解决**的，而 Monaco 至今仍有
-//   组词时补全弹窗抢按键的问题（#2199 / #4805 未关闭）。
-//   对中文用户这是硬指标 —— 见 poc/ime/ 的实测结论。
+// Why CodeMirror instead of Monaco:
+//   IME composition for Chinese is **solved** in CodeMirror, while Monaco still has
+//   the autocomplete popup stealing keys during composition (#2199 / #4805 still open).
+//   For Chinese users this is a hard requirement — see the measured findings in poc/ime/.
 //
-// ★ R13 规则（实测发现，必须遵守）：
-//   **每个补全源的第一行都必须判 `context.view?.composing`。**
-//   CodeMirror 的 autocompletion 在 composing === true 时**仍会**调用补全源，
-//   于是中文组词时弹窗和输入法候选词抢按键。加上判断后：
-//   组词期间弹窗出现次数 2 → 0（见 poc/ime/R13结论-补全与输入法.md）。
+// ★ R13 rule (discovered by testing, must be followed):
+//   **Every completion source must check `context.view?.composing` on its first line.**
+//   CodeMirror's autocompletion **still** calls completion sources when composing === true,
+//   so during Chinese composition the popup fights the IME candidates for keys. With the check:
+//   组词期间弹窗出现次数 2 → 0（见 poc/ime/r13-conclusion-autocomplete-and-ime.md）。
 import { useEffect, useRef } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
 import {
@@ -18,26 +18,26 @@ import {
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-// ⚠️ `languages` 不在 @codemirror/lang-markdown 里（实测查过它的 8 个导出：
+// ⚠️ `languages` is not in @codemirror/lang-markdown (checked all 8 of its exports:
 //    commonmarkLanguage / deleteMarkupBackward / insertNewlineContinueMarkup /
 //    insertNewlineContinueMarkupCommand / markdown / markdownKeymap /
-//    markdownLanguage / pasteURLAsLink）。它在 @codemirror/language-data 里。
-//    我凭记忆写错过一次，构建直接报 "languages is not exported"。
+//    markdownLanguage / pasteURLAsLink). It lives in @codemirror/language-data.
+//    I once got this wrong from memory and the build reported "languages is not exported".
 import { languages } from "@codemirror/language-data";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput } from "@codemirror/language";
 import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 
 interface Props {
-  /** 文件路径（切换文件时重建编辑器） */
+  /** File path (rebuilds the editor when switching files) */
   path: string;
-  /** 初始内容 */
+  /** Initial content */
   value: string;
-  /** 内容变化（用于标记"未保存"） */
+  /** Content change (used to mark "unsaved") */
   onChange?: (text: string) => void;
-  /** Ctrl+S 保存 */
+  /** Ctrl+S save */
   onSave?: () => void;
-  /** 库里的文件与文件夹名（wikilink 补全用） */
+  /** File and folder names in the library (for wikilink completion) */
   vaultNames?: string[];
 }
 const editorPositions=new Map<string,{anchor:number;head:number;scrollTop:number}>();
@@ -45,7 +45,7 @@ const editorPositions=new Map<string,{anchor:number;head:number;scrollTop:number
 export default function MdEditor({ path, value, onChange, onSave, vaultNames = [] }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  // 用 ref 保存回调，避免它们变化时重建编辑器（会丢光标位置）
+  // Keep callbacks in a ref so changes do not rebuild the editor (which would lose the cursor)
   const cbRef = useRef({ onChange, onSave, vaultNames });
   cbRef.current = { onChange, onSave, vaultNames };
 
@@ -54,13 +54,13 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
     if (!host) return;
 
     /**
-     * wikilink 补全源。
+     * wikilink completion source.
      *
-     * ★ 第一行必须是 composing 判断 —— 见文件顶部 R13 说明。
-     *   实测：不判的话中文组词时弹窗会抢输入法的按键。
+     * ★ The first line must be the composing check — see the R13 note at the top of the file.
+     *   Measured: without it, the popup steals IME keys during Chinese composition.
      */
     const wikiComplete = (context: any) => {
-      if (context.view?.composing) return null;      // ← R13：必须第一行
+      if (context.view?.composing) return null;      // ← R13: must be the first line
       const before = context.matchBefore(/\[\[([^\]\n]*)$/);
       if (!before) return null;
       const typed = before.text.slice(2).toLowerCase();
@@ -72,12 +72,12 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
       return { from: before.from + 2, options, validFor: /^[^\]\n]*$/ };
     };
 
-    /** 标题补全：# 之后给常用 Markdown 结构 */
+    /** Heading completion: common Markdown structure after # */
     const mdComplete = (context: any) => {
-      if (context.view?.composing) return null;      // ← R13：必须第一行
+      if (context.view?.composing) return null;      // ← R13: must be the first line
       const before = context.matchBefore(/^#{1,6}\s.*$/);
       if (!before) return null;
-      return null;   // 标题里不做补全，交给 wikilink
+      return null;   // No completion inside headings; leave it to wikilinks
     };
 
     const state = EditorState.create({
@@ -108,7 +108,7 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
           ...historyKeymap,
           indentWithTab,
           {
-            // Ctrl+S 保存（编辑器内捕获，避免被浏览器/Electron 抢走）
+            // Ctrl+S save (captured in the editor so the browser/Electron does not take it)
             key: "Mod-s",
             preventDefault: true,
             run: () => { cbRef.current.onSave?.(); return true; },
@@ -118,7 +118,7 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
         EditorView.updateListener.of((u) => {
           if (u.docChanged) cbRef.current.onChange?.(u.state.doc.toString());
         }),
-        // 编辑器主题：与格致整体观感一致（不自带主题，用变量对齐）
+        // Editor theme: consistent with Gezhi's overall look (no bundled theme; align via variables)
         EditorView.theme({
           "&": {
             fontSize: "15px",
@@ -146,11 +146,11 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
           ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
             backgroundColor: "rgba(127,109,242,0.22) !important",
           },
-          // Markdown 标记符号弱化（标题#、强调*等）—— 接近所见即所得观感
+          // Dim Markdown markup symbols (heading #, emphasis *, etc.) — close to a WYSIWYG feel
           ".cm-formatting": { color: "var(--text-faint)" },
           ".cm-formatting-header": { color: "var(--accent)", opacity: 0.55 },
           ".cm-formatting-strong, .cm-formatting-emphasis": { color: "var(--text-faint)" },
-          // 标题字号分级（编辑时也能看出层级）
+          // Heading size hierarchy (levels visible while editing)
           ".cm-line.h1, .cm-line.ͼm": { fontSize: "1.5em" },
           ".cm-tooltip-autocomplete": {
             border: "1px solid var(--bd-strong)",
@@ -178,18 +178,18 @@ export default function MdEditor({ path, value, onChange, onSave, vaultNames = [
       view.destroy();
       viewRef.current = null;
     };
-    // path 变化时重建（换文件）；value 不进依赖 —— 否则每次输入都会重建
+    // Rebuild when path changes (switching files); value is not a dependency — otherwise every keystroke would rebuild
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
-  // 外部内容变化（例如 AI 改了文件后重新载入）→ 更新编辑器内容
+  // External content change (e.g. reload after AI edited the file) → update the editor content
   const lastValueRef = useRef(value);
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
-    // 只在外部值与编辑器当前值不同、且与上次已同步值不同时才覆盖，
-    // 否则会把用户正在输入的内容冲掉
+    // Overwrite only when the external value differs from the editor's current and last-synced values,
+    // otherwise it would wipe what the user is typing
     if (value !== current && value !== lastValueRef.current) {
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },

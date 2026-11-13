@@ -102,7 +102,7 @@ function registerSettings(ipcMain, getWindow, app) {
    */
   ipcMain.handle("settings:credStatus", async () => {
     const cred = await loadCred();
-    if (!cred) return { ok: false, error: "找不到凭据模块" };
+    if (!cred) return { ok: false, error: "Credentials module not found" };
     try {
       const info = cred.credentialsInfo();
       const out = {
@@ -144,7 +144,7 @@ function registerSettings(ipcMain, getWindow, app) {
    */
   ipcMain.handle("settings:credSave", async (_e, { tencent, deepseek, passphrase } = {}) => {
     const cred = await loadCred();
-    if (!cred) return { ok: false, error: "找不到凭据模块" };
+    if (!cred) return { ok: false, error: "Credentials module not found" };
     try {
       // 先读出已有的（DPAPI 模式无需密码）
       let existing = {};
@@ -152,24 +152,24 @@ function registerSettings(ipcMain, getWindow, app) {
       if (info.exists && info.mode === "dpapi") {
         try { existing = cred.loadSecrets({}) ?? {}; } catch { existing = {}; }
       } else if (info.exists && info.mode === "passphrase") {
-        if (!passphrase) return { ok: false, error: "现有凭据库用主密码保护，请先输入主密码" };
-        try { existing = cred.loadSecrets({ passphrase }) ?? {}; } catch { return { ok: false, error: "主密码不正确" }; }
+        if (!passphrase) return { ok: false, error: "The existing credential store is protected by a master password; enter the master password first" };
+        try { existing = cred.loadSecrets({ passphrase }) ?? {}; } catch { return { ok: false, error: "Incorrect master password" }; }
       }
 
       const next = { ...existing };
       if (tencent) {
         const id = String(tencent.secretId ?? "").trim();
         const key = String(tencent.secretKey ?? "").trim();
-        if (!id || !key) return { ok: false, error: "腾讯云的 SecretId 与 SecretKey 都要填" };
+        if (!id || !key) return { ok: false, error: "Both the Tencent Cloud SecretId and SecretKey are required" };
         // 粗略校验形状：腾讯云 SecretId 以 AKID 开头，36 位
         if (!/^AKID[A-Za-z0-9]{28,}$/.test(id)) {
-          return { ok: false, error: "SecretId 看起来不对（应以 AKID 开头，共 36 位）" };
+          return { ok: false, error: "SecretId looks invalid (it should start with AKID and be 36 characters)" };
         }
         next.tencent = { secretId: id, secretKey: key };
       }
       if (deepseek) {
         const k = String(deepseek.apiKey ?? "").trim();
-        if (!k) return { ok: false, error: "DeepSeek 的 API Key 不能为空" };
+        if (!k) return { ok: false, error: "The DeepSeek API Key cannot be empty" };
         next.deepseek = { apiKey: k };
       }
 
@@ -183,7 +183,7 @@ function registerSettings(ipcMain, getWindow, app) {
   /** 删除某个服务的凭据（或全部） */
   ipcMain.handle("settings:credDelete", async (_e, { which } = {}) => {
     const cred = await loadCred();
-    if (!cred) return { ok: false, error: "找不到凭据模块" };
+    if (!cred) return { ok: false, error: "Credentials module not found" };
     try {
       const info = cred.credentialsInfo();
       if (!info.exists) return { ok: true, removed: "none" };
@@ -192,12 +192,12 @@ function registerSettings(ipcMain, getWindow, app) {
         return { ok: true, removed: "all" };
       }
       if (info.mode !== "dpapi") {
-        return { ok: false, error: "主密码模式的凭据库暂不支持单独删除，请清空后重配" };
+        return { ok: false, error: "The master-password credential store does not support deleting items individually yet; clear it and reconfigure" };
       }
       const s = cred.loadSecrets({}) ?? {};
       if (which === "tencent") delete s.tencent;
       else if (which === "deepseek") delete s.deepseek;
-      else return { ok: false, error: "不知道要删哪个" };
+      else return { ok: false, error: "Cannot tell which item to delete" };
       if (!Object.keys(s).length) {
         cred.deleteSecrets();
         return { ok: true, removed: "all" };
@@ -213,7 +213,7 @@ function registerSettings(ipcMain, getWindow, app) {
   ipcMain.handle("settings:dshStatus", async () => {
     try {
       const bridge = await require('./ai.cjs').loadBridge().catch(() => null);
-      if (!bridge) return { ok: false, error: "找不到 DSH 桥接模块" };
+      if (!bridge) return { ok: false, error: "DSH bridge module not found" };
 
       const custom = readSettings().dshPath;
       // ⚠️ dsh-bridge 导出的是 healthCheck（不是 dshHealth），
@@ -235,9 +235,9 @@ function registerSettings(ipcMain, getWindow, app) {
         hint: h?.ok
           ? null
           : custom
-            ? "指定的路径跑不起来，请确认它是一个可执行的 DSH 程序。"
-            : "格致用 DeepSeek Harness 当 AI 大脑。请先安装并登录 DeepSeek Harness，" +
-              "或在下面手动指定它的可执行文件路径。",
+            ? "The specified path is not runnable; make sure it is an executable DSH program."
+            : "Gezhi uses DeepSeek Harness as its AI brain. Install and sign in to DeepSeek Harness first," +
+              "or specify its executable path manually below.",
       };
     } catch (e) {
       return { ok: false, error: String(e?.message ?? e) };

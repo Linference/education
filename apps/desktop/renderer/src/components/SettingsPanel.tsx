@@ -63,7 +63,7 @@ function Row({ label, value, ok, hint }: { label: string; value: string; ok?: bo
           background: ok ? "#e9f7ee" : "#fdecec",
           color: ok ? "#14532d" : "#8a1f1f",
         }}>
-          {ok ? "就绪" : "未就绪"}
+          {ok ? "Ready" : "Not ready"}
         </span>
       )}
     </div>
@@ -114,9 +114,9 @@ export default function SettingsPanel({ onChanged }: Props) {
         tencent: { secretId, secretKey },
         ...(passphrase ? { passphrase } : {}),
       });
-      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "The operation did not complete. Please try again." }); return; }
       setSecretId(""); setSecretKey(""); setPassphrase("");
-      setMsg({ ok: true, text: `已保存（${r.mode === "dpapi" ? "Windows 账户绑定加密" : "主密码加密"}）。语音功能现在应该可用了。` });
+      setMsg({ ok: true, text: `Saved (${r.mode === "dpapi" ? "encrypted against your Windows account" : "encrypted with a master password"}). Voice features should work now.` });
       await refresh();
       onChanged?.();
     } finally {
@@ -129,9 +129,9 @@ export default function SettingsPanel({ onChanged }: Props) {
     setMsg(null);
     try {
       const r = await window.gezhi.settings.credSave({ deepseek: { apiKey: deepseekKey } });
-      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "The operation did not complete. Please try again." }); return; }
       setDeepseekKey("");
-      setMsg({ ok: true, text: "DeepSeek 密钥已保存。" });
+      setMsg({ ok: true, text: "DeepSeek key saved." });
       await refresh();
     } finally {
       setBusy(false);
@@ -143,8 +143,8 @@ export default function SettingsPanel({ onChanged }: Props) {
     setMsg(null);
     try {
       const r = await window.gezhi.settings.credDelete({ which });
-      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
-      setMsg({ ok: true, text: "已清除。" });
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "The operation did not complete. Please try again." }); return; }
+      setMsg({ ok: true, text: "Cleared." });
       await refresh();
       onChanged?.();
     } finally {
@@ -156,8 +156,8 @@ export default function SettingsPanel({ onChanged }: Props) {
     setBusy(true);
     try {
       const r = await window.gezhi.settings.set({ dshPath });
-      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "操作未完成，请重试" }); return; }
-      setMsg({ ok: true, text: dshPath ? "路径已保存，正在复查…" : "已恢复自动探测。" });
+      if (!r.ok) { setMsg({ ok: false, text: r.error ?? "The operation did not complete. Please try again." }); return; }
+      setMsg({ ok: true, text: dshPath ? "Path saved, re-checking…" : "Automatic detection restored." });
       await refresh();
     } finally {
       setBusy(false);
@@ -202,10 +202,10 @@ export default function SettingsPanel({ onChanged }: Props) {
         flex: "0 0 auto", display: "flex", alignItems: "center", gap: 8,
         padding: "7px 10px", borderBottom: "1px solid var(--bd)", background: "var(--bg-secondary)",
       }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600 }}>设置</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600 }}>Settings</span>
         <div style={{ flex: "1 1 auto" }} />
         <button onClick={() => void refresh()} style={{ fontSize: 11.5, color: "var(--accent)", textDecoration: "underline" }}>
-          刷新状态
+          Refresh status
         </button>
       </div>
 
@@ -222,10 +222,10 @@ export default function SettingsPanel({ onChanged }: Props) {
 
         {/* ---------------- AI 大脑 ---------------- */}
         <div style={sectionStyle}>
-          {h("AI 大脑（DeepSeek Harness）",
-            "格致的 AI 由 DeepSeek Harness 驱动。它不在安装包里，需要单独安装并登录 —— 这是 AI 能用起来的前提。")}
-          <Row label="状态" value={dshOk ? `可用（版本 ${dsh?.version ?? "未知"}）` : (dsh?.error ?? "未找到")} ok={dshOk} />
-          {dsh?.bin && <Row label="可执行文件" value={dsh.bin} />}
+          {h("AI kernel (DeepSeek Harness)",
+            "Gezhi's AI is driven by DeepSeek Harness. It is not bundled with the installer, so it has to be installed and signed in separately — that is the prerequisite for using the AI.")}
+          <Row label="Status" value={dshOk ? `Available (version ${dsh?.version ?? "unknown"})` : (dsh?.error ?? "Not found")} ok={dshOk} />
+          {dsh?.bin && <Row label="Executable" value={dsh.bin} />}
           {!dshOk && dsh?.hint && (
             <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.75, margin: "4px 0 8px" }}>
               {dsh.hint}
@@ -233,34 +233,34 @@ export default function SettingsPanel({ onChanged }: Props) {
           )}
           <div style={{ marginTop: 6 }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>
-              手动指定 DSH 路径（留空 = 自动探测）
+              Specify the DSH path manually (leave empty = automatic detection)
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <input
                 value={dshPath}
                 onChange={(e) => setDshPath(e.target.value)}
-                placeholder="例如 D:\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd"
+                placeholder="For example D:\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd"
                 style={inputStyle}
               />
-              <button onClick={() => void savePath()} disabled={busy} style={btnStyle()}>保存</button>
+              <button onClick={() => void savePath()} disabled={busy} style={btnStyle()}>Save</button>
             </div>
           </div>
         </div>
 
         {/* ---------------- 腾讯云语音 ---------------- */}
         <div style={sectionStyle}>
-          {h("腾讯云语音（说话与识音）",
-            "费曼讲解台的语音输入、数字人的朗读都靠它。密钥只存在你自己电脑上，格致不会上传，也不会写进安装包。")}
+          {h("Tencent Cloud voice (speech and recognition)",
+            "The Feynman desk's voice input and the companion's read-aloud both use it. Keys are stored only on your own computer; Gezhi never uploads them and never writes them into the installer.")}
           <Row
-            label="状态"
-            value={tencentOk ? `已配置（SecretId 尾号 ${cred?.tencent?.secretIdTail ?? "?"}）` : "未配置"}
+            label="Status"
+            value={tencentOk ? `Configured (SecretId ends with ${cred?.tencent?.secretIdTail ?? "?"})` : "Not configured"}
             ok={tencentOk}
           />
           {cred?.mode && (
             <Row
-              label="加密方式"
-              value={cred.mode === "dpapi" ? "Windows 账户绑定（仅本机本账户可解）" : "主密码（scrypt + AES-256-GCM）"}
-              hint={cred.path ? `存放位置：${cred.path}` : undefined}
+              label="Encryption"
+              value={cred.mode === "dpapi" ? "Bound to your Windows account (only this account on this machine can decrypt it)" : "Master password (scrypt + AES-256-GCM)"}
+              hint={cred.path ? `Stored at: ${cred.path}` : undefined}
             />
           )}
 
@@ -268,7 +268,7 @@ export default function SettingsPanel({ onChanged }: Props) {
             <input
               value={secretId}
               onChange={(e) => setSecretId(e.target.value)}
-              placeholder="SecretId（以 AKID 开头，36 位）"
+              placeholder="SecretId (starts with AKID, 36 characters)"
               style={{ ...inputStyle, marginBottom: 5 }}
             />
             <input
@@ -281,7 +281,7 @@ export default function SettingsPanel({ onChanged }: Props) {
             <input
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
-              placeholder="主密码（可选；填了就用主密码加密，更强但每次要输）"
+              placeholder="Master password (optional; if set, keys are encrypted with it — stronger, but you must type it every time)"
               type="password"
               style={{ ...inputStyle, marginBottom: 6 }}
             />
@@ -291,29 +291,29 @@ export default function SettingsPanel({ onChanged }: Props) {
                 disabled={busy || !secretId.trim() || !secretKey.trim()}
                 style={btnStyle(true)}
               >
-                保存密钥
+                Save keys
               </button>
               {cred?.exists && (
                 <button onClick={() => void del("tencent")} disabled={busy} style={btnStyle()}>
-                  清除腾讯云
+                  Clear Tencent Cloud
                 </button>
               )}
             </div>
           </div>
 
           <div style={{ fontSize: 10.5, color: "var(--text-faint)", lineHeight: 1.75, marginTop: 7 }}>
-            密钥在腾讯云控制台「访问管理 → API 密钥管理」里创建。
-            建议给它只勾选「语音合成」「语音识别」两项权限。
+            Create the keys in the Tencent Cloud console under Access Management → API Key Management.
+            Grant only the "speech synthesis" and "speech recognition" permissions.
           </div>
         </div>
 
         {/* ---------------- DeepSeek 密钥 ---------------- */}
         <div style={sectionStyle}>
-          {h("DeepSeek 密钥（可选）",
-            "如果你的 DeepSeek Harness 已经登录过，这里不用填。留作备用：某些部署方式需要单独提供。")}
+          {h("DeepSeek key (optional)",
+            "If your DeepSeek Harness is already signed in, leave this empty. It is a fallback: some deployment setups require a key to be supplied separately.")}
           <Row
-            label="状态"
-            value={cred?.deepseek?.configured ? `已配置（尾号 ${cred.deepseek.apiKeyTail ?? "?"}）` : "未配置"}
+            label="Status"
+            value={cred?.deepseek?.configured ? `Configured (ends with ${cred.deepseek.apiKeyTail ?? "?"})` : "Not configured"}
             ok={Boolean(cred?.deepseek?.configured)}
           />
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
@@ -325,26 +325,26 @@ export default function SettingsPanel({ onChanged }: Props) {
               style={inputStyle}
             />
             <button onClick={() => void saveDeepseek()} disabled={busy || !deepseekKey.trim()} style={btnStyle()}>
-              保存
+              Save
             </button>
             {cred?.deepseek?.configured && (
-              <button onClick={() => void del("deepseek")} disabled={busy} style={btnStyle()}>清除</button>
+              <button onClick={() => void del("deepseek")} disabled={busy} style={btnStyle()}>Clear</button>
             )}
           </div>
         </div>
 
         {/* ---------------- 应用选项 ---------------- */}
         <div style={sectionStyle}>
-          {h("应用选项")}
+          {h("Application options")}
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0", cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={Boolean(settings?.hiFi)}
               onChange={(e) => void toggle("hiFi", e.target.checked)}
             />
-            高保真查看 Office 文档
+            High-fidelity Office viewing
             <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-              （用内置 LibreOffice 转 PDF；关掉则 PPT 只能看文字）
+              (converts to PDF with the bundled LibreOffice; turn it off and PPT shows text only)
             </span>
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0", cursor: "pointer" }}>
@@ -353,9 +353,9 @@ export default function SettingsPanel({ onChanged }: Props) {
               checked={Boolean(settings?.preferCloudVoice)}
               onChange={(e) => void toggle("preferCloudVoice", e.target.checked)}
             />
-            默认用云端语音
+            Use cloud voice by default
             <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-              （音质更好且带真实时间戳，口型更准；关掉则用系统语音）
+              (better sound and real timestamps for more accurate lip sync; turn it off to use the system voice)
             </span>
           </label>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 0", cursor: "pointer" }}>
@@ -364,23 +364,23 @@ export default function SettingsPanel({ onChanged }: Props) {
               checked={Boolean(settings?.feynmanSpeakFeedback)}
               onChange={(e) => void toggle("feynmanSpeakFeedback", e.target.checked)}
             />
-            费曼台念出反馈
+            Read Feynman feedback aloud
           </label>
         </div>
 
         {/* ---------------- 存储位置 ---------------- */}
         <div style={sectionStyle}>
-          {h("数据存放位置", "都在你自己电脑上。凭据与会话库放在 AppData，不随资料库同步（避免 OneDrive 冲突）。")}
-          <Row label="凭据" value={cred?.path ?? "（未创建）"} />
-          <Row label="设置" value={paths?.settings ?? "（未知）"} />
+          {h("Where data is stored", "Everything stays on your own computer. Credentials and session databases live in AppData and are not synced with the vault (which avoids OneDrive conflicts).")}
+          <Row label="Credentials" value={cred?.path ?? "(not created)"} />
+          <Row label="Settings" value={paths?.settings ?? "(unknown)"} />
           <div style={{ fontSize: 10.5, color: "var(--text-faint)", lineHeight: 1.7, marginTop: 4 }}>
-            资料库本身仍在你自己选的位置（如桌面上的「格致试用」）。
+            The vault itself stays wherever you chose it (for example "Gezhi Trial" on your desktop).
           </div>
         </div>
 
         {cred?.locked && (
           <div style={{ fontSize: 11.5, color: "var(--text-muted)", lineHeight: 1.7 }}>
-            凭据库用主密码保护，需要解锁才能查看内容。
+            The credential store is protected by a master password and must be unlocked before its contents can be read.
           </div>
         )}
       </div>

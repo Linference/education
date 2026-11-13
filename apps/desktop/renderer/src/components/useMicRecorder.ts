@@ -178,7 +178,7 @@ export function useMicRecorder() {
       cleanup();
       setRecording(false);
       const msg = e?.name === "NotAllowedError"
-        ? "没有麦克风权限。请在系统设置里允许格致使用麦克风。"
+        ? "Microphone permission was denied. Allow Gezhi to use the microphone in system settings."
         : (e?.message ?? String(e));
       setError(msg);
     }
@@ -193,7 +193,7 @@ export function useMicRecorder() {
       pendingBlob.current = null; setPending(false);
       if (!blob) {
         setBusy(false);
-        const msg = "没有录到声音";
+        const msg = "No audio was recorded";
         setError(msg);
         return { ok: false, error: msg };
       }
@@ -202,7 +202,7 @@ export function useMicRecorder() {
       const r = await window.gezhi.avatar.asr({ audioBase64: base64, format: "wav", sampleRate: SAMPLE_RATE });
       setBusy(false);
       if (!r.ok) {
-        setError(`${r.error ?? "识别失败"}${r.hint ? ` —— ${r.hint}` : ""}`);
+        setError(`${r.error ?? "Recognition failed"}${r.hint ? ` — ${r.hint}` : ""}`);
       }
       return r as AsrResult;
     } catch (e: any) {

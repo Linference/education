@@ -201,7 +201,7 @@ function parseSheetFile(filePath) {
   const t0 = Date.now();
   try {
     const st = fs.statSync(filePath);
-    if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
+    if (st.isDirectory()) return { ok: false, error: "This is a directory" };
     // 整个文件读一次进内存；下面所有 entry 都从这份 buffer 取，
     // 避免逐个 entry 重读文件（219 MB 的表格重读几十次会直接 OOM）
     const buf = fs.readFileSync(filePath);
@@ -220,12 +220,12 @@ function parseSheetFile(filePath) {
     // 工作表清单
     const workbookXml = readEntry("xl/workbook.xml");
     if (!workbookXml) {
-      return { ok: false, error: "这不是一个有效的 Excel 文件（找不到 xl/workbook.xml）" };
+      return { ok: false, error: "This is not a valid Excel file (xl/workbook.xml not found)" };
     }
     const relsXml = readEntry("xl/_rels/workbook.xml.rels");
     const sheetList = parseWorkbook(workbookXml, relsXml);
 
-    if (!sheetList.length) return { ok: false, error: "这个工作簿里没有工作表" };
+    if (!sheetList.length) return { ok: false, error: "This workbook has no worksheets" };
 
     const sheets = [];
     for (const s of sheetList) {
@@ -237,7 +237,7 @@ function parseSheetFile(filePath) {
 
       const xml = readEntry(full);
       if (!xml) {
-        sheets.push({ name: s.name, rows: [], rowCount: 0, colCount: 0, error: `找不到 ${full}` });
+        sheets.push({ name: s.name, rows: [], rowCount: 0, colCount: 0, error: `Not found: ${full}` });
         continue;
       }
       const parsed = parseSheet(xml, shared);

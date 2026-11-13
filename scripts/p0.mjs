@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// 格致 · P0 总入口：一条命令跑完全部地基检查
+// Gezhi · P0 main entry: run all foundation checks with a single command.
 //
-// P0 的完成定义（对应计划 §5 的验收清单）：
-//   ✔ 仓库骨架存在
-//   ✔ node:sqlite 能建出全部表，且中文双 FTS 索引可用
-//   ✔ 依赖许可门禁生效，且门禁本身经过自测
-//   ✔ 能建库（目录骨架 + 配置 + 数据库）
-//   ✔ DSH 桥能用，且 Agent 受控地读写库内文件
-// 这个脚本把上面每一条变成可重复执行的检查。
+// Definition of done for P0 (the acceptance checklist from plan §5):
+//   ✔ repo skeleton exists
+//   ✔ node:sqlite can create all tables, and the Chinese dual-FTS indexes work
+//   ✔ the dependency license gate is active, and the gate itself is self-tested
+//   ✔ a vault can be created (directory skeleton + config + database)
+//   ✔ the DSH bridge works, and the Agent reads/writes vault files under control
+// This script turns each of the above into a repeatable check.
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -29,12 +29,12 @@ function run(title, cmd, args, { expectFail = false, cwd = root } = {}) {
 }
 
 console.log("╔══════════════════════════════════════════════╗");
-console.log("║   格致 · P0 地基检查                          ║");
+console.log("║   Gezhi · P0 foundation checks                ║");
 console.log("╚══════════════════════════════════════════════╝");
-console.log(`  仓库根目录：${root}`);
+console.log(`  Repo root: ${root}`);
 
-// 1) 骨架
-process.stdout.write("\n──────── 1. 仓库骨架 ────────\n");
+// 1) Skeleton
+process.stdout.write("\n──────── 1. Repo skeleton ────────\n");
 const required = [
   "package.json",
   "pnpm-workspace.yaml",
@@ -54,39 +54,39 @@ const required = [
   "scripts/scan-secrets.test.mjs",
   "scripts/credentials.test.mjs",
   "scripts/p0.mjs",
-  "docs/00-环境勘察报告.md",
-  "docs/01-智能层选型-DSH作为Agent内核.md",
-  "docs/02-存储与检索实测.md",
-  "docs/03-DSH集成实测-写作助手.md",
-  "docs/04-凭据与安全.md",
+  "docs/00-environment-survey.md",
+  "docs/01-intelligence-layer-dsh-as-agent-core.md",
+  "docs/02-storage-and-retrieval-measurements.md",
+  "docs/03-dsh-integration-writing-assistant.md",
+  "docs/04-credentials-and-security.md",
   "templates/typst/handout.typ",
-  "poc/ime/R13结论-补全与输入法.md",
-  "格致-开发计划.md",
+  "poc/ime/r13-conclusion-autocomplete-and-ime.md",
+  "gezhi-development-plan.md",
 ];
 const missing = required.filter((f) => !fs.existsSync(path.join(root, f)));
 if (missing.length) {
   failed++;
-  console.log(`  [FAIL] 缺文件：${missing.join(", ")}`);
-  steps.push({ title: "骨架完整", ok: false });
+  console.log(`  [FAIL] missing files: ${missing.join(", ")}`);
+  steps.push({ title: "Skeleton complete", ok: false });
 } else {
-  console.log(`  [PASS] ${required.length} 个关键文件齐全`);
-  steps.push({ title: "骨架完整", ok: true });
+  console.log(`  [PASS] all ${required.length} key files present`);
+  steps.push({ title: "Skeleton complete", ok: true });
 }
 
-// 2) 数据库结构 + 中文检索
-run("2. 数据库结构断言（含中文双 FTS 索引）", process.execPath, ["packages/db/src/assert-schema.mjs"]);
+// 2) Database structure + Chinese search
+run("2. Database schema assertion (incl. Chinese dual FTS indexes)", process.execPath, ["packages/db/src/assert-schema.mjs"]);
 
-// 3) 许可门禁自测 + 真实扫描
-run("3a. 许可门禁自测（证明它真的会拦）", process.execPath, ["scripts/check-licenses.test.mjs"]);
-run("3b. 许可门禁扫描全仓", process.execPath, ["scripts/check-licenses.mjs"]);
+// 3) License gate self-test + real scan
+run("3a. License gate self-test (prove it really blocks)", process.execPath, ["scripts/check-licenses.test.mjs"]);
+run("3b. License gate scan of the whole repo", process.execPath, ["scripts/check-licenses.mjs"]);
 
-// 3c/3d/3e) 密钥防线：扫描器自测 + 全仓扫描 + 加密存储自测
-run("3c. 密钥扫描自测（证明它真的会拦）", process.execPath, ["scripts/scan-secrets.test.mjs"]);
-run("3d. 密钥扫描全仓", process.execPath, ["scripts/scan-secrets.mjs"]);
-run("3e. 密钥存储自测（明文/篡改/ACL）", process.execPath, ["scripts/credentials.test.mjs"]);
+// 3c/3d/3e) Secret defenses: scanner self-test + whole-repo scan + encrypted-storage self-test
+run("3c. Secret-scan self-test (prove it really blocks)", process.execPath, ["scripts/scan-secrets.test.mjs"]);
+run("3d. Secret scan of the whole repo", process.execPath, ["scripts/scan-secrets.mjs"]);
+run("3e. Credential-storage self-test (plaintext/tamper/ACL)", process.execPath, ["scripts/credentials.test.mjs"]);
 
-// 4) 建库（临时目录，不碰用户文档）
-process.stdout.write("\n──────── 4. 建库冒烟 ────────\n");
+// 4) Vault creation (temp directory, does not touch user documents)
+process.stdout.write("\n──────── 4. Vault-creation smoke ────────\n");
 const tmpRoot = path.join(process.env.TEMP ?? "/tmp", `gezhi-p0-${Date.now()}`);
 try {
   const r = spawnSync(process.execPath, ["packages/db/src/cli.mjs", "init", "P0冒烟库", "--root", tmpRoot, "--subject", "英语", "--grade", "高二"], {
@@ -95,20 +95,20 @@ try {
   console.log((r.stdout ?? "").trimEnd());
   const vaultDir = path.join(tmpRoot, "P0冒烟库");
   const checks = [
-    ["库目录", fs.existsSync(vaultDir)],
+    ["Vault directory", fs.existsSync(vaultDir)],
     ["vault.json", fs.existsSync(path.join(vaultDir, ".gezhi", "vault.json"))],
     ["workspace.json", fs.existsSync(path.join(vaultDir, ".gezhi", "workspace.json"))],
     ["vaults.json", fs.existsSync(path.join(tmpRoot, "vaults.json"))],
-    ["笔记目录", fs.existsSync(path.join(vaultDir, "笔记"))],
-    ["回收站目录", fs.existsSync(path.join(vaultDir, ".gezhi", "trash"))],
+    ["Notes directory", fs.existsSync(path.join(vaultDir, "笔记"))],
+    ["Trash directory", fs.existsSync(path.join(vaultDir, ".gezhi", "trash"))],
   ];
-  // 用 Node 读回配置，验证是真正的 UTF-8（而不是被控制台编码骗了）
+  // Read the config back with Node to verify it is genuinely UTF-8 (not fooled by console encoding)
   let cfgOk = false;
   try {
     const cfg = JSON.parse(fs.readFileSync(path.join(vaultDir, ".gezhi", "vault.json"), "utf8"));
     cfgOk = cfg.name === "P0冒烟库" && cfg.subject === "英语";
-  } catch { /* 保持 false */ }
-  checks.push(["配置读回且中文正确", cfgOk]);
+  } catch { /* stay false */ }
+  checks.push(["Config read back with correct Chinese", cfgOk]);
 
   let allOk = true;
   for (const [name, ok] of checks) {
@@ -116,26 +116,26 @@ try {
     if (!ok) allOk = false;
   }
   if (!allOk) failed++;
-  steps.push({ title: "建库冒烟", ok: allOk });
+  steps.push({ title: "Vault-creation smoke", ok: allOk });
 } catch (e) {
   failed++;
-  console.log(`  [FAIL] 建库失败：${e.message}`);
-  steps.push({ title: "建库冒烟", ok: false });
+  console.log(`  [FAIL] vault creation failed: ${e.message}`);
+  steps.push({ title: "Vault-creation smoke", ok: false });
 } finally {
-  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 // 5) DSH 桥
-run("5. DSH 桥冒烟（真实调用 + 受控改文件）", process.execPath, ["packages/dsh-bridge/smoke.mjs"]);
+run("5. DSH bridge smoke (real call + controlled file modification)", process.execPath, ["packages/dsh-bridge/smoke.mjs"]);
 
-// ---------------------------------------------------------------- 汇总
+// ---------------------------------------------------------------- Summary
 console.log("\n╔══════════════════════════════════════════════╗");
-console.log("║   P0 汇总                                     ║");
+console.log("║   P0 summary                                  ║");
 console.log("╚══════════════════════════════════════════════╝");
 for (const s of steps) {
   const mark = s.ok ? "✔" : "✖";
   console.log(`  ${mark} ${s.title}`);
 }
 const okCount = steps.filter((s) => s.ok).length;
-console.log(`\n  ${okCount}/${steps.length} 项通过 → ${failed === 0 ? "P0 完成" : "P0 未完成"}`);
+console.log(`\n  ${okCount}/${steps.length} passed → ${failed === 0 ? "P0 complete" : "P0 incomplete"}`);
 process.exit(failed === 0 ? 0 : 1);

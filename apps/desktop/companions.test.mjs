@@ -17,8 +17,8 @@ test('unobserved, out-of-range, and invented evidence never become radar scores'
   assert.equal(result.dimensions[0].score,null);assert.equal(result.dimensions[0].evidence,'');assert.equal(result.dimensions[1].score,null);assert.equal(result.dimensions[2].score,null);assert.equal(result.dimensions[3].score,3);
 });
 test('malformed or incomplete AI replies fail explicitly', () => {
-  assert.throws(()=>rubric.normalize('无法评估',transcript),/格式/);
-  const data=sample();data.dimensions.pop();assert.throws(()=>rubric.normalize(JSON.stringify(data),transcript),/六维/);
+  assert.throws(()=>rubric.normalize('无法评估',transcript),/format/);
+  const data=sample();data.dimensions.pop();assert.throws(()=>rubric.normalize(JSON.stringify(data),transcript),/six-dimension/);
 });
 test('numbered and bold-field documents import without phantom introduction questions', async () => {
   const r=await parseDocument({name:'题目.txt',text:'说明文字\n1. 细胞膜有什么作用？\n**答案：**控制物质进出\n**解析**：需要选择透过性。\n2. DNA 在哪里？\n答案：细胞核'});

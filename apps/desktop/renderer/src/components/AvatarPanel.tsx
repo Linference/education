@@ -1,15 +1,17 @@
-// 数字人面板
+// Companion panel
 //
-// 两个子页签：
-//   · 对话 —— 和数字人说话（打字 → AI 回答 → 念出来，带口型）
-//   · 检测 —— 哪些能力可用、哪些缺什么
+// Two sub-tabs:
+//   · Chat — talk to the Companion (type → AI answers → spoken aloud with lip sync)
+//   · Capabilities — which capabilities are available and what is missing
 //
-// ★ 为什么拆成两个页签：
-//   用户指出的缺口是"没有对话按钮" —— 之前只有一个"朗读"输入框，
-//   那只是把字念出来，不是对话。现在「对话」页签是主界面，
-//   「检测」退到第二个页签（它是排查用的，不该占主位）。
+// ★ Why split into two tabs:
+//   The gap users pointed out was "there is no chat button" — before, there was only
+//   a "read aloud" input box, which merely spoke text rather than holding a conversation.
+//   The Chat tab is now the main interface, and Capabilities moves to the second tab
+//   (it is for troubleshooting and should not take the prime spot).
 //
-// ★ 语音逻辑不在这里了：都收进 useAvatarVoice，对话台也共用那一份。
+// ★ Voice logic no longer lives here: it is all in useAvatarVoice, shared with the
+//   conversation console.
 import { useCallback, useEffect, useState } from "react";
 import AvatarConsole from "./AvatarConsole";
 import FeynmanPanel from "./FeynmanPanel";
@@ -39,13 +41,13 @@ interface ProbeResult {
 interface Props {
   onOpenRooms?: () => void;
   vaultPath: string | null;
-  /** 当前打开的文件名 —— 给费曼台的"讲什么"当默认值 */
+  /** Currently open file name — used as the default "what to explain" for the Feynman panel */
   currentFileName?: string | null;
-  /** 当前打开文件的文字 —— 作为 AI 判断讲得对不对的参考资料 */
+  /** Text of the currently open file — reference material for the AI to judge the explanation */
   currentFileText?: string | null;
 }
 
-/** 一行检测结果 */
+/** A single capability check row */
 function CapRow({ label, cap, hint }: { label: string; cap: Cap; hint?: string }) {
   const ok = cap.available;
   return (
@@ -77,7 +79,7 @@ function CapRow({ label, cap, hint }: { label: string; cap: Cap; hint?: string }
         background: ok ? "#e9f7ee" : "var(--bg-secondary)",
         color: ok ? "#14532d" : "var(--text-faint)",
       }}>
-        {ok ? "可用" : "未就绪"}
+        {ok ? "Ready" : "Not ready"}
       </span>
     </div>
   );
@@ -85,17 +87,17 @@ function CapRow({ label, cap, hint }: { label: string; cap: Cap; hint?: string }
 
 export default function AvatarPanel({ vaultPath, currentFileName, currentFileText, onOpenRooms }: Props) {
   /**
-   * 默认开在「费曼」页 —— 那才是数字人的主要用途：
-   * **用户当老师讲一遍，AI 查缺补漏**。
-   * 「对话」是普通问答（AI 讲给你听），是补充而不是主线。
+   * Opens on the Feynman tab by default — that is the Companion's main use:
+   * **the user teaches it back, and the AI checks for gaps**.
+   * Chat is ordinary Q&A (the AI explains to you), a supplement rather than the main line.
    */
   const [tab, setTab] = useState<"feynman" | "chat" | "probe">("feynman");
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  /** 系统语音（浏览器内置）是否可用 —— TTS 的免费回退 */
+  /** Whether system speech (built into the browser) is available — the free TTS fallback */
   const [sysTts, setSysTts] = useState<{ ok: boolean; voices: number; reason?: string }>({ ok: false, voices: 0 });
-  /** 麦克风设备 */
+  /** Microphone devices */
   const [mics, setMics] = useState<{ ok: boolean; count: number; reason?: string }>({ ok: false, count: 0 });
 
   const run = useCallback(async () => {
@@ -116,25 +118,25 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
   // ---- 系统语音（浏览器内置，无需密钥） ----
   useEffect(() => {
     const synth = (window as any).speechSynthesis;
-    if (!synth) { setSysTts({ ok: false, voices: 0, reason: "这个环境没有内置语音合成" }); return; }
+    if (!synth) { setSysTts({ ok: false, voices: 0, reason: "This environment has no built-in speech synthesis" }); return; }
     const read = () => {
       const vs = synth.getVoices?.() ?? [];
-      setSysTts({ ok: vs.length > 0, voices: vs.length, reason: vs.length ? undefined : "系统里没有可用的语音" });
+      setSysTts({ ok: vs.length > 0, voices: vs.length, reason: vs.length ? undefined : "No voices available on this system" });
     };
     read();
-    // 语音列表是异步加载的，第一次可能为空
+    // The voice list loads asynchronously; the first read may be empty
     synth.addEventListener?.("voiceschanged", read);
     return () => synth.removeEventListener?.("voiceschanged", read);
   }, []);
 
-  // ---- 麦克风设备 ----
+  // ---- Microphone devices ----
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const md = (navigator as any).mediaDevices;
         if (!md?.enumerateDevices) {
-          if (!cancelled) setMics({ ok: false, count: 0, reason: "这个环境不支持枚举音频设备" });
+          if (!cancelled) setMics({ ok: false, count: 0, reason: "This environment cannot enumerate audio devices" });
           return;
         }
         const devs = await md.enumerateDevices();
@@ -143,7 +145,7 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
           setMics({
             ok: audioIn.length > 0,
             count: audioIn.length,
-            reason: audioIn.length ? undefined : "没有检测到麦克风",
+            reason: audioIn.length ? undefined : "No microphone detected",
           });
         }
       } catch (e: any) {
@@ -154,7 +156,7 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
   }, []);
 
   if (!vaultPath) {
-    return <div className="tree-empty">打开一个库后可以使用数字人</div>;
+    return <div className="tree-empty">Open a vault to use the Companion</div>;
   }
 
   const localReady = [sysTts.ok, mics.ok, Boolean(probe?.viseme.available)].filter(Boolean).length;
@@ -162,11 +164,11 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
 
   return (
     <div className="companion-panel" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* 子页签。
-          顺序上把「费曼」放第一个 —— 它是主用途（你讲、AI 查缺补漏），
-          「对话」是普通问答，「检测」是排查工具。 */}
+      {/* Sub-tabs.
+          Feynman comes first — it is the main use (you explain, the AI checks for gaps),
+          Chat is ordinary Q&A, and Capabilities is a troubleshooting tool. */}
       <div className="companion-tabs" style={{ flex: "0 0 auto", display: "flex", borderBottom: "1px solid var(--bd)" }}>
-        {([["feynman", "费曼"], ["chat", "对话"], ["probe", "检测"]] as const).map(([k, label]) => (
+        {([["feynman", "Feynman"], ["chat", "Chat"], ["probe", "Capabilities"]] as const).map(([k, label]) => (
           <button
             key={k}
             aria-selected={tab === k}
@@ -183,7 +185,7 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
         ))}
       </div>
 
-      {/* ---- 费曼：你讲，AI 查缺补漏 ---- */}
+      {/* ---- Feynman: you explain, the AI checks for gaps ---- */}
       {tab === "feynman" && (
         <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
           <FeynmanPanel
@@ -196,14 +198,14 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
         </div>
       )}
 
-      {/* ---- 对话 ---- */}
+      {/* ---- Chat ---- */}
       {tab === "chat" && (
         <div style={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
           <AvatarConsole vaultPath={vaultPath} cloudReady={cloudReady} />
         </div>
       )}
 
-      {/* ---- 检测 ---- */}
+      {/* ---- Capabilities ---- */}
       {tab === "probe" && (
         <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0 }}>
           <div style={{
@@ -211,64 +213,64 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
             background: "var(--bg-secondary)", fontSize: 11.5,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontWeight: 600 }}>能力检测</span>
+              <span style={{ fontWeight: 600 }}>Capabilities</span>
               <div style={{ flex: "1 1 auto" }} />
               <button
                 onClick={() => void run()}
                 style={{ color: "var(--accent)", fontSize: 11.5, textDecoration: "underline" }}
               >
-                {loading ? "检测中…" : "重新检测"}
+                {loading ? "Checking…" : "Check again"}
               </button>
             </div>
             <div style={{ marginTop: 4, color: "var(--text-faint)", lineHeight: 1.7 }}>
-              本地能力 {localReady}/3 · 云端能力 {cloudReady ? 2 : 0}/2
+              Local capabilities {localReady}/3 · cloud capabilities {cloudReady ? 2 : 0}/2
               <br />
               <span style={{ fontSize: 10.5 }}>
-                本地能力不需要密钥，现在就能用；云端需要腾讯云凭据。
+                Local capabilities need no credentials and work right now; cloud capabilities need Tencent Cloud credentials.
               </span>
             </div>
           </div>
 
           {err && (
             <div style={{ padding: "6px 10px", fontSize: 11.5, color: "var(--red)", background: "#fdecec" }}>
-              检测出错：{err}
+              Check failed: {err}
             </div>
           )}
 
           <div style={{ padding: "6px 10px 2px", fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-            本地能力（不需要密钥）
+            Local capabilities (no credentials needed)
           </div>
           <CapRow
-            label="口型数据生成"
-            cap={probe?.viseme ?? { available: false, reason: "还没检测" }}
-            hint={probe?.viseme.frames ? `实测生成 ${probe.viseme.frames} 帧` : undefined}
+            label="Viseme generation"
+            cap={probe?.viseme ?? { available: false, reason: "Not checked yet" }}
+            hint={probe?.viseme.frames ? `Measured ${probe.viseme.frames} frames` : undefined}
           />
           <CapRow
-            label="系统语音朗读（TTS 回退）"
+            label="System speech (TTS fallback)"
             cap={{ available: sysTts.ok, reason: sysTts.reason ?? null }}
-            hint={sysTts.ok ? `系统里有 ${sysTts.voices} 个语音` : undefined}
+            hint={sysTts.ok ? `${sysTts.voices} voices on this system` : undefined}
           />
           <CapRow
-            label="麦克风（录音输入）"
+            label="Microphone (audio input)"
             cap={{ available: mics.ok, reason: mics.reason ?? null }}
-            hint={mics.ok ? `检测到 ${mics.count} 个输入设备` : undefined}
+            hint={mics.ok ? `${mics.count} input devices detected` : undefined}
           />
 
           <div style={{ padding: "10px 10px 2px", fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>
-            云端能力（需要腾讯云凭据）
+            Cloud capabilities (Tencent Cloud credentials required)
           </div>
-          <CapRow label="语音合成（TTS）" cap={probe?.tts ?? { available: false, reason: "还没检测" }} />
-          <CapRow label="语音识别（ASR）" cap={probe?.asr ?? { available: false, reason: "还没检测" }} />
+          <CapRow label="Speech synthesis (TTS)" cap={probe?.tts ?? { available: false, reason: "Not checked yet" }} />
+          <CapRow label="Speech recognition (ASR)" cap={probe?.asr ?? { available: false, reason: "Not checked yet" }} />
 
           {probe && !probe.credentials.configured && (
             <div style={{
               margin: "8px 10px", padding: "7px 9px", borderRadius: 4,
               background: "var(--bg-secondary)", fontSize: 11, lineHeight: 1.8, color: "var(--text-muted)",
             }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>凭据未配置</div>
-              两种配置方式：
-              <br />· 环境变量 <code style={{ fontSize: 10.5 }}>TENCENT_SECRET_ID</code> 与 <code style={{ fontSize: 10.5 }}>TENCENT_SECRET_KEY</code>
-              <br />· 或存进格致的加密凭据库
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Credentials not configured</div>
+              Two ways to configure them:
+              <br />· Environment variables <code style={{ fontSize: 10.5 }}>TENCENT_SECRET_ID</code> and <code style={{ fontSize: 10.5 }}>TENCENT_SECRET_KEY</code>
+              <br />· Or store them in Gezhi's encrypted credential store
               {probe.credentials.storePath && (
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)", wordBreak: "break-all", marginTop: 2 }}>
                   {probe.credentials.storePath}
@@ -279,18 +281,18 @@ export default function AvatarPanel({ vaultPath, currentFileName, currentFileTex
 
           {probe?.credentials.configured && (
             <div style={{ margin: "8px 10px", fontSize: 11, color: "#14532d" }}>
-              ✔ 凭据已就绪（{probe.credentials.fromEnv ? "来自环境变量" : "来自加密凭据库"}）
+              ✔ Credentials ready ({probe.credentials.fromEnv ? "from environment variables" : "from the encrypted credential store"})
             </div>
           )}
 
           {probe?.limits && (
             <div style={{ padding: "10px", fontSize: 10.5, color: "var(--text-faint)", lineHeight: 1.8 }}>
-              平台上限：
-              {probe.limits.ttsMaxChars ? <> 单次合成 {probe.limits.ttsMaxChars} 字</> : null}
-              {probe.limits.asr?.maxSeconds ? <> · 单次识别 {probe.limits.asr.maxSeconds} 秒</> : null}
-              {probe.limits.asr?.maxBytes ? <>（≤ {(probe.limits.asr.maxBytes / 1024 / 1024).toFixed(1)} MB）</> : null}
+              Platform limits:
+              {probe.limits.ttsMaxChars ? <> {probe.limits.ttsMaxChars} characters per synthesis</> : null}
+              {probe.limits.asr?.maxSeconds ? <> · {probe.limits.asr.maxSeconds} seconds per recognition</> : null}
+              {probe.limits.asr?.maxBytes ? <> (≤ {(probe.limits.asr.maxBytes / 1024 / 1024).toFixed(1)} MB)</> : null}
               <br />
-              超过上限格致会自动分段。
+              Beyond these limits, Gezhi splits the text automatically.
             </div>
           )}
         </div>

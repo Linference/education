@@ -54,8 +54,8 @@ async function loadBridge() {
   const entry = findBridgeEntry();
   if (!entry) {
     throw new Error(
-      "找不到 dsh-bridge。开发态请确认 packages/dsh-bridge/src/index.mjs 存在；" +
-      "打包态请确认 build 配置里有 extraResources 带上 dsh-bridge。"
+      "Cannot find dsh-bridge. In development, make sure packages/dsh-bridge/src/index.mjs exists;" +
+      "In a packaged build, make sure the build config's extraResources includes dsh-bridge."
     );
   }
   bridgeMod = await import(pathToFileURL(entry).href);
@@ -104,20 +104,20 @@ function registerAIStream(ipcMain, getWindow) {
       if (win && !win.isDestroyed()) win.webContents.send("ai:event", payload);
     };
 
-    if (current) return { ok: false, error: "上一个任务还在跑，请先等它结束。" };
+    if (current) return { ok: false, error: "The previous task is still running; please wait for it to finish." };
 
     let mod;
     try {
       mod = await loadBridge();
     } catch (e) {
-      return { ok: false, error: `加载 DSH 桥失败：${e.message}` };
+      return { ok: false, error: `Failed to load DSH bridge: ${e.message}` };
     }
 
     // 沙箱边界：必须是用户打开的库。没有库就拒绝 ——
     // 绝不允许 AI 在仓库根或用户主目录里乱跑。
     const workdir = cwd && fs.existsSync(cwd) ? cwd : null;
     if (!workdir) {
-      return { ok: false, error: "请先打开一个库 —— AI 只在你打开的资料库目录里工作。" };
+      return { ok: false, error: "Please open a library first — the AI only works inside the library directory you opened." };
     }
 
     current = { task };

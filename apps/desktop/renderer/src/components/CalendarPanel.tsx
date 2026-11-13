@@ -32,17 +32,18 @@ interface Props {
 
 /** 事件类型 → 颜色与名称 */
 const EVENT_STYLE: Record<string, { color: string; label: string }> = {
-  class: { color: "#6366f1", label: "上课" },
-  exam: { color: "#dc2626", label: "考试" },
-  activity: { color: "#16a34a", label: "活动" },
-  other: { color: "#8b8b8b", label: "其他" },
+  class: { color: "#6366f1", label: "Class" },
+  exam: { color: "#dc2626", label: "Exam" },
+  activity: { color: "#16a34a", label: "Activity" },
+  other: { color: "#8b8b8b", label: "Other" },
 };
 const TASK_STYLE: Record<string, { color: string; label: string }> = {
-  study: { color: "#6366f1", label: "学习" },
-  review: { color: "#f59e0b", label: "复习" },
-  exam: { color: "#dc2626", label: "考试" },
-  rest: { color: "#16a34a", label: "休息" },
+  study: { color: "#6366f1", label: "Study" },
+  review: { color: "#f59e0b", label: "Review" },
+  exam: { color: "#dc2626", label: "Exam" },
+  rest: { color: "#16a34a", label: "Rest" },
 };
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 /** 本地日期 → YYYY-MM-DD（不用 toISOString，那会按 UTC 偏移出错） */
 function ymd(d: Date): string {
@@ -173,16 +174,16 @@ export default function CalendarPanel({ vaultPath }: Props) {
   };
 
   if (!vaultPath) {
-    return <div className="tree-empty">打开一个库后可以使用日历与计划</div>;
+    return <div className="tree-empty">Open a vault to use the calendar and planner</div>;
   }
 
-  const monthLabel = `${cursor.getFullYear()} 年 ${cursor.getMonth() + 1} 月`;
+  const monthLabel = `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
 
   return (
     <div className="calendar-panel" data-testid="calendar-panel" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* 页签 */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-        {([["month", "月历"], ["tasks", "待办"], ["countdown", "倒计时"]] as const).map(([k, label]) => (
+        {([["month", "Calendar"], ["tasks", "To-dos"], ["countdown", "Countdown"]] as const).map(([k, label]) => (
           <button
             key={k}
             onClick={() => setTab(k)}
@@ -213,17 +214,17 @@ export default function CalendarPanel({ vaultPath }: Props) {
           {/* 月份切换 */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
             <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
-              style={{ fontSize: 13, color: "var(--text-muted)", padding: "0 6px" }} title="上个月">‹</button>
+              style={{ fontSize: 13, color: "var(--text-muted)", padding: "0 6px" }} title="Previous month">‹</button>
             <span style={{ flex: "1 1 auto", textAlign: "center", fontSize: 13, fontWeight: 600 }}>{monthLabel}</span>
             <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
-              style={{ fontSize: 13, color: "var(--text-muted)", padding: "0 6px" }} title="下个月">›</button>
+              style={{ fontSize: 13, color: "var(--text-muted)", padding: "0 6px" }} title="Next month">›</button>
             <button onClick={() => { setCursor(new Date(today.getFullYear(), today.getMonth(), 1)); setSelected(ymd(today)); }}
-              style={{ fontSize: 11, color: "var(--accent)" }} title="回到今天">今天</button>
+              style={{ fontSize: 11, color: "var(--accent)" }} title="Back to today">Today</button>
           </div>
 
           {/* 星期表头（周一开头） */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 2 }}>
-            {["一", "二", "三", "四", "五", "六", "日"].map((w, i) => (
+            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w, i) => (
               <div key={w} style={{
                 textAlign: "center", fontSize: 11, padding: "2px 0",
                 color: i >= 5 ? "var(--accent)" : "var(--text-faint)",
@@ -281,7 +282,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
           <div style={{ marginTop: 10, borderTop: "1px solid var(--bd)", paddingTop: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
               {selected}
-              {selected === ymd(today) && <span style={{ color: "var(--accent)", marginLeft: 6, fontWeight: 400 }}>今天</span>}
+              {selected === ymd(today) && <span style={{ color: "var(--accent)", marginLeft: 6, fontWeight: 400 }}>Today</span>}
             </div>
 
             <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
@@ -290,7 +291,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") void addEvent(); }}
-                placeholder="新增日程…"
+                placeholder="New event…"
                 style={{
                   flex: "1 1 auto", minWidth: 0, fontSize: 12, padding: "4px 7px",
                   border: "1px solid var(--bd-strong)", borderRadius: 4,
@@ -314,7 +315,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                 type="time"
                 value={newTime}
                 onChange={(e) => setNewTime(e.target.value)}
-                title="不填默认 09:00"
+                title="Defaults to 09:00 if left blank"
                 style={{
                   width: 74, fontSize: 11, padding: "2px 4px", borderRadius: 4,
                   border: "1px solid var(--bd-strong)", background: "var(--bg-primary)",
@@ -327,11 +328,11 @@ export default function CalendarPanel({ vaultPath }: Props) {
                   padding: "4px 8px", borderRadius: 4, fontSize: 12,
                   background: "var(--accent)", color: "var(--on-accent)",
                 }}
-              >加</button>
+              >Add</button>
             </div>
 
             {dayEvents.length === 0 && dayTasks.length === 0 && (
-              <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>这天还没有安排</div>
+              <div style={{ fontSize: 11.5, color: "var(--text-faint)" }}>Nothing scheduled for this day</div>
             )}
             {dayEvents.map((e) => (
               <div key={e.id} style={{
@@ -342,7 +343,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                 <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                   <div style={{ fontSize: 12.5 }}>{e.title}</div>
                   <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-                    {String(e.start_at).slice(11, 16) || "全天"}
+                    {String(e.start_at).slice(11, 16) || "All day"}
                     {e.end_at ? ` – ${String(e.end_at).slice(11, 16)}` : ""}
                     {" · "}{EVENT_STYLE[e.kind]?.label ?? e.kind}
                   </div>
@@ -352,7 +353,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                     await window.gezhi.cal.deleteEvent({ id: e.id, vault: vaultPath });
                     await load();
                   }}
-                  title="删除"
+                  title="Delete"
                   style={{ color: "var(--text-faint)", fontSize: 11 }}
                 >✕</button>
               </div>
@@ -364,7 +365,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                 borderLeft: `3px solid ${TASK_STYLE[t.kind]?.color ?? "#888"}`,
               }}>
                 <span style={{ fontSize: 12.5, flex: "1 1 auto" }}>{t.title}</span>
-                <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>待办</span>
+                <span style={{ fontSize: 10.5, color: "var(--text-faint)" }}>To-do</span>
               </div>
             ))}
           </div>
@@ -375,7 +376,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
       {tab === "tasks" && (
         <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0, padding: "8px 10px" }}>
           <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 8, lineHeight: 1.7 }}>
-            学习任务允许 AI 参与安排；固定日程请放在「月历」里（那里 AI 不会动）。
+            Learning tasks can be planned with AI; put fixed events in the Calendar tab, where AI will not move them.
           </div>
 
           <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
@@ -383,7 +384,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void addTask(); }}
-              placeholder="新增待办…"
+              placeholder="New to-do…"
               style={{
                 flex: "1 1 auto", minWidth: 0, fontSize: 12, padding: "4px 7px",
                 border: "1px solid var(--bd-strong)", borderRadius: 4,
@@ -393,11 +394,11 @@ export default function CalendarPanel({ vaultPath }: Props) {
             <button
               onClick={() => void addTask()}
               style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "var(--on-accent)" }}
-            >加</button>
+            >Add</button>
           </div>
 
-          {loading && <div className="tree-empty">载入中…</div>}
-          {!loading && tasks.length === 0 && <div className="tree-empty">还没有待办</div>}
+          {loading && <div className="tree-empty">Loading…</div>}
+          {!loading && tasks.length === 0 && <div className="tree-empty">No to-dos yet</div>}
 
           {tasks.map((t) => (
             <div key={t.id} style={{
@@ -416,9 +417,9 @@ export default function CalendarPanel({ vaultPath }: Props) {
               <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                 <div style={{ fontSize: 12.5 }}>{t.title}</div>
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>
-                  {datePart(t.due_at) || "无期限"}
-                  {t.est_minutes ? ` · 预计 ${t.est_minutes} 分钟` : ""}
-                  {t.source === "ai" ? " · AI 安排" : ""}
+                  {datePart(t.due_at) || "No due date"}
+                  {t.est_minutes ? ` · about ${t.est_minutes} minutes` : ""}
+                  {t.source === "ai" ? " · planned by AI" : ""}
                 </div>
               </div>
               <button
@@ -427,7 +428,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                   await load();
                 }}
                 style={{ color: "var(--text-faint)", fontSize: 11 }}
-                title="删除"
+                title="Delete"
               >✕</button>
             </div>
           ))}
@@ -442,7 +443,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") void addCountdown(); }}
-              placeholder={`倒计时名称（目标日 ${selected}）`}
+              placeholder={`Countdown name (target date ${selected})`}
               style={{
                 flex: "1 1 auto", minWidth: 0, fontSize: 12, padding: "4px 7px",
                 border: "1px solid var(--bd-strong)", borderRadius: 4,
@@ -452,13 +453,13 @@ export default function CalendarPanel({ vaultPath }: Props) {
             <button
               onClick={() => void addCountdown()}
               style={{ padding: "4px 8px", borderRadius: 4, fontSize: 12, background: "var(--accent)", color: "var(--on-accent)" }}
-            >加</button>
+            >Add</button>
           </div>
           <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 8 }}>
-            目标日取「月历」里选中的那天（当前：{selected}）
+            The target date is the day selected in the Calendar tab (currently {selected})
           </div>
 
-          {countdowns.length === 0 && <div className="tree-empty">还没有倒计时</div>}
+          {countdowns.length === 0 && <div className="tree-empty">No countdowns yet</div>}
           {countdowns.map((c) => {
             const d = daysUntil(c.date);
             return (
@@ -468,7 +469,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
               }}>
                 <div style={{ flex: "1 1 auto", minWidth: 0 }}>
                   <div style={{ fontSize: 13 }}>{c.title}</div>
-                  <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>{c.date ?? "（农历）"}</div>
+                  <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>{c.date ?? "(lunar)"}</div>
                 </div>
                 <div style={{
                   fontSize: 15, fontWeight: 700,
@@ -478,7 +479,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                     : d <= 30 ? "var(--orange, #f59e0b)"
                     : "var(--accent)",
                 }}>
-                  {d === null ? "—" : d < 0 ? "已过" : d === 0 ? "今天" : `${d} 天`}
+                  {d === null ? "—" : d < 0 ? "Passed" : d === 0 ? "Today" : `${d} days`}
                 </div>
                 <button
                   onClick={async () => {
@@ -486,7 +487,7 @@ export default function CalendarPanel({ vaultPath }: Props) {
                     await load();
                   }}
                   style={{ color: "var(--text-faint)", fontSize: 11 }}
-                  title="删除"
+                  title="Delete"
                 >✕</button>
               </div>
             );

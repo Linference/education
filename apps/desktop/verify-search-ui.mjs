@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// 全文检索 + 反向链接的界面验证
+// UI verification of full-text search + backlinks
 //
-// 要回答的问题：
-//   1. 左栏切到「检索」能搜到内容吗？**双字词**能搜到吗（这是 trigram 的坑）？
-//   2. 点结果能跳到那个文件吗？
-//   3. 右栏「链接」页签能显示反向链接吗？点反链能跳过去吗？
-//   4. 保存后重新索引吗（刚写的内容马上能搜到）？
+// Questions to answer:
+//   1. Can the left rail, switched to 「检索」 (Search), find content? Can **two-character words** be found (this is the trigram pitfall)?
+//   2. Does clicking a result jump to that file?
+//   3. Can the right rail's 「链接」 (Links) tab show backlinks? Does clicking a backlink jump there?
+//   4. Does it re-index after saving (newly written content is searchable right away)?
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -27,7 +27,7 @@ fs.mkdirSync(path.join(vault, ".gezhi"), { recursive: true });
 fs.writeFileSync(path.join(vault, ".gezhi", "vault.json"), JSON.stringify({ id: "s" }), "utf8");
 fs.mkdirSync(path.join(vault, "语法"), { recursive: true });
 
-// 有 wikilink 关系的笔记
+// Notes with wikilink relationships
 fs.writeFileSync(path.join(vault, "语法", "情态动词.md"), [
   "# 情态动词",
   "",
@@ -50,16 +50,17 @@ fs.writeFileSync(path.join(vault, "索引页.md"), [
   "本页汇总：[[情态动词]]、[[虚拟语气]]",
 ].join("\n"), "utf8");
 
-// ⚠️ 空态必须用**真没人引用**的笔记来测。
-//    一开始我拿「索引页.md」测，但它恰恰是被情态动词.md 与 虚拟语气.md 引用最多的那篇
-//    （它自己出链多，但也有入链），于是"空态没显示"是**正确行为**，测试却判失败。
+// ⚠️ The empty state must be tested with a note that is **genuinely unreferenced** by anyone.
+//    At first I tested with 「索引页.md」, but it happens to be the note most referenced by
+//    情态动词.md and 虚拟语气.md (it has many outbound links, but also inbound links),
+//    so "the empty state not showing" was actually **correct behavior**, yet the test judged it a failure.
 fs.writeFileSync(path.join(vault, "孤儿笔记.md"), [
   "# 孤儿笔记",
   "",
   "这篇没有任何别的笔记引用它。",
 ].join("\n"), "utf8");
 
-console.log("=== 检索与反向链接界面验证 ===\n");
+console.log("=== Search & backlink UI verification ===\n");
 
 const app = await electron.launch({
   executablePath: path.join(HERE, "node_modules", "electron", "dist", "electron.exe"),
@@ -75,7 +76,7 @@ try {
   await page.waitForFunction(() => Boolean(window.__gezhiTest), { timeout: 20000 });
   await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
 
-  // 等索引跑完（打开库时在后台索引）
+  // Wait for indexing to finish (it runs in the background when the vault opens)
   await page.waitForFunction(async () => {
     const r = await window.gezhi.search.waitIdle();
     return r?.ok === true;
@@ -83,42 +84,42 @@ try {
   await page.waitForTimeout(800);
 
   const stats = await page.evaluate((d) => window.gezhi.search.stats(d), vault);
-  check("★ 打开库后自动建了索引", stats.docs >= 3, `${stats.docs} 篇 / ${stats.chunks} 块 / ${stats.links} 链接`);
+  check("★ the index is built automatically after opening the vault", stats.docs >= 3, `${stats.docs} docs / ${stats.chunks} chunks / ${stats.links} links`);
 
-  // ---- 1. 左栏切到检索 ----
-  console.log("\n── 全文检索 ──");
+  // ---- 1. Left rail switches to search ----
+  console.log("\n── Full-text search ──");
   const searchTab = page.locator("button", { hasText: "检索" }).first();
-  check("左栏有「检索」页签", (await searchTab.count()) > 0);
+  check("the left rail has the 「检索」 (Search) tab", (await searchTab.count()) > 0);
   await searchTab.click();
   await page.waitForTimeout(400);
 
   const box = page.locator('input[placeholder*="搜索全部笔记"]').first();
-  check("检索面板有输入框", (await box.count()) > 0);
+  check("the search panel has an input box", (await box.count()) > 0);
 
-  // 四字查询（走 FTS）
+  // Four-character query (goes through FTS)
   await box.fill("情态动词");
   await page.waitForTimeout(900);
   const fourChar = await page.evaluate(() => document.body.innerText);
-  check("★ 多字词能搜到（走 FTS 索引）",
+  check("★ multi-character words can be found (via the FTS index)",
     fourChar.includes("情态动词.md"), "");
-  check("界面显示检索策略（FTS 索引）", /FTS\s*索引/.test(fourChar));
+  check("the UI shows the search strategy (FTS index)", /FTS\s*索引/.test(fourChar));
 
-  // ★ 双字查询（trigram 的坑，靠 LIKE 兜底）
+  // ★ Two-character query (the trigram pitfall, backed by LIKE fallback)
   await box.fill("电场");
   await page.waitForTimeout(900);
   const twoChar = await page.evaluate(() => document.body.innerText);
-  check("★ 双字词「电场」能搜到（这是 trigram 的坑，靠扫描兜底）",
-    twoChar.includes("情态动词.md"), twoChar.includes("没有匹配") ? "显示「没有匹配」→ 兜底失效" : "");
-  check("界面如实标注短词走扫描", /LIKE\s*扫描/.test(twoChar), "");
+  check("★ the two-character word 「电场」 (electric field) can be found (this is the trigram pitfall, backed by scanning fallback)",
+    twoChar.includes("情态动词.md"), twoChar.includes("没有匹配") ? "shows 「没有匹配」 (no match) → fallback failed" : "");
+  check("the UI honestly labels short words as using scanning", /LIKE\s*扫描/.test(twoChar), "");
 
-  // 搜不到的词
+  // A word that cannot be found
   await box.fill("完全不存在的词语");
   await page.waitForTimeout(900);
   const none = await page.evaluate(() => document.body.innerText);
-  check("搜不到的词显示空结果提示", none.includes("没有匹配"), "");
+  check("unfindable words show an empty-result hint", none.includes("没有匹配"), "");
 
-  // ---- 2. 点结果跳转 ----
-  console.log("\n── 点结果跳转 ──");
+  // ---- 2. Click a result to jump ----
+  console.log("\n── Click result to jump ──");
   await box.fill("虚拟语气");
   await page.waitForTimeout(900);
   const hitBtn = page.locator("button", { hasText: "虚拟语气.md" }).first();
@@ -129,41 +130,41 @@ try {
       tabs: [...document.querySelectorAll(".tab .tname")].map((n) => n.textContent),
       body: document.body.innerText,
     }));
-    check("★ 点检索结果能打开对应文件",
+    check("★ clicking a search result opens the corresponding file",
       opened.tabs.includes("虚拟语气.md"), opened.tabs.join(", "));
   } else {
-    check("★ 点检索结果能打开对应文件", false, "结果里没有可点的条目");
+    check("★ clicking a search result opens the corresponding file", false, "no clickable entries in the results");
   }
 
-  // ---- 3. 反向链接 ----
-  console.log("\n── 反向链接 ──");
+  // ---- 3. Backlinks ----
+  console.log("\n── Backlinks ──");
   const linksTab = page.locator("button", { hasText: "链接" }).first();
-  check("右栏有「链接」页签", (await linksTab.count()) > 0);
+  check("the right rail has the 「链接」 (Links) tab", (await linksTab.count()) > 0);
   await linksTab.click();
   await page.waitForTimeout(1200);
 
   const blView = await page.evaluate(() => document.body.innerText);
-  check("★ 反链面板显示了引用来源（情态动词.md / 索引页.md）",
+  check("★ the backlink panel shows the referencing sources (情态动词.md / 索引页.md)",
     blView.includes("情态动词.md") && blView.includes("索引页.md"),
-    blView.includes("反向链接") ? "" : "没看到「反向链接」标题");
-  check("反链显示引用行号", /第\s*\d+\s*行/.test(blView));
-  check("反链计数可见", /\d+\s*处/.test(blView));
+    blView.includes("反向链接") ? "" : "did not see the 「反向链接」 (Backlinks) heading");
+  check("backlinks show the referencing line number", /第\s*\d+\s*行/.test(blView));
+  check("the backlink count is visible", /\d+\s*处/.test(blView));
 
-  // 打开一篇**真没人引用**的笔记，应显示空态提示
+  // Open a note that is **truly unreferenced**; the empty-state hint should show
   const lonely = path.join(vault, "孤儿笔记.md");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), lonely);
   await page.waitForTimeout(1200);
   const lonelyView = await page.evaluate(() => document.body.innerText);
-  check("没人引用的笔记显示空态说明", lonelyView.includes("还没有别的笔记引用"),
+  check("an unreferenced note shows the empty-state explanation", lonelyView.includes("还没有别的笔记引用"),
     lonelyView.includes("还没有别的笔记引用") ? "" : lonelyView.slice(0, 120).replace(/\n/g, " | "));
-  check("空态里给出写法提示（告诉用户怎么写链接）",
+  check("the empty state gives a syntax hint (telling users how to write links)",
     lonelyView.includes("[[孤儿笔记]]"), "");
 
-  // ---- 4. 保存后自动重新索引 ----
-  console.log("\n── 保存后重新索引 ──");
+  // ---- 4. Auto re-index after saving ----
+  console.log("\n── Re-index after saving ──");
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), path.join(vault, "语法", "虚拟语气.md"));
   await page.waitForTimeout(900);
-  // 切到编辑模式，加一句独特的话并保存
+  // Switch to edit mode, add a distinctive sentence, and save
   const editBtn = page.locator("button", { hasText: "编辑" }).first();
   await editBtn.click();
   await page.waitForTimeout(1000);
@@ -178,11 +179,11 @@ try {
 
   const found = await page.evaluate((d) =>
     window.gezhi.search.query({ vault: d, query: "量子纠缠" }).then((r) => r.hits?.length ?? 0), vault);
-  check("★ 保存后新内容立刻能搜到（自动重新索引）", found > 0, `命中 ${found} 条`);
+  check("★ newly saved content is immediately searchable (auto re-index)", found > 0, `${found} hits`);
 
-  // ★ 保存后**新增的 wikilink** 要立刻出现在目标笔记的反链里。
-  //   这条锁定一个时序 bug：早先 reindexFile 是 .then() 里递增版本号，
-  //   反链面板会在索引落库**之前**就重新查询，于是刚写完的引用显示 0 处。
+  // ★ After saving, a **newly added wikilink** must immediately appear in the target note's backlinks.
+  //   This locks in a timing bug: earlier, reindexFile incremented the version number inside a .then(),
+  //   so the backlink panel re-queried **before** the index was persisted, and the just-written reference showed 0 occurrences.
   await page.locator("button", { hasText: "链接" }).first().click();
   await page.waitForTimeout(300);
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), path.join(vault, "语法", "虚拟语气.md"));
@@ -196,22 +197,22 @@ try {
   await page.keyboard.press("Control+s");
   await page.waitForTimeout(2500);
 
-  // 打开被引用的那篇（它还不存在，但反链应当能查出来）
+  // Open the referenced note (it does not exist yet, but the backlink should still be found)
   const newBacklinks = await page.evaluate((d) =>
     window.gezhi.search.backlinks({ vault: d, path: d + "\\语法\\量子力学.md" })
       .then((r) => r.total ?? 0), vault);
-  check("★ 保存后新增的 wikilink 立刻进反链（时序修复）", newBacklinks > 0,
-    `量子力学 的反链 ${newBacklinks} 处`);
+  check("★ a newly saved wikilink immediately enters the backlinks (timing fix)", newBacklinks > 0,
+    `量子力学 backlinks: ${newBacklinks}`);
 
   await page.screenshot({ path: path.join(OUT, "ui-search.png") });
-  check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("renderer process has no JS errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
   await app.close();
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((x) => x.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== Result: ${passed}/${results.length} passed ===`);
 for (const x of results) if (!x.pass) console.log(`  FAIL ${x.name}: ${x.detail}`);
-console.log(`\n截图：产出/ui-search.png`);
+console.log(`\nScreenshot: 产出/ui-search.png`);
 process.exit(passed === results.length ? 0 : 1);

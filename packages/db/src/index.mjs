@@ -1,6 +1,6 @@
-// 格致 · 数据库层：开库、建表、检索
-// 只用 Node 内置的 node:sqlite（实测 SQLite 3.53.1，含 FTS5 与 JSON1），
-// 不引入原生模块 —— 避开 Node 升级后预编译二进制失配的老问题。
+// Gezhi · Database layer: open, create tables, search
+// Uses only Node's built-in node:sqlite (measured SQLite 3.53.1, with FTS5 and JSON1),
+// and pulls in no native modules — avoiding the old problem of prebuilt binaries mismatching after a Node upgrade.
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const SCHEMA_PATH = path.resolve(HERE, "..", "schema.sql");
 
-/** 格致的应用数据目录（索引与缓存放这里，刻意放在库之外）。 */
+/** Gezhi's application data directory (index and cache live here, deliberately outside the vault). */
 export function appDataDir() {
   const base =
     process.env.APPDATA ??
@@ -20,21 +20,21 @@ export function appDataDir() {
   return path.join(base, "gezhi");
 }
 
-/** 索引库位置：%APPDATA%\gezhi\index\<vaultId>\gezhi.db */
+/** Index database location: %APPDATA%\gezhi\index\<vaultId>\gezhi.db */
 export function indexPathFor(vaultId) {
   return path.join(appDataDir(), "index", vaultId, "gezhi.db");
 }
 
-/** 缓存目录：%APPDATA%\gezhi\cache\<vaultId>\ */
+/** Cache directory: %APPDATA%\gezhi\cache\<vaultId>\ */
 export function cacheDirFor(vaultId) {
   return path.join(appDataDir(), "cache", vaultId);
 }
 
 /**
- * 打开数据库。
+ * Open the database.
  * @param {object} opts
- * @param {string} [opts.vaultId]   库 id —— 决定放在 %APPDATA% 的哪个子目录
- * @param {string} [opts.file]      直接指定 db 文件（测试时用 ":memory:"）
+ * @param {string} [opts.vaultId]   Vault id — determines which subdirectory under %APPDATA% is used
+ * @param {string} [opts.file]      Specify the db file directly (use ":memory:" in tests)
  */
 export function openDatabase({ vaultId = "default", file } = {}) {
   const dbPath = file ?? indexPathFor(vaultId);
@@ -44,7 +44,7 @@ export function openDatabase({ vaultId = "default", file } = {}) {
   return db;
 }
 
-/** 每个连接都必须设这三个 PRAGMA（尤其是 foreign_keys，默认是关的）。 */
+/** These PRAGMAs must be set on every connection (especially foreign_keys, which is off by default). */
 export function applyPragmas(db) {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec("PRAGMA journal_mode = WAL");
@@ -52,10 +52,10 @@ export function applyPragmas(db) {
   db.exec("PRAGMA busy_timeout = 5000");
 }
 
-/** 建表（幂等）。 */
+/** Create tables (idempotent). */
 export function migrate(db, { schemaPath = SCHEMA_PATH } = {}) {
   const sql = fs.readFileSync(schemaPath, "utf8");
-  // schema.sql 里也写了 PRAGMA，重复执行无害
+  // schema.sql also sets the PRAGMAs; executing them again is harmless
   db.exec(sql);
   return schemaInfo(db);
 }
@@ -80,11 +80,11 @@ export function schemaInfo(db) {
   };
 }
 
-// ------------------------------------------------------------------ 检索
+// ------------------------------------------------------------------ Search
 
 /**
- * 双路检索：trigram 负责"找得到"，分词索引负责"排得准"。
- * 关键词用空格或逗号分隔；每个词在任一路命中即算召回。
+ * Two-path search: trigram is responsible for "finding it", the token index for "ranking it accurately".
+ * Keywords are separated by spaces or commas; a term that hits either path counts as recalled.
  */
 export function searchChunks(db, query, { limit = 20 } = {}) {
   const terms = query
@@ -115,17 +115,17 @@ export function searchChunks(db, query, { limit = 20 } = {}) {
     WHERE chunks_fts_word MATCH ? ORDER BY rank LIMIT ?`;
 
   for (const term of terms) {
-    // trigram：直接把词丢进去即可（子串匹配）
+    // trigram: just pass the term straight in (substring match)
     try {
       fold(db.prepare(sqlTri).all(quoteFts(term), limit), "trigram", 1);
     } catch {
-      /* 关键词里可能含有 FTS 语法字符，忽略这一路 */
+      /* the keyword may contain FTS syntax characters; ignore this path */
     }
-    // 分词索引：需要把词切成 token 再查（中文已由 text_seg 预分词）
+    // token index: the term must be split into tokens before querying (Chinese is already pre-segmented by text_seg)
     try {
       fold(db.prepare(sqlWord).all(quoteFts(term), limit), "word", 1.5);
     } catch {
-      /* 同上 */
+      /* same as above */
     }
   }
 
@@ -135,12 +135,12 @@ export function searchChunks(db, query, { limit = 20 } = {}) {
     .slice(0, limit);
 }
 
-/** 把用户输入包成 FTS5 字符串字面量，避免语法字符把查询搞崩。 */
+/** Wrap user input as an FTS5 string literal so syntax characters do not break the query. */
 export function quoteFts(term) {
   return `"${String(term).replace(/"/g, '""')}"`;
 }
 
-/** 插入一个 chunk（触发器会自动同步两张 FTS 表）。 */
+/** Insert a chunk (triggers automatically sync both FTS tables). */
 export function insertChunk(db, { bookId, chapterId = null, pageFrom, pageTo, text, textSeg = null, kpIds = [] }) {
   const info = db
     .prepare(
@@ -155,6 +155,6 @@ export function closeDatabase(db) {
   try {
     db.close();
   } catch {
-    /* 已关就忽略 */
+    /* ignore if already closed */
   }
 }

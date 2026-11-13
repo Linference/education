@@ -1,16 +1,21 @@
-// 日历 / 计划的数据层（SQLite）
+// Calendar / plan data layer (SQLite)
 //
-// ★ 设计上最重要的一条（schema.sql 里原话）：
-//   **events 与 tasks 严格分离** —— 固定日程（上课、考试）不可被 AI 重排；
-//   tasks 是可调整的学习任务，允许 AI 参与安排。
-//   这个分离不是洁癖：如果把"周一 8 点数学课"和"复习函数"混在一张表里，
-//   AI 重排计划时会把你的课也挪走。所以两张表、两种语义，永不混用。
+// ★ The single most important design decision (verbatim from schema.sql):
+//   **events and tasks are strictly separated** — fixed schedule items
+//   (classes, exams) must not be reordered by AI; tasks are adjustable study
+//   items that AI may help arrange.
+//   This separation is not pedantry: if "Monday 8am math class" and "review
+//   functions" were mixed in one table, AI rescheduling would also move your
+//   class. So two tables, two meanings, never mixed.
 //
-// ★ 数据库位置：与索引库同目录（%APPDATA%\gezhi），**不放库目录**。
-//   理由同 P0 的存储决策：库可能在 OneDrive 下，WAL 文件会引发同步冲突。
+// ★ Database location: same directory as the index database (%APPDATA%\gezhi),
+//   **not in the library directory**. Same reasoning as the P0 storage
+//   decision: the library may be under OneDrive, and WAL files would cause
+//   sync conflicts.
 //
-// 本文件只建日历需要的表，不引 packages/db 的全量 schema ——
-// 那份 schema 有 vaults/knowledge_points 等外键依赖，界面这一层不需要它们。
+// This file only creates the tables the calendar needs and does not import the
+// full packages/db schema — that schema has vaults/knowledge_points foreign-key
+// dependencies this UI layer does not need.
 const path = require("node:path");
 const fs = require("node:fs");
 
@@ -20,9 +25,9 @@ function sqlite() {
   return DatabaseSync;
 }
 
-/** 事件类型（与 schema.sql 的注释保持一致：class/exam/activity） */
+/** Event kinds (kept in line with the schema.sql comment: class/exam/activity) */
 const EVENT_KINDS = ["class", "exam", "activity", "other"];
-/** 任务类型（study/review/exam/rest） */
+/** Task kinds (study/review/exam/rest) */
 const TASK_KINDS = ["study", "review", "exam", "rest"];
 
 function openCalendarDb(dbPath) {
@@ -31,7 +36,7 @@ function openCalendarDb(dbPath) {
   const db = new DB(dbPath);
   db.exec("pragma journal_mode = wal");
   db.exec(`
-    -- 固定日程：上课、考试、活动。**AI 不可重排**
+    -- Fixed schedule items: classes, exams, activities. **AI must not reorder**
     create table if not exists cal_events(
       id              text primary key,
       vault           text not null,
@@ -48,7 +53,7 @@ function openCalendarDb(dbPath) {
     );
     create index if not exists idx_cal_events_start on cal_events(vault, start_at);
 
-    -- 可调整的学习任务：AI 可以参与安排
+    -- Adjustable study tasks: AI may help arrange them
     create table if not exists cal_tasks(
       id          text primary key,
       vault       text not null,
@@ -63,14 +68,15 @@ function openCalendarDb(dbPath) {
     );
     create index if not exists idx_cal_tasks_due on cal_tasks(vault, due_at);
 
-    -- 倒计时：考试、生日、假期。支持公历或农历（农历只存月日，不换算）
+    -- Countdowns: exams, birthdays, holidays. Gregorian or lunar supported
+    -- (lunar stores only month and day; no conversion is done)
     create table if not exists cal_countdowns(
       id           text primary key,
       vault        text not null,
       title        text not null,
-      date         text,                    -- 公历 YYYY-MM-DD
-      lunar_month  integer,                 -- 农历月（1-12）
-      lunar_day    integer,                 -- 农历日（1-30）
+      date         text,                    -- Gregorian YYYY-MM-DD
+      lunar_month  integer,                 -- lunar month (1-12)
+      lunar_day    integer,                 -- lunar day (1-30)
       is_leap      integer default 0,
       color        text,
       created_at   text not null
@@ -80,15 +86,15 @@ function openCalendarDb(dbPath) {
   return db;
 }
 
-/** 生成 id：时间戳 + 随机后缀，足够避免同毫秒冲突，且可读 */
+/** Generate an id: timestamp + random suffix, readable and enough to avoid same-millisecond collisions */
 function newId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ---------------------------------------------------------------- 事件
+// ---------------------------------------------------------------- Events
 
 function listEvents(db, { vault, from, to }) {
-  // from/to 是 ISO 日期字符串；不传则返回全部（一般会传当前月范围）
+  // from/to are ISO date strings; if omitted, return everything (usually the current month range is passed)
   const rows = (from && to)
     ? db.prepare("select * from cal_events where vault = ? and start_at >= ? and start_at < ? order by start_at").all(vault, from, to)
     : db.prepare("select * from cal_events where vault = ? order by start_at").all(vault);
@@ -96,8 +102,8 @@ function listEvents(db, { vault, from, to }) {
 }
 
 function addEvent(db, { vault, title, kind, startAt, endAt, allDay, location, repeat, remindBeforeMin, note }) {
-  if (!title || !String(title).trim()) return { ok: false, error: "标题不能为空" };
-  if (!startAt) return { ok: false, error: "必须指定开始时间" };
+  if (!title || !String(title).trim()) return { ok: false, error: "Title cannot be empty" };
+  if (!startAt) return { ok: false, error: "Start time is required" };
   const k = EVENT_KINDS.includes(kind) ? kind : "other";
   const id = newId("ev");
   db.prepare(
@@ -110,7 +116,7 @@ function addEvent(db, { vault, title, kind, startAt, endAt, allDay, location, re
 
 function updateEvent(db, { id, vault, patch }) {
   const cur = db.prepare("select * from cal_events where id = ? and vault = ?").get(id, vault);
-  if (!cur) return { ok: false, error: "找不到这个日程" };
+  if (!cur) return { ok: false, error: "Event not found" };
   const map = {
     title: "title", kind: "kind", startAt: "start_at", endAt: "end_at",
     allDay: "all_day", location: "location", repeat: "repeat",
@@ -136,7 +142,7 @@ function deleteEvent(db, { id, vault }) {
   return { ok: true, removed: Number(r.changes ?? 0) };
 }
 
-// ---------------------------------------------------------------- 任务
+// ---------------------------------------------------------------- Tasks
 
 function listTasks(db, { vault, includeDone = false }) {
   const rows = includeDone
@@ -146,7 +152,7 @@ function listTasks(db, { vault, includeDone = false }) {
 }
 
 function addTask(db, { vault, title, kind, dueAt, estMinutes, goal, source = "manual" }) {
-  if (!title || !String(title).trim()) return { ok: false, error: "标题不能为空" };
+  if (!title || !String(title).trim()) return { ok: false, error: "Title cannot be empty" };
   const k = TASK_KINDS.includes(kind) ? kind : "study";
   const id = newId("tk");
   db.prepare(
@@ -159,7 +165,7 @@ function addTask(db, { vault, title, kind, dueAt, estMinutes, goal, source = "ma
 
 function toggleTask(db, { id, vault }) {
   const cur = db.prepare("select * from cal_tasks where id = ? and vault = ?").get(id, vault);
-  if (!cur) return { ok: false, error: "找不到这个任务" };
+  if (!cur) return { ok: false, error: "Task not found" };
   const done = cur.done_at ? null : new Date().toISOString();
   db.prepare("update cal_tasks set done_at = ? where id = ? and vault = ?").run(done, id, vault);
   return { ok: true, done: Boolean(done) };
@@ -170,7 +176,7 @@ function deleteTask(db, { id, vault }) {
   return { ok: true, removed: Number(r.changes ?? 0) };
 }
 
-// ---------------------------------------------------------------- 倒计时
+// ---------------------------------------------------------------- Countdowns
 
 function listCountdowns(db, { vault }) {
   const rows = db.prepare("select * from cal_countdowns where vault = ? order by coalesce(date,'~')").all(vault);
@@ -178,10 +184,10 @@ function listCountdowns(db, { vault }) {
 }
 
 function addCountdown(db, { vault, title, date, lunarMonth, lunarDay, isLeap, color }) {
-  if (!title || !String(title).trim()) return { ok: false, error: "标题不能为空" };
+  if (!title || !String(title).trim()) return { ok: false, error: "Title cannot be empty" };
   const hasGregorian = Boolean(date);
   const hasLunar = lunarMonth && lunarDay;
-  if (!hasGregorian && !hasLunar) return { ok: false, error: "要么给公历日期，要么给农历月日" };
+  if (!hasGregorian && !hasLunar) return { ok: false, error: "Provide either a Gregorian date or a lunar month and day" };
   const id = newId("cd");
   db.prepare(
     `insert into cal_countdowns(id, vault, title, date, lunar_month, lunar_day, is_leap, color, created_at)

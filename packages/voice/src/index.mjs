@@ -1,48 +1,48 @@
-// 格致 · 语音服务（腾讯云 ASR / TTS）
+// Gezhi · Voice service (Tencent Cloud ASR / TTS)
 //
-// 安全铁律（这个模块最要紧的约束）：
-//   1. 密钥只在**主进程**使用，绝不下发到渲染进程 —— 签名需要 SecretKey，
-//      一旦进前端，任何能开 DevTools 的人都能拿走。
-//   2. 密钥来源优先级：环境变量 > 加密存储（%APPDATA%\gezhi\credentials.enc）。
-//      **不要把密钥写进任何文件**，包括这个模块的注释和测试。
-//   3. 这个模块对外只暴露「文本进、音频出」和「音频进、文本出」，
-//      调用方拿不到也不需要拿 credential 对象。
+// Security rules (the most important constraints of this module):
+//   1. Keys are used only in the **main process** and never sent to the renderer — signing needs SecretKey,
+//      and once it reaches the frontend anyone who can open DevTools can take it.
+//   2. Key source priority: environment variables > encrypted store (%APPDATA%\gezhi\credentials.enc).
+//      **Never write keys into any file**, including this module's comments and tests.
+//   3. This module exposes only "text in, audio out" and "audio in, text out" to the outside;
+//      callers cannot get, and do not need, the credential object.
 import crypto from "node:crypto";
 import { loadSecrets, credentialsInfo } from "../../core/src/credentials.mjs";
 
-// ------------------------------------------------------------------ 密钥解析
+// ------------------------------------------------------------------ Credential resolution
 
-/** 环境变量名（测试与本机开发用；生产走加密存储） */
+/** Environment variable names (for tests and local development; production uses the encrypted store) */
 export const ENV_KEYS = {
   secretId: "TENCENT_SECRET_ID",
   secretKey: "TENCENT_SECRET_KEY",
 };
 
 /**
- * 取腾讯云凭据。返回 { secretId, secretKey, source }。
- * 绝不把内容打印出来 —— 只报来源。
+ * Get Tencent Cloud credentials. Returns { secretId, secretKey, source }.
+ * Never print the contents — report only the source.
  */
 export function resolveTencentCredentials({ passphrase } = {}) {
   const envId = process.env[ENV_KEYS.secretId];
   const envKey = process.env[ENV_KEYS.secretKey];
   if (envId && envKey) {
-    return { secretId: envId, secretKey: envKey, source: "环境变量" };
+    return { secretId: envId, secretKey: envKey, source: "environment variables" };
   }
   try {
     const s = loadSecrets({ passphrase });
     if (s?.tencent?.secretId && s?.tencent?.secretKey) {
-      return { ...s.tencent, source: "加密存储" };
+      return { ...s.tencent, source: "encrypted store" };
     }
   } catch (e) {
-    throw new Error(`读取加密凭据失败：${e.message}`);
+    throw new Error(`Failed to read encrypted credentials: ${e.message}`);
   }
   throw new Error(
-    `没有可用的腾讯云凭据。请设置环境变量 ${ENV_KEYS.secretId} / ${ENV_KEYS.secretKey}，` +
-    `或先配置 ${credentialsInfo().path}`
+    `No Tencent Cloud credentials available. Set the ${ENV_KEYS.secretId} / ${ENV_KEYS.secretKey} environment variables, ` +
+    `or configure ${credentialsInfo().path} first`
   );
 }
 
-/** 只报"有没有配好"，不暴露内容 —— 给设置页用 */
+/** Report only whether things are configured, without exposing contents — for the settings page */
 export function credentialsStatus() {
   const envOk = Boolean(process.env[ENV_KEYS.secretId] && process.env[ENV_KEYS.secretKey]);
   const info = credentialsInfo();
@@ -57,46 +57,46 @@ export function credentialsStatus() {
 
 // ------------------------------------------------------------------ TTS
 
-/** 腾讯云 TTS 单次请求的文本上限：中文 150 字（全角标点算一字） */
+/** Text limit per Tencent Cloud TTS request: 150 Chinese characters (full-width punctuation counts as one character) */
 export const TTS_MAX_CHARS = 150;
 
 /**
- * 音色预设。
+ * Voice presets.
  *
- * ⚠ 实测教训（2026-10-01，12 个音色逐个扫过，见 docs/05）：
- *   **"教育音色"（403005 云雅琴 / 403003 云小天）不支持时间戳** ——
- *   而它们恰好是最贴合"AI 老师"人设的那一档。同时超自然音色（602005/603001）也不支持。
- *   支持时间戳的是：基础版（101001/101002/0）、精品（1001/1002）、
- *   大模型（501008 智斌 / 501000 智兰 / 601008 智斌2）。
+ * Warning, measured lesson (2026-10-01, all 12 voices scanned one by one, see docs/05):
+ *   **The "education voices" (403005 Yun Yaqin / 403003 Yun Xiaotian) do not support timestamps** —
+ *   yet they are exactly the ones that best fit the "AI teacher" persona. The supernatural voices (602005/603001) also do not support them.
+ *   Voices that do support timestamps: basic (101001/101002/0), premium (1001/1002),
+ *   and large-model (501008 Zhibin / 501000 Zhilan / 601008 Zhibin 2).
  *
- *   而时间戳是数字人口型的数据源 —— 没有它就得靠音频能量估口型（效果差一档）。
- *   所以默认音色改选"大模型·智兰"：音质属于高档，且时间戳可用。
+ *   Timestamps are the data source for the digital human's lip sync — without them we would have to estimate mouth shapes from audio energy (a notch worse).
+ *   So the default voice was changed to "large-model · Zhilan": high-grade audio quality with timestamps available.
  */
 export const VOICE_PRESETS = {
-  // ✅ 支持时间戳（口型可用）
-  llmZhiLan: 501000,      // 大模型·智兰 —— **默认**：音质好 + 有字级时间戳
-  llmZhiBin: 501008,      // 大模型·智斌 —— 男声
-  llmZhiBin2: 601008,     // 大模型·智斌2
-  premiumZhiYu: 1001,     // 精品·智瑜
-  premiumZhiLing: 1002,   // 精品·智聆
-  basicF: 101001,         // 基础版女声（最省额度）
-  basicM: 101002,         // 基础版男声
-  // ⚠ 不支持时间戳 —— 只在不需要口型时用（例如纯朗读）
-  teacherYunYaqin: 403005,  // 教育·云雅琴
-  campusYunXiaotian: 403003,// 教育·云小天
-  naturalYunMu: 602005,     // 超自然·云幕
-  naturalYunXi: 603001,     // 超自然·云希
+  // Supported timestamps (lip sync usable)
+  llmZhiLan: 501000,      // large-model · Zhilan — **default**: good quality + character-level timestamps
+  llmZhiBin: 501008,      // large-model · Zhibin — male
+  llmZhiBin2: 601008,     // large-model · Zhibin 2
+  premiumZhiYu: 1001,     // premium · Zhiyu
+  premiumZhiLing: 1002,   // premium · Zhiling
+  basicF: 101001,         // basic female (uses the least quota)
+  basicM: 101002,         // basic male
+  // Warning: no timestamp support — use only when lip sync is not needed (e.g. plain reading)
+  teacherYunYaqin: 403005,  // education · Yun Yaqin
+  campusYunXiaotian: 403003,// education · Yun Xiaotian
+  naturalYunMu: 602005,     // supernatural · Yun Mu
+  naturalYunXi: 603001,     // supernatural · Yun Xi
 };
 
-/** 已实测确认支持字级时间戳的音色 */
+/** Voices measured and confirmed to support character-level timestamps */
 export const VOICES_WITH_TIMING = new Set([501000, 501008, 601008, 1001, 1002, 101001, 101002, 0]);
 
-/** 默认音色：挑"音质好 + 有口型数据"的交集 */
+/** Default voice: the intersection of "good audio quality + lip-sync data available" */
 export const DEFAULT_VOICE = VOICE_PRESETS.llmZhiLan;
 
 /**
- * 把长文本切成不超过上限的片段，尽量在标点处断开。
- * 为什么必须做：超 150 字接口直接报错，而 AI 生成的讲解稿通常远超这个长度。
+ * Split long text into pieces under the limit, breaking at punctuation where possible.
+ * Why this is necessary: texts over 150 characters make the API error out, and AI-generated explanations are usually far longer.
  */
 export function splitForTts(text, limit = TTS_MAX_CHARS) {
   const clean = String(text).replace(/\s+/g, " ").trim();
@@ -104,7 +104,7 @@ export function splitForTts(text, limit = TTS_MAX_CHARS) {
 
   const parts = [];
   let buf = "";
-  // 优先在句末标点断开，其次逗号，最后硬切
+  // Prefer breaking at sentence-ending punctuation, then commas, and hard-cut as a last resort
   const sentences = clean.split(/(?<=[。！？；!?;])/);
   for (const s of sentences) {
     if ((buf + s).length <= limit) {
@@ -115,7 +115,7 @@ export function splitForTts(text, limit = TTS_MAX_CHARS) {
     if (s.length <= limit) {
       buf = s;
     } else {
-      // 单句就超长：按逗号再切，还超就硬切
+      // A single sentence is already too long: split at commas again, and hard-cut if still too long
       let rest = s;
       while (rest.length > limit) {
         const cut = rest.lastIndexOf("，", limit);
@@ -130,7 +130,7 @@ export function splitForTts(text, limit = TTS_MAX_CHARS) {
   return parts;
 }
 
-/** 惰性加载 SDK（避免没装 SDK 时整个模块 import 就炸） */
+/** Lazily load the SDK (so importing the whole module does not fail when the SDK is not installed) */
 let _ttsClient = null;
 async function ttsClient() {
   if (_ttsClient) return _ttsClient;
@@ -146,15 +146,15 @@ async function ttsClient() {
 }
 
 /**
- * 合成一段语音。
+ * Synthesize a piece of speech.
  *
  * @param {string} text
  * @param {object} opts
- * @param {number} [opts.voiceType]  音色 ID，默认 403005（云雅琴）
- * @param {string} [opts.codec]      "pcm" | "wav" | "mp3"，默认 pcm（便于数字人按帧对齐）
- * @param {number} [opts.sampleRate] 16000 / 8000，默认 16000
- * @param {number} [opts.speed]      [-2, 6]，默认 0
- * @param {boolean}[opts.withTiming] 是否要字级时间戳（口型数据源），默认 true
+ * @param {number} [opts.voiceType]  Voice ID, default 403005 (Yun Yaqin)
+ * @param {string} [opts.codec]      "pcm" | "wav" | "mp3", default pcm (makes frame alignment easy for the digital human)
+ * @param {number} [opts.sampleRate] 16000 / 8000, default 16000
+ * @param {number} [opts.speed]      [-2, 6], default 0
+ * @param {boolean}[opts.withTiming] Whether character-level timestamps are wanted (lip-sync data source), default true
  * @returns {{audio: Buffer, codec: string, sampleRate: number, timings: Array, chunks: number, requestIds: string[]}}
  */
 export async function synthesize(text, opts = {}) {
@@ -168,7 +168,7 @@ export async function synthesize(text, opts = {}) {
   } = opts;
 
   const pieces = splitForTts(text);
-  if (pieces.length === 0) throw new Error("文本为空");
+  if (pieces.length === 0) throw new Error("Text is empty");
 
   const client = await ttsClient();
   const buffers = [];
@@ -191,14 +191,14 @@ export async function synthesize(text, opts = {}) {
     requestIds.push(res.RequestId ?? null);
 
     const audio = Buffer.from(res.Audio ?? "", "base64");
-    if (audio.length === 0) throw new Error("接口返回了空音频");
+    if (audio.length === 0) throw new Error("The API returned empty audio");
 
-    // 时间戳：SDK 已经解析成数组了（字段名是 Subtitles，复数，不是 Subtitle）。
-    // 实测教训：调研报告里写的 "Subtitle（JSON 字符串）" 是错的 ——
-    //   ① 字段名是 Subtitles
-    //   ② 类型是 Array<{Text, BeginTime, EndTime, BeginIndex, EndIndex}>
-    //   ③ 即使 EnableSubtitle: true，本机实测多个音色都返回空数组（见 docs/05）
-    // 所以这里必须宽容：拿不到时间戳也要能正常出声，只是没有口型数据。
+    // Timestamps: the SDK has already parsed them into an array (the field is Subtitles, plural, not Subtitle).
+    // Measured lesson: the research report's "Subtitle (JSON string)" is wrong —
+    //   ① the field name is Subtitles
+    //   ② the type is Array<{Text, BeginTime, EndTime, BeginIndex, EndIndex}>
+    //   ③ even with EnableSubtitle: true, measurements on this machine found several voices returning an empty array (see docs/05)
+    // So be lenient here: playback must work even without timestamps, just without lip-sync data.
     const subs = Array.isArray(res.Subtitles) ? res.Subtitles : [];
     if (withTiming && subs.length > 0) {
       for (const w of subs) {
@@ -211,7 +211,7 @@ export async function synthesize(text, opts = {}) {
       const last = subs[subs.length - 1];
       if (last?.EndTime) offsetMs += last.EndTime;
     } else {
-      // 没有时间戳时按采样率粗算时长，保证分片之间的 offset 仍然推进
+      // Without timestamps, estimate duration from the sample rate so the offset still advances between chunks
       const bytesPerMs = codec === "pcm" ? (sampleRate * 2) / 1000 : null;
       if (bytesPerMs) offsetMs += Math.round(audio.length / bytesPerMs);
     }
@@ -232,14 +232,14 @@ export async function synthesize(text, opts = {}) {
 }
 
 /**
- * 把字级时间戳压缩成"口型帧序列"。
+ * Compress character-level timestamps into a "lip-sync frame sequence".
  *
- * 这是数字人方案的核心：腾讯云 TTS 的 EnableSubtitle 免费给出每个字的
- * 起止时间，等于免费拿到口型（viseme）数据源 —— 不需要音频驱动的模型。
- * 这里先做最简版本：按时间轴产出「嘴张开/闭合」的帧，后续可按拼音韵母细分。
+ * This is the core of the digital human approach: Tencent Cloud TTS's EnableSubtitle gives each character's
+ * start and end time for free, which amounts to a free lip-sync (viseme) data source — no audio-driven model needed.
+ * This is a minimal version for now: produce "mouth open/closed" frames along the timeline; later they can be refined by pinyin finals.
  *
- * @param {Array} timings  synthesize() 返回的 timings
- * @param {number} fps     目标帧率，默认 30
+ * @param {Array} timings  timings returned by synthesize()
+ * @param {number} fps     Target frame rate, default 30
  * @returns {Array<{t:number, open:number, ch:string}>} open: 0..1
  */
 export function buildVisemeTrack(timings, { fps = 30, gapMs = 40 } = {}) {
@@ -254,11 +254,11 @@ export function buildVisemeTrack(timings, { fps = 30, gapMs = 40 } = {}) {
     let open = 0;
     let ch = "";
     if (cur && t >= cur.beginMs) {
-      // 字中间张得最大、首尾收拢 —— 让口型有个自然的开合弧线
+      // Widest in the middle of the character, closing at the edges — gives the mouth shape a natural open-close arc
       const span = Math.max(1, cur.endMs - cur.beginMs);
       const phase = Math.min(1, (t - cur.beginMs) / span);
       open = Math.sin(Math.PI * phase);
-      open = Math.max(0.25, open);   // 发音期间嘴至少微张
+      open = Math.max(0.25, open);   // mouth stays at least slightly open while speaking
       ch = cur.text;
     }
     frames.push({ t: Math.round(t), open: Number(open.toFixed(3)), ch });
@@ -268,7 +268,7 @@ export function buildVisemeTrack(timings, { fps = 30, gapMs = 40 } = {}) {
 
 // ------------------------------------------------------------------ ASR
 
-/** 一句话识别（同步）限制：音频 ≤ 60 秒、≤ 3 MB */
+/** One-shot recognition (synchronous) limits: audio <= 60 seconds, <= 3 MB */
 export const ASR_ONE_SHOT_LIMITS = { maxSeconds: 60, maxBytes: 3 * 1024 * 1024 };
 
 let _asrClient = null;
@@ -286,19 +286,19 @@ async function asrClient() {
 }
 
 /**
- * 一句话识别：音频 → 文本。
+ * One-shot recognition: audio -> text.
  *
- * 澳门场景的关键：EngineModelType 支持
- *   16k_zh     普通话
- *   16k_zh-PY  中英粤混说
- *   16k_yue    粤语
- *   16k_zh_dialect 23 种方言
+ * The key point for the Macau scenario: EngineModelType supports
+ *   16k_zh     Mandarin
+ *   16k_zh-PY  mixed Chinese/English/Cantonese
+ *   16k_yue    Cantonese
+ *   16k_zh_dialect 23 dialects
  *
- * @param {Buffer} audioData 音频数据
+ * @param {Buffer} audioData Audio data
  * @param {object} opts
- * @param {string} [opts.engine]    引擎类型，默认 16k_zh-PY（澳门学生中英粤混说很常见）
- * @param {string} [opts.voiceFormat] "wav" | "pcm" | "mp3" | "m4a" | "silk"，默认 wav
- * @param {number} [opts.sampleRate] 默认 16000
+ * @param {string} [opts.engine]    Engine type, default 16k_zh-PY (mixed Chinese/English/Cantonese is very common among Macau students)
+ * @param {string} [opts.voiceFormat] "wav" | "pcm" | "mp3" | "m4a" | "silk", default wav
+ * @param {number} [opts.sampleRate] default 16000
  */
 export async function recognizeOnce(audioData, opts = {}) {
   const {
@@ -308,9 +308,9 @@ export async function recognizeOnce(audioData, opts = {}) {
     hotwordList = null,
   } = opts;
 
-  if (!Buffer.isBuffer(audioData) || audioData.length === 0) throw new Error("音频为空");
+  if (!Buffer.isBuffer(audioData) || audioData.length === 0) throw new Error("Audio is empty");
   if (audioData.length > ASR_ONE_SHOT_LIMITS.maxBytes) {
-    throw new Error(`音频 ${(audioData.length / 1024 / 1024).toFixed(2)}MB 超过一句话识别上限 3MB，请改用录音文件识别`);
+    throw new Error(`Audio is ${(audioData.length / 1024 / 1024).toFixed(2)}MB, over the 3MB one-shot recognition limit; use recording-file recognition instead`);
   }
 
   const client = await asrClient();
@@ -324,15 +324,15 @@ export async function recognizeOnce(audioData, opts = {}) {
     FilterDirty: 1,
     FilterModal: 1,
     FilterPunc: 0,
-    ConvertNumMode: 1,      // 数字转阿拉伯数字，方便后续按数字判分
-    WordInfo: 1,            // 要字级信息
+    ConvertNumMode: 1,      // convert numbers to Arabic numerals, making later numeric grading easier
+    WordInfo: 1,            // request character-level information
   };
   if (hotwordList) req.HotwordList = hotwordList;
 
   const res = await client.SentenceRecognition(req);
-  // 实测教训：SDK 已经把 WordList 解析成数组了（Array<SentenceWord>），
-  // 再 JSON.parse 一次会得到 "[object Object]" 解析失败 —— 而且我第一版的
-  // 断言只判 Array.isArray，所以这个 bug 被"通过"了。断言要判长度。
+  // Measured lesson: the SDK has already parsed WordList into an array (Array<SentenceWord>),
+  // so JSON.parse-ing it again yields a "[object Object]" parse failure — and the first version's
+  // assertion only checked Array.isArray, so this bug "passed". Assertions must check length.
   const words = Array.isArray(res.WordList) ? res.WordList : [];
   return {
     text: res.Result ?? "",
@@ -343,7 +343,7 @@ export async function recognizeOnce(audioData, opts = {}) {
   };
 }
 
-/** 把 ASR 结果整理成费曼评分要的输入（带时间轴的讲解稿） */
+/** Turn ASR results into the input the Feynman scoring needs (an explanation transcript with a timeline) */
 export function toTranscript(words) {
   if (!words?.length) return { text: "", segments: [] };
   return {

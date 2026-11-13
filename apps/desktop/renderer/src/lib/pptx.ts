@@ -117,7 +117,7 @@ export async function parsePptx(bytes: Uint8Array): Promise<PptxResult> {
     const order = await resolveSlideOrder(bytes, entries);
 
     if (order.length === 0) {
-      return { ok: false, slides: [], slideCount: 0, hasNotes: false, ms: 0, error: "这个 PPTX 里没有幻灯片" };
+      return { ok: false, slides: [], slideCount: 0, hasNotes: false, ms: 0, error: "This PPTX file has no slides" };
     }
 
     const slides: Slide[] = [];
@@ -129,7 +129,7 @@ export async function parsePptx(bytes: Uint8Array): Promise<PptxResult> {
       const lines = extractParagraphs(xml);
       slides.push({
         index: i + 1,
-        title: lines[0] ?? `（第 ${i + 1} 页无文字）`,
+        title: lines[0] ?? `(Slide ${i + 1} has no text)`,
         lines,
       });
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 把对比用的 HTML 渲染成 PNG（这样能直接看效果）
+// Render the comparison HTML to PNG (so the result can be viewed directly)
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +11,7 @@ const HTML = path.join(ROOT, "产出", "logo尺码对比.html");
 const PNG = path.join(ROOT, "产出", "logo尺码对比.png");
 
 if (!fs.existsSync(HTML)) {
-  console.error("先生成 HTML：node brand/logo-size-compare.mjs");
+  console.error("Generate the HTML first: node brand/logo-size-compare.mjs");
   process.exit(1);
 }
 
@@ -25,4 +25,4 @@ await page.waitForTimeout(1200);
 await page.screenshot({ path: PNG, fullPage: true });
 await app.close();
 
-console.log(`已截图：${path.relative(ROOT, PNG)}（${(fs.statSync(PNG).size / 1024).toFixed(0)} KB）`);
+console.log(`Screenshot saved: ${path.relative(ROOT, PNG)} (${(fs.statSync(PNG).size / 1024).toFixed(0)} KB)`);

@@ -69,16 +69,16 @@ function registerExport(ipcMain, getWindow) {
   ipcMain.handle("export:run", async (_e, payload) => {
     try {
     const { format, markdown, sourcePath: suppliedSource, defaultName, author, saveAs, toDownloads } = payload ?? {};
-    if (!['markdown', 'pdf', 'docx'].includes(format)) return { ok: false, error: '不支持的导出格式' };
+    if (!['markdown', 'pdf', 'docx'].includes(format)) return { ok: false, error: 'Unsupported export format' };
     if (typeof markdown !== "string" || (format !== 'markdown' && !markdown.trim())) {
-      return { ok: false, error: "没有可导出的内容" };
+      return { ok: false, error: "No content to export" };
     }
     if (typeof suppliedSource !== 'string' || !suppliedSource.trim()) {
-      return { ok: false, error: "缺少源文件路径" };
+      return { ok: false, error: "Missing source file path" };
     }
 
     const sourcePath = fs.existsSync(suppliedSource) && fs.statSync(suppliedSource).isDirectory()
-      ? path.join(suppliedSource, '学习记录.md') : suppliedSource;
+      ? path.join(suppliedSource, 'Learning record.md') : suppliedSource;
     const stem = validateName(defaultName || path.basename(sourcePath, path.extname(sourcePath)));
     /*
      * 输出目录。
@@ -106,12 +106,12 @@ function registerExport(ipcMain, getWindow) {
     let target;
     if (format === "markdown") {
       const ext = ".md";
-      target = path.join(dir, `${stem}.导出${ext}`);
+      target = path.join(dir, `${stem}.exported${ext}`);
       // Automatic export must not silently replace an earlier copy.
-      for (let n = 2; !saveAs && fs.existsSync(target); n++) target = path.join(dir, `${stem}.导出-${n}${ext}`);
+      for (let n = 2; !saveAs && fs.existsSync(target); n++) target = path.join(dir, `${stem}.exported-${n}${ext}`);
       if (saveAs) {
         const r = await dialog.showSaveDialog(getWindow(), {
-          title: "导出 Markdown",
+          title: "Export Markdown",
           defaultPath: target,
           filters: [{ name: "Markdown", extensions: ["md"] }],
         });
@@ -131,11 +131,11 @@ function registerExport(ipcMain, getWindow) {
     target = path.join(dir, `${stem}${ext}`);
     if (saveAs) {
       const r = await dialog.showSaveDialog(getWindow(), {
-        title: format === "pdf" ? "导出 PDF" : "导出 Word",
+        title: format === "pdf" ? "Export PDF" : "Export Word",
         defaultPath: target,
         filters: format === "pdf"
           ? [{ name: "PDF", extensions: ["pdf"] }]
-          : [{ name: "Word 文档", extensions: ["docx"] }],
+          : [{ name: "Word document", extensions: ["docx"] }],
       });
       if (r.canceled || !r.filePath) return { ok: false, canceled: true };
       target = r.filePath;
@@ -162,7 +162,7 @@ function registerExport(ipcMain, getWindow) {
         scriptPath: docxScriptPath,
       });
     }
-    return { ok: false, error: `不支持的格式：${format}` };
+    return { ok: false, error: `Unsupported format: ${format}` };
     } catch (e) {
       return { ok: false, error: String(e?.message ?? e) };
     }
@@ -174,7 +174,7 @@ function registerExport(ipcMain, getWindow) {
       require("electron").shell.showItemInFolder(p);
       return { ok: true };
     }
-    return { ok: false, error: "文件不存在" };
+    return { ok: false, error: "File not found" };
   });
 }
 

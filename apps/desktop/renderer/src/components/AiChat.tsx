@@ -1,21 +1,24 @@
-// AI 助手面板 —— DeepSeek Harness 的界面
+// AI Assistant panel — the DeepSeek Harness UI
 //
-// 这是"融合 DSH"的可见部分。设计要点：
-//   1. **过程要看得见**：thinking / tool_call / tool_result 都实时显示成条目，
-//      而不是只有一个转圈。用户要知道 AI 在读哪个文件、改了什么。
-//   2. **改文件要能看 diff**：DSH 的 edit 事件带 old_string / new_string，
-//      直接渲染成红绿对比 —— 这是"敢让它动我的笔记"的前提。
-//   3. **会话可续**：把 sessionId 存下来，后续消息接着同一个上下文，
-//      不用每次重新解释背景。
-//   4. 沙箱边界 = 当前打开的库。界面上明确写出来，让用户放心。
+// This is the visible part of the "DSH integration". Design points:
+//   1. **The process must be visible**: thinking / tool_call / tool_result are all
+//      shown as live entries instead of a single spinner. Users need to know which
+//      file the AI is reading and what it changed.
+//   2. **File edits must show a diff**: DSH edit events carry old_string / new_string,
+//      rendered as a red/green comparison — the precondition for trusting it with
+//      your notes.
+//   3. **Sessions resume**: sessionId is persisted, so follow-up messages continue in
+//      the same context without re-explaining the background each time.
+//   4. Sandbox boundary = the currently open library. The UI states this clearly so
+//      users feel safe.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DshEvent } from "../types";
 import MarkdownView from "./MarkdownView";
 
 interface Props {
-  /** 当前打开的库目录 —— DSH 的 cwd，也是沙箱边界 */
+  /** The currently open library directory — DSH's cwd, also the sandbox boundary */
   vaultPath: string | null;
-  /** AI 改完文件后通知外面刷新文件树 */
+  /** Notify the parent to refresh the file tree after the AI changes files */
   onFilesChanged?: () => void;
 }
 
@@ -41,18 +44,20 @@ interface Msg {
 }
 
 /**
- * 对话持久化的 localStorage 键。
+ * localStorage key for persisted conversation.
  *
- * 为什么要持久化：用户实测反馈"点一下信息再回来，对话全没了" ——
- * 那个的直接原因是组件被卸载（切右栏用的三元表达式），已改成 CSS 隐藏。
- * 但如果只修那一处，**关掉软件对话照样丢**。
- * 一个能写笔记、能改文件的 AI 助手，对话不该是易失的。
+ * Why persist: users reported "I clicked Info, came back, and the conversation was
+ * gone" — the direct cause was the component being unmounted (the ternary used to
+ * switch the right sidebar). That is now CSS-hidden.
+ * But fixing only that spot still means **the conversation is lost when the app closes**.
+ * For an AI assistant that can write notes and edit files, the conversation should not
+ * be volatile.
  *
- * 按库路径分键：不同资料库的对话不该混在一起。
+ * Keyed by library path: conversations from different libraries should not mix.
  */
 const STORE_KEY = (vaultPath: string | null) => `gezhi.chat.${vaultPath ?? "__none__"}`;
 
-/** 一条对话最多保留多少条消息（避免 localStorage 无限膨胀） */
+/** Maximum messages kept per conversation (so localStorage does not grow forever) */
 const MAX_PERSISTED_MSGS = 60;
 
 function loadPersisted(vaultPath: string | null): { msgs: Msg[]; sessionId: string | null } {
@@ -60,7 +65,7 @@ function loadPersisted(vaultPath: string | null): { msgs: Msg[]; sessionId: stri
     const raw = localStorage.getItem(STORE_KEY(vaultPath));
     if (!raw) return { msgs: [], sessionId: null };
     const j = JSON.parse(raw);
-    // 不做过度校验：坏数据就当没有，不要因为持久化把界面搞崩
+    // No heavy validation: treat bad data as absent; persistence must not crash the UI
     return {
       msgs: Array.isArray(j?.msgs) ? j.msgs : [],
       sessionId: typeof j?.sessionId === "string" ? j.sessionId : null,
@@ -72,23 +77,23 @@ function loadPersisted(vaultPath: string | null): { msgs: Msg[]; sessionId: stri
 
 function savePersisted(vaultPath: string | null, msgs: Msg[], sessionId: string | null) {
   try {
-    // 只留最近若干条；steps 可能很大（工具返回内容），也做截断
+    // Keep only the most recent messages; steps can be large (tool output), so truncate them too
     const slim = msgs.slice(-MAX_PERSISTED_MSGS).map((m) => ({
       ...m,
       steps: m.steps?.slice(-40).map((s) => ({
         ...s,
-        // 工具返回内容截到 4000 字，否则 localStorage 很快写满
+        // Truncate tool output to 4000 chars, otherwise localStorage fills up fast
         resultText: s.resultText ? s.resultText.slice(0, 4000) : undefined,
       })),
     }));
     localStorage.setItem(STORE_KEY(vaultPath), JSON.stringify({ msgs: slim, sessionId }));
   } catch {
-    // 写不进去（比如配额满了）就放弃持久化，不影响当前会话继续用
+    // If writing fails (e.g. quota full), skip persistence; the current session keeps working
   }
 }
 
 export default function AiChat({ vaultPath, onFilesChanged }: Props) {
-  // 初始值从持久化里读 —— 重启软件后对话还在
+  // The initial value is read from persistence — the conversation survives an app restart
   const initial = useRef(loadPersisted(null));
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -98,11 +103,11 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stepIdRef = useRef(0);
   const touchedFilesRef = useRef(false);
-  /** 当前已加载的是哪个库的对话（切库时要换） */
+  /** Which library's conversation is currently loaded (switch when the library changes) */
   const loadedForRef = useRef<string | null>(null);
   void initial;
 
-  // 切库时载入那个库的对话
+  // Load that library's conversation when the library changes
   useEffect(() => {
     const key = vaultPath ?? null;
     if (loadedForRef.current === key) return;
@@ -112,17 +117,17 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
     setSessionId(r.sessionId);
   }, [vaultPath]);
 
-  // 对话变化就存起来
+  // Save whenever the conversation changes
   useEffect(() => {
     savePersisted(vaultPath ?? null, msgs, sessionId);
   }, [msgs, sessionId, vaultPath]);
 
-  // DSH 健康检查
+  // DSH health check
   useEffect(() => {
     window.gezhi.ai.health().then(setHealth).catch((e) => setHealth({ ok: false, error: e.message }));
   }, []);
 
-  // 订阅事件流
+  // Subscribe to the event stream
   useEffect(() => {
     const off = window.gezhi.ai.onEvent(({ event }) => {
       const ev: DshEvent = event;
@@ -161,7 +166,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
               oldText: typeof a.old_string === "string" ? a.old_string : ev.old_string,
               newText: typeof a.new_string === "string" ? a.new_string : ev.new_string,
             });
-            // 写类工具动过文件 → 待会儿刷新文件树
+            // A write-style tool touched files → refresh the file tree later
             if (/edit|write|create|patch|replace/i.test(name)) touchedFilesRef.current = true;
             break;
           }
@@ -179,7 +184,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
             last.done = true;
             break;
           case "error":
-            push({ kind: "error", text: ev.message ?? ev.error ?? "未知错误" });
+            push({ kind: "error", text: ev.message ?? ev.error ?? "Unknown error" });
             last.error = ev.message ?? ev.error;
             last.done = true;
             break;
@@ -193,7 +198,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
     return off;
   }, []);
 
-  // 自动滚到底
+  // Auto-scroll to the bottom
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -203,7 +208,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
     const task = input.trim();
     if (!task || running) return;
     if (!vaultPath) {
-      setMsgs((p) => [...p, { role: "assistant", text: "", error: "请先打开一个库 —— AI 只在你打开的资料库目录里工作。" }]);
+      setMsgs((p) => [...p, { role: "assistant", text: "", error: "Open a library first — AI only works inside the library directory you opened." }]);
       return;
     }
     setInput("");
@@ -225,7 +230,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
         last.done = true;
         if (r.tokens) last.tokens = r.tokens;
         if (!r.ok) {
-          last.error = r.error ?? "运行失败";
+          last.error = r.error ?? "Run failed";
           if (!last.text) last.text = "";
         }
         next[next.length - 1] = last;
@@ -244,13 +249,13 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
       });
     } finally {
       setRunning(false);
-      // AI 可能改了文件 —— 让外面的文件树刷新
+      // The AI may have changed files — let the parent refresh the file tree
       if (touchedFilesRef.current) onFilesChanged?.();
     }
   }, [input, running, vaultPath, sessionId, onFilesChanged]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    // Enter 发送，Shift+Enter 换行（聊天框的通行习惯）
+    // Enter sends, Shift+Enter inserts a newline (standard chat behaviour)
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       send();
@@ -259,7 +264,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
 
   return (
     <div className="ai-chat" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {/* 顶部：DSH 状态 */}
+      {/* Top: DSH status */}
       <div
         style={{
           padding: "6px 12px",
@@ -280,30 +285,30 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
         />
         <span>
           {health === null
-            ? "检查 DSH…"
+            ? "Checking DSH…"
             : health.ok
             ? `DeepSeek Harness ${health.version ?? ""}`
-            : "DSH 不可用"}
+            : "DSH unavailable"}
         </span>
-        {sessionId && <span style={{ marginLeft: "auto" }} title={sessionId}>已连接上下文</span>}
+        {sessionId && <span style={{ marginLeft: "auto" }} title={sessionId}>Context connected</span>}
       </div>
 
-      {/* 消息区 */}
+      {/* Messages */}
       <div ref={scrollerRef} style={{ flex: "1 1 auto", overflow: "auto", padding: "8px 0 12px" }}>
         {msgs.length === 0 && (
           <div className="ai-empty" style={{ padding: "16px 14px", color: "var(--text-faint)", fontSize: 13, lineHeight: 1.8 }}>
-            <div style={{ marginBottom: 10 }}>让 AI 在你的资料库里干活。它能读、能写、能改你的笔记。</div>
-            {!vaultPath && <div style={{ color: "var(--red)" }}>先打开一个库（Ctrl+O）</div>}
+            <div style={{ marginBottom: 10 }}>Ask AI to work in your library. It can read, create and revise your notes.</div>
+            {!vaultPath && <div style={{ color: "var(--red)" }}>Open a library first (Ctrl+O)</div>}
             {health && !health.ok && (
               <div style={{ color: "var(--red)", marginTop: 8 }}>
-                DSH 不可用：{health.error ?? "未找到可执行文件"}
+                DSH unavailable: {health.error ?? "No executable found"}
               </div>
             )}
-            <div style={{ marginTop: 12, color: "var(--text-muted)" }}>试试：</div>
+            <div style={{ marginTop: 12, color: "var(--text-muted)" }}>Try this:</div>
             <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
-              <li>把这篇笔记整理成大纲</li>
-              <li>给这个库里的英语笔记建一份索引</li>
-              <li>把这份讲义转成练习题（Markdown）</li>
+              <li>Organise this note into an outline</li>
+              <li>Create an index for this library</li>
+              <li>Turn this handout into Markdown exercises</li>
             </ul>
           </div>
         )}
@@ -327,15 +332,16 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
               </div>
             ) : (
               <div>
-                {/* 过程条目 */}
+                {/* Process entries */}
                 {m.steps?.map((s) => (
                   <StepView key={s.id} step={s} />
                 ))}
 
-                {/* 最终回答：Markdown 渲染。
-                    用 compact 模式 —— 默认的阅读排版是给 760px 正文区设计的，
-                    h1 近 30px、留白很大，塞进 340px 的聊天栏又大又散
-                    （用户实测反馈"格式大小也太大了"）。 */}
+                {/* Final answer: rendered as Markdown.
+                    Use compact mode — the default reading layout is designed for a
+                    760px body area, with h1 near 30px and generous spacing; inside
+                    the 340px chat column it looks oversized and loose
+                    (users reported "the formatting is far too large"). */}
                 {m.text && (
                   <div
                     style={{
@@ -351,18 +357,18 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
                 )}
 
                 {m.error && (
-                  <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 6 }}>出错了：{m.error}</div>
+                  <div style={{ color: "var(--red)", fontSize: 12.5, marginTop: 6 }}>Error: {m.error}</div>
                 )}
 
                 {!m.done && (
                   <div style={{ color: "var(--text-faint)", fontSize: 12, marginTop: 4 }}>
-                    <span className="ai-dots">正在工作</span>
+                    <span className="ai-dots">Working</span>
                   </div>
                 )}
 
                 {m.tokens && m.done && (
                   <div style={{ color: "var(--text-faint)", fontSize: 11, marginTop: 4 }}>
-                    tokens: {m.tokens.input} 入 / {m.tokens.output} 出
+                    tokens: {m.tokens.input} in / {m.tokens.output} out
                   </div>
                 )}
               </div>
@@ -371,13 +377,13 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
         ))}
       </div>
 
-      {/* 输入区 */}
+      {/* Composer */}
       <div className="ai-composer" style={{ flex: "0 0 auto", borderTop: "1px solid var(--bd)", padding: 8 }}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={vaultPath ? "交给 AI 做点什么…（Enter 发送，Shift+Enter 换行）" : "先打开一个库"}
+          placeholder={vaultPath ? "Ask AI to do something… (Enter to send, Shift+Enter for a new line)" : "Open a library first"}
           disabled={!vaultPath || running}
           rows={3}
           style={{
@@ -396,7 +402,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
         />
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
           <span style={{ fontSize: 11, color: "var(--text-faint)", flex: "1 1 auto" }}>
-            {vaultPath ? `工作目录：${vaultPath.split(/[\\/]/).pop()}` : "未打开库"}
+            {vaultPath ? `Workspace: ${vaultPath.split(/[\\/]/).pop()}` : "No library open"}
           </span>
           {running ? (
             <button
@@ -406,7 +412,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
                 border: "1px solid var(--bd-strong)", background: "var(--bg-secondary)",
               }}
             >
-              停止
+              Stop
             </button>
           ) : (
             <button
@@ -419,7 +425,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
                 cursor: vaultPath && input.trim() ? "pointer" : "default",
               }}
             >
-              发送
+              Send
             </button>
           )}
         </div>
@@ -428,7 +434,7 @@ export default function AiChat({ vaultPath, onFilesChanged }: Props) {
   );
 }
 
-// ---------------------------------------------------------------- 过程条目
+// ---------------------------------------------------------------- Process entries
 function StepView({ step }: { step: Step }) {
   const [open, setOpen] = useState(false);
 
@@ -474,7 +480,7 @@ function StepView({ step }: { step: Step }) {
           {short && <span style={{ color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{short}</span>}
           {isEdit && (
             <span style={{ marginLeft: "auto", color: "var(--text-faint)", fontSize: 11 }}>
-              {open ? "收起改动 ▴" : "查看改动 ▾"}
+              {open ? "Hide changes ▴" : "View changes ▾"}
             </span>
           )}
         </div>
@@ -505,7 +511,7 @@ function StepView({ step }: { step: Step }) {
           onClick={() => setOpen((o) => !o)}
           style={{ cursor: "pointer", textDecoration: "underline dotted" }}
         >
-          {step.ok === false ? "工具报错" : "工具返回"}（{txt.length} 字）{open ? " ▴" : " ▾"}
+          {step.ok === false ? "Tool error" : "Tool output"} ({txt.length} chars){open ? " ▴" : " ▾"}
         </span>
         {open && (
           <pre

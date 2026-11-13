@@ -1,22 +1,27 @@
-// 格致 · 索引器（全文检索 + 反向链接）
+// Gezhi - Indexer (full-text search + backlinks)
 //
-// 两件事：
-//   1. **全文检索**：把库里的文本文件切块写入 SQLite 的 FTS5 表
-//   2. **反向链接**：解析 `[[wikilink]]`，建出 "哪篇笔记引用了哪篇" 的关系
+// Two jobs:
+//   1. **Full-text search**: chunk the vault's text files and write them into SQLite's FTS5 table
+//   2. **Backlinks**: parse `[[wikilink]]` and build the "which note references which" relationship
 //
-// ★ 检索策略（实测定下来的，见 verify-search-strategy.cjs）：
-//   SQLite 的 trigram 分词器**只索引 ≥3 字符的片段**，所以
-//   查「电场」「情态」这类**双字中文词**会静默命中 0 条 —— 不报错、不警告。
-//   而 jieba 预分词词表也不可靠（「情态」被切成「情态动词」一个词，查「情态」匹配不上）。
-//   → 对策：**≥3 字走 FTS 索引，≤2 字走 LIKE 扫描**。
-//     实测 2 万行 LIKE 只要 2ms，这个规模下"查得到"比"查得快"重要。
+// ★ Search strategy (settled by real-world testing, see verify-search-strategy.cjs):
+//   SQLite's trigram tokenizer **only indexes fragments of ≥3 characters**, so
+//   searching for two-character Chinese words like "电场" or "情态" silently returns
+//   0 hits - no error, no warning.
+//   And the jieba pre-tokenized word list is also unreliable ("情态" gets split into
+//   the single word "情态动词", so searching "情态" finds no match).
+//   → Strategy: **≥3 characters use the FTS index, ≤2 characters use a LIKE scan**.
+//     In practice a LIKE scan over 20,000 rows takes only 2ms; at this scale
+//     "finding it" matters more than "finding it fast".
 //
-// ★ 数据库位置：放 %APPDATA%\gezhi\index.db 而不是库目录内。
-//   理由同 P0 的存储决策：库目录可能在 OneDrive 下，WAL 文件会引发同步冲突。
+// ★ Database location: put it in %APPDATA%\gezhi\index.db rather than inside the
+//   vault directory.
+//   Reason is the same as the P0 storage decision: the vault may be under OneDrive,
+//   and WAL files would cause sync conflicts.
 const fs = require("node:fs");
 const path = require("node:path");
 
-/** 可索引的文本类扩展名 */
+/** Indexable text-type extensions */
 const INDEXABLE = new Set([
   ".md", ".markdown", ".txt", ".log", ".rtf",
   ".csv", ".tsv", ".json", ".yaml", ".yml", ".toml", ".ini",
@@ -24,11 +29,11 @@ const INDEXABLE = new Set([
   ".java", ".rs", ".go", ".rb", ".php", ".sh", ".ps1", ".sql", ".html", ".css",
 ]);
 
-/** 单文件最大索引体积（超过就跳过，避免把几 MB 的 CSV 全塞进索引） */
+/** Maximum per-file index size (skip files larger than this, so a multi-MB CSV isn't stuffed into the index) */
 const MAX_INDEX_BYTES = 2 * 1024 * 1024;
-/** 每块的目标字符数 */
+/** Target character count per chunk */
 const CHUNK_SIZE = 900;
-/** 块之间重叠多少字符（避免关键词正好落在切缝上） */
+/** How many characters overlap between chunks (so a keyword doesn't land exactly on a cut) */
 const CHUNK_OVERLAP = 120;
 
 let DatabaseSync = null;
@@ -37,17 +42,17 @@ function getSqlite() {
   try {
     DatabaseSync = require("node:sqlite").DatabaseSync;
   } catch (e) {
-    throw new Error("这个运行环境不支持 node:sqlite：" + e.message);
+    throw new Error("This runtime does not support node:sqlite: " + e.message);
   }
   return DatabaseSync;
 }
 
-/** 打开（并初始化）索引库 */
+/** Open (and initialize) the index database */
 function openIndex(dbPath) {
   const DB = getSqlite();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const db = new DB(dbPath);
-  // WAL：读写并发更稳（Electron 主进程可能同时被索引与查询访问）
+  // WAL: more stable concurrent reads/writes (the Electron main process may be hit by both indexing and queries at once)
   db.exec("pragma journal_mode = wal");
   db.exec("pragma synchronous = normal");
   db.exec(`
@@ -70,7 +75,7 @@ function openIndex(dbPath) {
       text   text not null
     );
 
-    -- 全文索引：trigram 是中文能用的关键（unicode61 查中文恒为 0 条）
+    -- Full-text index: trigram is the key that works for Chinese (unicode61 always returns 0 hits for Chinese)
     create virtual table if not exists chunks_fts using fts5(
       text,
       content='chunks',
@@ -78,7 +83,7 @@ function openIndex(dbPath) {
       tokenize='trigram'
     );
 
-    -- 反向链接：source 引用 target
+    -- Backlinks: source references target
     create table if not exists links(
       id       integer primary key autoincrement,
       vault    text not null,

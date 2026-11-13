@@ -1,11 +1,11 @@
-// PPTX / PPT 查看器
+// PPTX / PPT viewer
 //
-// 数据来源：**由主进程解析好后传进来**，这个组件不读盘、不解析。
-// 原因：最大的 PPTX 是 219 MB，走字节 IPC 会把渲染进程搞崩（实测），
-// 而提取出的文字通常只有几百 KB。解析全在主进程完成。
+// Data source: **parsed by the main process and passed in**; this component never reads or parses files.
+// Reason: the largest PPTX is 219 MB, and sending bytes over IPC crashes the renderer (measured),
+// while the extracted text is usually only a few hundred KB. Parsing happens entirely in the main process.
 //
-// 呈现方式是"幻灯片列表 + 每页文字"，**不是**原版视觉还原：
-// 课件里的排版、图片、动画在提取后都没有了。这一点在界面上要说明白。
+// Presentation is a "slide list + text per slide", **not** a faithful visual reproduction:
+// the layout, images, and animations in the deck are lost after extraction. The UI must make this clear.
 import { useMemo, useState } from "react";
 
 interface Slide {
@@ -18,7 +18,7 @@ interface Props {
   slides: Slide[];
   path: string;
   ext: string;
-  /** 解析耗时（主进程报的），展示给用户看 */
+  /** Parse time (reported by the main process), shown to the user */
   ms?: number;
 }
 
@@ -30,7 +30,7 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
   const isLegacy = ext === ".ppt";
   const name = path.split(/[\\/]/).pop() ?? "";
 
-  // 搜索：按页筛（含关键词的页）
+  // Search: filter by slide (slides containing the keyword)
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return slides;
@@ -42,11 +42,11 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
   if (slides.length === 0) {
     return (
       <div className="empty-state">
-        <div style={{ fontSize: 15 }}>这份演示文稿里没有提取到文字</div>
+        <div style={{ fontSize: 15 }}>No text was extracted from this presentation</div>
         <div style={{ maxWidth: 540, textAlign: "center", lineHeight: 1.9, color: "var(--text-muted)" }}>
-          可能整份都是图片（扫描件、纯图片排版，或公式以图片形式插入）。
+          The whole file may be images (a scan, an image-only layout, or formulas inserted as images).
           <br />
-          图片里的文字需要 OCR 才能读，目前未支持。
+          Text in images requires OCR, which is not supported yet.
         </div>
       </div>
     );
@@ -65,16 +65,16 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
           }}
         >
           <span style={{ flex: "1 1 auto" }}>
-            <b>文字提取模式</b>：只提取每页文字，<b>图片、排版、动画与母版样式无法还原</b>。
-            {isLegacy && " 旧版 .ppt 是 OLE 二进制格式，页码是**按内容分段近似**的，不是原始页码。"}
-            {ms !== undefined && <> 解析耗时 {ms}ms。</>}
+            <b>Text extraction mode</b>: only text is extracted per slide. <b>Images, layout, animation, and master styles cannot be reproduced.</b>
+            {isLegacy && " Legacy .ppt is an OLE binary format, so page numbers are **approximate content-based segments**, not the original slide numbers."}
+            {ms !== undefined && <> Parsed in {ms}ms.</>}
           </span>
-          <button onClick={() => setShowNotice(false)} style={{ flex: "0 0 auto", color: "#7a5300", opacity: 0.7 }} title="知道了">✕</button>
+          <button onClick={() => setShowNotice(false)} style={{ flex: "0 0 auto", color: "#7a5300", opacity: 0.7 }} title="Got it">✕</button>
         </div>
       )}
 
       <div style={{ flex: "1 1 auto", display: "flex", minHeight: 0 }}>
-        {/* 左：页码列表 */}
+        {/* Left: slide list */}
         <div
           style={{
             flex: "0 0 auto", width: 210, borderRight: "1px solid var(--bd)",
@@ -85,7 +85,7 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索页面内容…"
+              placeholder="Search slide content…"
               style={{
                 width: "100%", fontSize: 12, padding: "3px 7px",
                 border: "1px solid var(--bd-strong)", borderRadius: 5,
@@ -93,8 +93,8 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
               }}
             />
             <div style={{ fontSize: 11, color: "var(--text-faint)", marginTop: 5 }}>
-              共 {slides.length} 页
-              {query && ` · 命中 ${filtered.length} 页`}
+              {slides.length} slides total
+              {query && ` · ${filtered.length} matching slides`}
             </div>
           </div>
 
@@ -123,21 +123,21 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
             </button>
           ))}
 
-          {filtered.length === 0 && <div className="tree-empty">没有含「{query}」的页面</div>}
+          {filtered.length === 0 && <div className="tree-empty">No slides containing “{query}”</div>}
         </div>
 
-        {/* 右：当前页内容 */}
+        {/* Right: current slide content */}
         <div style={{ flex: "1 1 auto", overflow: "auto", padding: "24px 32px 80px", minWidth: 0 }}>
           <div style={{ maxWidth: 780, margin: "0 auto" }}>
             <div style={{ fontSize: 12, color: "var(--text-faint)", marginBottom: 12 }}>
-              {name} · 第 {cur.index} / {slides.length} 页
+              {name} · Slide {cur.index} / {slides.length}
             </div>
 
             {cur.lines.length === 0 ? (
-              <div style={{ color: "var(--text-faint)" }}>（这一页没有文字）</div>
+              <div style={{ color: "var(--text-faint)" }}>(No text on this slide)</div>
             ) : (
               <>
-                {/* 第一行当标题 */}
+                {/* First line as the title */}
                 <div
                   className="selectable"
                   style={{ fontSize: 21, fontWeight: 650, lineHeight: 1.5, marginBottom: 16 }}
@@ -152,7 +152,7 @@ export default function PptViewer({ slides, path, ext, ms }: Props) {
                         className="selectable"
                         style={{
                           display: "flex", gap: 8, marginBottom: 3,
-                          // 看起来像列表项的缩进行：一个短横 + 内容
+                          // Indented line that looks like a list item: a dash + content
                         }}
                       >
                         <span style={{ color: "var(--text-faint)", flex: "0 0 auto", userSelect: "none" }}>·</span>

@@ -19,16 +19,16 @@ function registerDshSetup(ipcMain, app) {
     catch (e) { return { ok: false, installed: false, installerBundled: Boolean(installer), completed: false, error: e.message }; }
   });
   ipcMain.handle('dsh:install', async () => {
-    try { if (!installer) throw new Error('未找到随包的 DeepSeek Harness 安装程序'); await launch(installer); return { ok: true }; }
+    try { if (!installer) throw new Error('Bundled DeepSeek Harness installer not found'); await launch(installer); return { ok: true }; }
     catch (e) { return { ok: false, error: e.message }; }
   });
   ipcMain.handle('dsh:login', async () => {
-    try { const state = await locate(); if (!state.installed) throw new Error('请先使用内置安装程序安装 DeepSeek Harness'); await launch(state.exe); return { ok: true }; }
+    try { const state = await locate(); if (!state.installed) throw new Error('Please install DeepSeek Harness using the built-in installer first'); await launch(state.exe); return { ok: true }; }
     catch (e) { return { ok: false, error: e.message }; }
   });
   ipcMain.handle('dsh:completeSetup', async () => {
-    try { const state = await locate(); if (!state.installed) throw new Error('尚未检测到 DeepSeek Harness，请完成安装后重试');
-      const health = await (await loadBridge()).healthCheck(); if (!health.ok) throw new Error(health.error || '运行时检查失败');
+    try { const state = await locate(); if (!state.installed) throw new Error('DeepSeek Harness was not detected; complete the installation and try again');
+      const health = await (await loadBridge()).healthCheck(); if (!health.ok) throw new Error(health.error || 'Runtime check failed');
       fs.mkdirSync(path.dirname(marker), { recursive: true }); fs.writeFileSync(marker, JSON.stringify({ at: new Date().toISOString(), version: health.version, userAcknowledgedLogin: true }));
       return { ok: true };
     } catch (e) { return { ok: false, error: e.message }; }

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-// 费曼讲解台验证 + CSP 音频修复验证
+// Feynman presentation console verification + CSP audio fix verification
 //
-// 用户澄清了数字人的真正用途：
-//   "我一开始做这个不是用于费曼学习法，我成为老师讲一遍给我查缺补漏的吗"
-// 所以这个测试锁死：
-//   1. 数字人面板默认开在「费曼」页
-//   2. 有"讲什么"的输入框、有"开始讲"的按钮（语音输入）
-//   3. 讲解文字能累加（模拟识别结果）
-//   4. "讲完了 → 查缺补漏"能真跑 AI，并给出针对性反馈
-//   5. CSP 放行了 blob 音频（否则合成了也听不到、嘴也不动）
+// The user clarified the real purpose of the avatar:
+//   "I didn't build this for the Feynman technique — I want to be a teacher and explain it once so you can fill in my gaps"
+// So this test locks in:
+//   1. the avatar panel defaults to the "费曼" (Feynman) tab
+//   2. there is a "讲什么" (what to explain) input box and a "开始讲" (start explaining) button (voice input)
+//   3. the transcript accumulates (simulated recognition results)
+//   4. "讲完了 → 查缺补漏" (done → fill in gaps) really runs the AI and gives targeted feedback
+//   5. CSP allows blob audio (otherwise it can't be heard even after synthesis, and the mouth doesn't move)
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -35,7 +35,7 @@ fs.writeFileSync(
   "utf8",
 );
 
-console.log("=== 费曼讲解台验证 ===\n");
+console.log("=== Feynman presentation console verification ===\n");
 
 const app = await electron.launch({
   executablePath: path.join(HERE, "node_modules", "electron", "dist", "electron.exe"),
@@ -54,17 +54,17 @@ try {
   await page.waitForSelector(".app", { timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.__gezhiTest), { timeout: 20000 });
 
-  // ---- 0. CSP：blob 音频必须放行 ----
-  console.log("── 0. CSP（blob 音频）──");
+  // ---- 0. CSP: blob audio must be allowed ----
+  console.log("── 0. CSP (blob audio) ──");
   const csp = await page.evaluate(() =>
     document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content") ?? "");
-  check("★ CSP 里有 media-src（否则合成的语音播不出来）",
-    /media-src[^;]*blob:/.test(csp), csp.match(/media-src[^;]*/)?.[0] ?? "没有 media-src");
+  check("★ CSP includes media-src (otherwise the synthesized voice can't play)",
+    /media-src[^;]*blob:/.test(csp), csp.match(/media-src[^;]*/)?.[0] ?? "no media-src");
 
   await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
   await page.waitForTimeout(800);
 
-  // 打开一个文件，让费曼台有默认主题与参考资料
+  // Open a file so the Feynman console has a default topic and reference material
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), path.join(vault, "二次函数.md"));
   await page.waitForTimeout(1200);
 
@@ -73,44 +73,44 @@ try {
 
   const panel = page.locator('[data-testid="feynman-panel"], .sidebar.right').first();
 
-  // ---- 1. 默认在费曼页 ----
-  console.log("\n── 1. 界面 ──");
+  // ---- 1. Defaults to the Feynman tab ----
+  console.log("\n── 1. UI ──");
   const bodyText = await page.evaluate(() => document.body.innerText);
-  check("★ 数字人面板默认开在「费曼」页", bodyText.includes("费曼"));
-  check("有「对话」页（普通问答仍在）", bodyText.includes("对话"));
-  check("有「检测」页", bodyText.includes("检测"));
+  check("★ avatar panel defaults to the '费曼' (Feynman) tab", bodyText.includes("费曼"));
+  check("has a '对话' (Chat) tab (ordinary Q&A still present)", bodyText.includes("对话"));
+  check("has a '检测' (Detection) tab", bodyText.includes("检测"));
 
   const topicInput = page.locator('input[placeholder*="二次函数"], input[placeholder*="例如："]').first();
-  check("★ 有「你要讲什么」的输入框", (await topicInput.count()) > 0);
+  check("★ has a '你要讲什么' (what do you want to explain) input box", (await topicInput.count()) > 0);
 
   const topicVal = (await topicInput.count()) ? await topicInput.inputValue() : "";
   const placeholder = (await topicInput.count()) ? await topicInput.getAttribute("placeholder") : "";
-  check("主题默认取当前文件名（打开文件后自动填）",
+  check("topic defaults to the current filename (auto-filled after opening the file)",
     topicVal.includes("二次函数") || String(placeholder).includes("二次函数"),
     `value="${topicVal}" placeholder="${placeholder}"`);
 
   const startBtn = page.locator("button").filter({ hasText: /开始讲/ }).first();
-  check("★ 有「开始讲」按钮（费曼要用语音讲出来）", (await startBtn.count()) > 0);
-  check("凭据就绪时「开始讲」可点",
+  check("★ has a '开始讲' (Start Explaining) button (Feynman requires speaking out loud)", (await startBtn.count()) > 0);
+  check("'开始讲' (Start Explaining) is clickable when credentials are ready",
     (await startBtn.count()) > 0 ? !(await startBtn.isDisabled()) : false);
 
-  check("说明了可以做多段录音", bodyText.includes("分段") || bodyText.includes("每段最长"));
+  check("explains that multi-segment recording is possible", bodyText.includes("分段") || bodyText.includes("每段最长"));
 
-  // ---- 2. 模拟一段讲解（真录不了音，直接灌入识别结果走同一条逻辑）----
-  console.log("\n── 2. 讲解记录（模拟识别文本）──");
-  // 用页面的 React 无法直接塞 state，所以直接调 ASR 走真链路没意义（没人说话）。
-  // 改为：验证"讲完了"按钮在字数不足时禁用（防止空讲提交）。
+  // ---- 2. Simulate a segment of explanation (can't really record; inject recognition results through the same path) ----
+  console.log("\n── 2. Transcript (simulated recognition text) ──");
+  // You can't inject React state from the page directly, so calling ASR through the real chain is pointless (no one is speaking).
+  // Instead: verify the "讲完了" (done) button is disabled when the word count is insufficient (prevent empty submissions).
   const analyzeBtn = page.locator("button").filter({ hasText: /讲完了|查缺补漏/ }).first();
-  check("★ 有「讲完了 → 帮我查缺补漏」按钮", (await analyzeBtn.count()) > 0);
-  check("★ 没讲内容时该按钮禁用（防止空提交）",
+  check("★ has a '讲完了 → 帮我查缺补漏' (Done → Help Me Fill Gaps) button", (await analyzeBtn.count()) > 0);
+  check("★ the button is disabled when nothing has been said (prevent empty submission)",
     (await analyzeBtn.count()) > 0 ? await analyzeBtn.isDisabled() : false,
     (await analyzeBtn.count()) ? await analyzeBtn.innerText() : "");
 
-  // ---- 3. 真跑一次查缺补漏 ----
-  // 由于不能真的说话，这里直接验证费曼提示词与 AI 链路：
-  // 通过 __gezhiTest 之外的路径 —— 用 IPC 直接发一个等价的费曼任务，
-  // 看 AI 是否按"查缺补漏"的格式回答（而不是重新讲一遍）。
-  console.log("\n── 3. 查缺补漏（真跑 AI，约 30~90 秒）──");
+  // ---- 3. Run gap-filling once for real ----
+  // Since we can't actually speak, verify the Feynman prompt and AI chain directly:
+  // go outside __gezhiTest — send an equivalent Feynman task via IPC,
+  // and see whether the AI answers in the "查缺补漏" (fill-in-gaps) format (rather than re-explaining).
+  console.log("\n── 3. Gap-filling (runs the AI for real, ~30–90 s) ──");
   const t0 = Date.now();
   const r = await page.evaluate(async (cwd) => {
     const transcript =
@@ -131,26 +131,26 @@ ${transcript}
     return { ok: res.ok, text: res.finalText ?? "", error: res.error ?? null, ms: Date.now() - (res.t0 ?? 0) };
   }, vault);
   const secs = (Date.now() - t0) / 1000;
-  console.log(`  AI 耗时 ${secs.toFixed(0)} 秒，回答 ${r.text.length} 字`);
-  console.log("  回答开头：" + r.text.slice(0, 160).replace(/\n/g, " / "));
+  console.log(`  AI took ${secs.toFixed(0)} s, answer ${r.text.length} chars`);
+  console.log("  answer starts: " + r.text.slice(0, 160).replace(/\n/g, " / "));
 
-  check("★ 查缺补漏能跑通（AI 有回答）", r.ok && r.text.length > 50, r.error ?? "");
-  // 费曼的关键：AI 不该把知识点重讲一遍，而应指出缺漏与追问
-  check("★ 回答里有「漏」/「缺」类的查漏内容",
+  check("★ gap-filling runs end-to-end (AI has an answer)", r.ok && r.text.length > 50, r.error ?? "");
+  // The key to Feynman: the AI should not re-explain the topic, but point out gaps and ask follow-ups
+  check("★ answer contains gap-type content ('漏'/'缺' = missed / missing)",
     /漏|缺|没有提|未提|少讲/.test(r.text), "");
-  check("★ 回答里有追问（问号）", /[？?]/.test(r.text), "");
-  check("★ 不是把知识点重讲一遍（长度合理，没有大段教科书式复述）",
-    r.text.length < 4000, `${r.text.length} 字`);
+  check("★ answer contains follow-up questions (question mark)", /[？?]/.test(r.text), "");
+  check("★ does not re-explain the topic (reasonable length, no long textbook-style recitation)",
+    r.text.length < 4000, `${r.text.length} chars`);
 
   await page.screenshot({ path: path.join(OUT, "数字人-费曼.png") });
-  check("★ 没有 CSP 拦截音频的报错", cspErrs.length === 0, cspErrs.slice(0, 1).join(""));
-  check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("★ no CSP errors blocking audio", cspErrs.length === 0, cspErrs.slice(0, 1).join(""));
+  check("no JS errors in the renderer process", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
   await app.close();
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((x) => x.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== Result: ${passed}/${results.length} passed ===`);
 for (const x of results) if (!x.pass) console.log(`  FAIL ${x.name}: ${x.detail}`);
 process.exit(passed === results.length ? 0 : 1);

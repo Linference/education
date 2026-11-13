@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// 格致 · 界面渲染验证（看得见的证据）
+// 格致 (Gezhi) · UI rendering verification (visible evidence)
 //
-// 上一个冒烟测试只证明了"进程起来、IPC 通"，**没证明渲染对不对**。
-// 这个脚本做真正要紧的事：
-//   打开一份"什么都有"的 Markdown，检查 DOM 里是否真的出现了
-//   <h1>/<table>/<pre><code>/KaTeX 节点/任务列表/wikilink，
-//   并对 PDF 与 Word 各截一张图。
+// The previous smoke test only proved "the process starts and IPC works", **not that rendering is correct**.
+// This script does the truly important part:
+//   open a Markdown that has "a bit of everything", check the DOM really contains
+//   <h1>/<table>/<pre><code>/KaTeX nodes/task lists/wikilinks,
+//   and take a screenshot of both PDF and Word.
 //
-// 产物：产出/ui-*.png（可以直接看图核对）
+// Artifacts: 产出/ui-*.png (can be checked by eye directly)
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,7 +26,7 @@ function check(name, ok, detail = "") {
   return Boolean(ok);
 }
 
-// ---------------------------------------------------------------- 测试库
+// ---------------------------------------------------------------- test vault
 const vault = fs.mkdtempSync(path.join(os.tmpdir(), "gezhi-render-"));
 fs.mkdirSync(path.join(vault, ".gezhi"), { recursive: true });
 fs.writeFileSync(path.join(vault, ".gezhi", "vault.json"),
@@ -96,15 +96,16 @@ const PDF = path.join(vault, "笔记", "sample.pdf");
   fs.writeFileSync(PDF, Buffer.from(pdf, "binary"));
 }
 
-console.log("=== 格致 · 界面渲染验证 ===");
+console.log("=== 格致 (Gezhi) · UI rendering verification ===");
 
 const app = await electron.launch({
   executablePath: path.join(HERE, "node_modules", "electron", "dist", "electron.exe"),
   args: [APP_DIR],
-  // ⚠️ 必须带 GEZHI_TEST=1 —— 测试钩子 window.__gezhiTest 只在
-  //    主进程给页面加 ?test=1 时才挂载（生产构建里不再无条件启用）。
-  //    漏了这个会卡在下面的 waitForFunction 上，报"超时"而不是"没设环境变量"，
-  //    很难一眼看出原因。
+  // ⚠️ Must set GEZHI_TEST=1 — the test hook window.__gezhiTest is only mounted
+  //    when the main process adds ?test=1 to the page (no longer unconditionally enabled
+  //    in production builds).
+  //    Missing this gets stuck at the waitForFunction below, reporting "timeout" instead of
+  //    "environment variable not set", which is hard to diagnose at a glance.
   env: { ...process.env, GEZHI_TEST: "1" },
 });
 const page = await app.firstWindow();
@@ -116,16 +117,16 @@ try {
   await page.waitForSelector(".app", { timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.__gezhiTest), { timeout: 20000 });
 
-  // 打开库与文件
+  // open the vault and the file
   await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
   await page.waitForTimeout(500);
-  check("文件树渲染出条目", (await page.locator(".tree-row").count()) > 0,
-    `${await page.locator(".tree-row").count()} 行`);
+  check("file tree renders entries", (await page.locator(".tree-row").count()) > 0,
+    `${await page.locator(".tree-row").count()} rows`);
 
   await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), MD);
   await page.waitForTimeout(900);
 
-  // ---- 核心：Markdown 到底渲染成什么 ----
+  // ---- core: what Markdown actually renders to ----
   const dom = await page.evaluate(() => {
     const b = document.querySelector(".markdown-body");
     if (!b) return null;
@@ -143,36 +144,36 @@ try {
       tags: [...b.querySelectorAll(".tag-chip")].map((e) => e.textContent),
       blockquote: b.querySelectorAll("blockquote").length,
       strong: b.querySelectorAll("strong").length,
-      // 有没有把 markdown 源码原样吐出来（说明没渲染）
+      // did it dump the markdown source verbatim (meaning no rendering)
       rawHashLeak: b.textContent?.includes("## ") ?? false,
       rawPipeLeak: b.textContent?.includes("| --- |") ?? false,
     };
   });
 
-  check("Markdown 已渲染（不是原样显示源码）", dom !== null && !dom.rawHashLeak && !dom.rawPipeLeak);
-  check("一级标题渲染", (dom?.h1?.length ?? 0) > 0, JSON.stringify(dom?.h1));
-  check("二级标题渲染", (dom?.h2?.length ?? 0) >= 2, JSON.stringify(dom?.h2));
-  check("表格渲染", (dom?.tables ?? 0) > 0, `${dom?.tables} 个表 / ${dom?.tds} 个单元格`);
-  check("代码块渲染且语法高亮", (dom?.pre ?? 0) > 0 && (dom?.codeHighlighted ?? 0) > 3,
-    `${dom?.pre} 个 pre，${dom?.codeHighlighted} 个高亮 span`);
-  check("★ 块级公式渲染（KaTeX）", (dom?.katexDisplay ?? 0) > 0, `${dom?.katexDisplay} 个块级`);
-  check("★ 行内公式渲染（KaTeX）", (dom?.katexInline ?? 0) > 1, `${dom?.katexInline} 个 katex 节点`);
-  check("任务列表渲染成复选框", (dom?.taskItems ?? 0) >= 2, `${dom?.taskItems} 个`);
-  check("wikilink 渲染成链接", (dom?.wikilinks?.length ?? 0) > 0, JSON.stringify(dom?.wikilinks));
-  check("标签渲染成 chip", (dom?.tags?.length ?? 0) > 0, JSON.stringify(dom?.tags));
-  check("引用块渲染", (dom?.blockquote ?? 0) > 0);
-  check("加粗渲染", (dom?.strong ?? 0) > 0);
+  check("Markdown is rendered (source not shown verbatim)", dom !== null && !dom.rawHashLeak && !dom.rawPipeLeak);
+  check("h1 rendered", (dom?.h1?.length ?? 0) > 0, JSON.stringify(dom?.h1));
+  check("h2 rendered", (dom?.h2?.length ?? 0) >= 2, JSON.stringify(dom?.h2));
+  check("table rendered", (dom?.tables ?? 0) > 0, `${dom?.tables} tables / ${dom?.tds} cells`);
+  check("code block rendered and syntax highlighted", (dom?.pre ?? 0) > 0 && (dom?.codeHighlighted ?? 0) > 3,
+    `${dom?.pre} pre, ${dom?.codeHighlighted} highlight spans`);
+  check("★ block formula rendered (KaTeX)", (dom?.katexDisplay ?? 0) > 0, `${dom?.katexDisplay} block`);
+  check("★ inline formula rendered (KaTeX)", (dom?.katexInline ?? 0) > 1, `${dom?.katexInline} katex nodes`);
+  check("task list rendered as checkboxes", (dom?.taskItems ?? 0) >= 2, `${dom?.taskItems}`);
+  check("wikilinks rendered as links", (dom?.wikilinks?.length ?? 0) > 0, JSON.stringify(dom?.wikilinks));
+  check("tags rendered as chips", (dom?.tags?.length ?? 0) > 0, JSON.stringify(dom?.tags));
+  check("blockquote rendered", (dom?.blockquote ?? 0) > 0);
+  check("bold rendered", (dom?.strong ?? 0) > 0);
 
-  // 属性面板
+  // properties panel
   const props = await page.evaluate(() => {
     const p = document.querySelector(".props");
     return p ? { title: p.querySelector(".props-title")?.textContent, rows: p.querySelectorAll(".prop-row").length, chips: p.querySelectorAll(".tag-chip").length } : null;
   });
-  check("★ YAML 属性面板渲染", props !== null && props.rows >= 3, props ? `${props.rows} 行属性，${props.chips} 个标签` : "无");
+  check("★ YAML properties panel rendered", props !== null && props.rows >= 3, props ? `${props.rows} property rows, ${props.chips} tags` : "none");
 
-  // 状态栏字数
+  // status bar word/char count
   const statusText = await page.locator(".statusbar").innerText();
-  check("状态栏显示字数统计", /个词|个字符/.test(statusText), statusText.replace(/\n/g, " | "));
+  check("status bar shows word/char count", /个词|个字符/.test(statusText), statusText.replace(/\n/g, " | "));
 
   await page.screenshot({ path: path.join(OUT, "ui-markdown.png") });
 
@@ -185,19 +186,19 @@ try {
     canvasW: document.querySelector(".pdf-canvas-wrap canvas")?.width ?? 0,
     canvasH: document.querySelector(".pdf-canvas-wrap canvas")?.height ?? 0,
   }));
-  check("★ PDF 页面渲染出画布", pdfDom.canvases > 0 && pdfDom.canvasW > 100 && pdfDom.canvasH > 100,
+  check("★ PDF page renders a canvas", pdfDom.canvases > 0 && pdfDom.canvasW > 100 && pdfDom.canvasH > 100,
     `${pdfDom.canvasW}×${pdfDom.canvasH}`);
-  check("PDF 工具条显示页码", /第\s*\d+\s*\/\s*\d+\s*页/.test(pdfDom.toolbar), pdfDom.toolbar.slice(0, 60));
+  check("PDF toolbar shows page numbers", /第\s*\d+\s*\/\s*\d+\s*页/.test(pdfDom.toolbar), pdfDom.toolbar.slice(0, 60));
   await page.screenshot({ path: path.join(OUT, "ui-pdf.png") });
 
-  check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("renderer process has no JS errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
   await app.close();
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((r) => r.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== result: ${passed}/${results.length} passed ===`);
 for (const r of results) if (!r.pass) console.log(`  FAIL ${r.name}: ${r.detail}`);
-console.log(`\n截图：产出/ui-markdown.png、产出/ui-pdf.png`);
+console.log(`\nscreenshots: 产出/ui-markdown.png, 产出/ui-pdf.png`);
 process.exit(passed === results.length ? 0 : 1);

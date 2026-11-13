@@ -9,7 +9,7 @@ interface Options { repel: number; distance: number; center: number; linkForce: 
 const DEFAULTS: Options = { repel: 150, distance: 95, center: 0.025, linkForce: 0.18, nodeSize: 1, linkWidth: 0.8, labels: 0.7, arrows: false };
 const COLORS = ["#8b7bea", "#5b9bd5", "#59b6a2", "#daa85e", "#d27897", "#7594cc", "#ad8bc6", "#8caf68"];
 const OPTION_BOUNDS = { repel: [30, 600], distance: [40, 220], center: [0.005, 0.1], linkForce: [0.05, 0.6], nodeSize: [0.5, 2], linkWidth: [0.3, 2], labels: [0.1, 1.6] };
-function folderOf(n: GNode) { const parts = (n.rel ?? "").split(/[\\/]/).filter(Boolean); return parts.length > 1 ? parts[0] : n.exists ? "根目录" : "未创建"; }
+function folderOf(n: GNode) { const parts = (n.rel ?? "").split(/[\\/]/).filter(Boolean); return parts.length > 1 ? parts[0] : n.exists ? "Root" : "Not created"; }
 function colorOf(folder: string) { let h = 0; for (const ch of folder) h = (h * 31 + ch.charCodeAt(0)) | 0; return COLORS[Math.abs(h) % COLORS.length]; }
 function nodeRadius(n: GNode, size: number) { return (3.5 + Math.min(8, Math.sqrt(n.degree) * 1.4)) * size; }
 function readOptions(): Options {
@@ -67,7 +67,7 @@ export default function GraphView({ vaultPath, activePath, onOpen, onEvidence }:
       await window.gezhi.search.waitIdle();
       const r = await window.gezhi.search.graph({ vault: vaultPath, maxNodes: 1500, maxEdges: 6000 });
       if (seq !== loadSeq.current) return;
-      if (!r.ok) throw new Error(String((r as any).error ?? "图谱载入失败"));
+      if (!r.ok) throw new Error(String((r as any).error ?? "Could not load the graph"));
       autoFit.current = true;
       setData({ nodes: r.nodes ?? [], edges: r.edges ?? [], truncated: r.truncated, totalDocs: r.totalDocs });
     } catch (e: any) { if (seq === loadSeq.current) setErr(e.message); }
@@ -130,7 +130,7 @@ export default function GraphView({ vaultPath, activePath, onOpen, onEvidence }:
       if (message.done) { setSettled(true); if (autoFit.current) { fit(); autoFit.current = false; } }
       scheduleDraw();
     };
-    w.onerror = () => { setErr("图谱布局未能启动，请重新载入。"); setSettled(true); };
+    w.onerror = () => { setErr("The graph layout could not start. Reload to try again."); setSettled(true); };
     const visibility = () => w.postMessage({ type: "pause", value: document.hidden });
     document.addEventListener("visibilitychange", visibility); visibility();
     return () => { w.terminate(); worker.current = null; motion.removeEventListener("change", updateMotion); document.removeEventListener("visibilitychange", visibility); cancelAnimationFrame(drawRaf.current); drawRaf.current = 0; };
@@ -277,7 +277,7 @@ export default function GraphView({ vaultPath, activePath, onOpen, onEvidence }:
     if (d.id && d.moved) worker.current?.postMessage({ type: "pin", revision: layout.current.revision, id: d.id, release: true });
     if (d.id && !d.moved) {
       if (nodeMap.get(d.id)?.exists) onOpen?.(d.id);
-      else setErr(`「${nodeMap.get(d.id)?.name}」尚未创建。在笔记中保留这条双链即可。`);
+      else setErr(`"${nodeMap.get(d.id)?.name}" has not been created yet. Keep this wikilink in a note and it will appear here.`);
     }
   };
   const cancel = () => { const d = drag.current; drag.current = null; if (d?.id) worker.current?.postMessage({ type: "pin", revision: layout.current.revision, id: d.id, release: true }); };
@@ -289,39 +289,39 @@ export default function GraphView({ vaultPath, activePath, onOpen, onEvidence }:
     else return; e.preventDefault();
   };
   const setOption = (key: keyof Options, value: number | boolean) => setOptions(prev => ({ ...prev, [key]: value }));
-  if (!vaultPath) return <div className="tree-empty">打开一个库后可以看到关系图谱</div>;
+  if (!vaultPath) return <div className="tree-empty">Open a vault to see the knowledge graph</div>;
   const hoverNode = inspected ? nodeMap.get(inspected) : null;
 
   return <div className="graph-view" data-testid="graph-view" data-settled={settled} data-node-count={view.nodes.length}>
     <header className="graph-toolbar">
-      <div className="graph-heading"><span className="graph-symbol">◎</span><div><strong>关系图谱</strong><span>{view.nodes.length} 个节点 · {view.edges.length} 条链接</span></div></div>
-      <div className="graph-mode"><button className={!localRoot ? "active" : ""} onClick={() => setLocalRoot(null)}>全局</button><button className={localRoot ? "active" : ""} disabled={!activePath && !hover} title="查看当前笔记的邻近链接" onClick={() => setLocalRoot(hover ?? activePath ?? null)}>局部</button></div>
-      {onEvidence && <button className="graph-evidence-link" onClick={onEvidence}>学习证据地图 ↗</button>}
-      <button className={`workbench-icon ${showSettings ? "active" : ""}`} aria-label="图谱设置" aria-expanded={showSettings} onClick={() => setShowSettings(v => !v)}>⚙</button>
+      <div className="graph-heading"><span className="graph-symbol">◎</span><div><strong>Knowledge graph</strong><span>{view.nodes.length} nodes · {view.edges.length} links</span></div></div>
+      <div className="graph-mode"><button className={!localRoot ? "active" : ""} onClick={() => setLocalRoot(null)}>Global</button><button className={localRoot ? "active" : ""} disabled={!activePath && !hover} title="Show links near the current note" onClick={() => setLocalRoot(hover ?? activePath ?? null)}>Local</button></div>
+      {onEvidence && <button className="graph-evidence-link" onClick={onEvidence}>Learning evidence map ↗</button>}
+      <button className={`workbench-icon ${showSettings ? "active" : ""}`} aria-label="Graph settings" aria-expanded={showSettings} onClick={() => setShowSettings(v => !v)}>⚙</button>
     </header>
-    {err && <div className="graph-error" role="alert">{err}<button aria-label="关闭提示" onClick={() => setErr(null)}>×</button></div>}
+    {err && <div className="graph-error" role="alert">{err}<button aria-label="Dismiss the message" onClick={() => setErr(null)}>×</button></div>}
     <div className="graph-canvas-wrap" ref={wrap}>
-      <canvas ref={canvas} aria-label={`关系图谱，${view.nodes.length} 个节点。拖拽平移，滚轮缩放，点击笔记打开。`} tabIndex={0} onKeyDown={keys}
+      <canvas ref={canvas} aria-label={`Knowledge graph with ${view.nodes.length} nodes. Drag to pan, scroll to zoom, click a note to open it.`} tabIndex={0} onKeyDown={keys}
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onLostPointerCapture={cancel} onPointerLeave={() => { if (!drag.current) setHover(null); }}
         onDoubleClick={() => { fit(); autoFit.current = false; }} />
-      {localRoot && <div className="graph-local-pill">局部 · {data?.nodes.find(n => n.id === localRoot)?.name ?? "当前笔记"}<button aria-label="退出局部图谱" onClick={() => setLocalRoot(null)}>×</button></div>}
-      {(loading || !settled && view.nodes.length > 0) && <div className="graph-layout-status"><span />{loading ? "读取笔记链接" : "布局正在收敛"}</div>}
-      {!loading && !view.nodes.length && <div className="graph-empty"><span>◎</span><strong>{data?.nodes.length ? "没有匹配的笔记" : "让知识连接起来"}</strong><p>{data?.nodes.length ? "调整筛选条件，或切回全局图谱。" : "在笔记中写下 [[另一篇笔记]]，这里就会出现连接。"}</p></div>}
-      {hoverNode && <div className="graph-inspector"><span style={{ background: colorOf(folderOf(hoverNode)) }} /><div><strong>{hoverNode.name}</strong><small>{folderOf(hoverNode)} · {hoverNode.degree} 个连接</small></div><button onClick={() => setLocalRoot(hoverNode.id)}>查看邻居</button></div>}
-      <div className="graph-zoom"><button aria-label="缩小图谱" onClick={() => zoom(1 / 1.2)}>−</button><span data-testid="graph-zoom">{zoomLabel}%</span><button aria-label="放大图谱" onClick={() => zoom(1.2)}>+</button><button aria-label="适应画布" title="适应画布（0）" onClick={fit}>⤢</button></div>
+      {localRoot && <div className="graph-local-pill">Local · {data?.nodes.find(n => n.id === localRoot)?.name ?? "current note"}<button aria-label="Leave the local graph" onClick={() => setLocalRoot(null)}>×</button></div>}
+      {(loading || !settled && view.nodes.length > 0) && <div className="graph-layout-status"><span />{loading ? "Reading note links" : "Layout is settling"}</div>}
+      {!loading && !view.nodes.length && <div className="graph-empty"><span>◎</span><strong>{data?.nodes.length ? "No matching notes" : "Let knowledge connect"}</strong><p>{data?.nodes.length ? "Adjust the filters, or switch back to the global graph." : "Write [[another note]] in a note and the connection will appear here."}</p></div>}
+      {hoverNode && <div className="graph-inspector"><span style={{ background: colorOf(folderOf(hoverNode)) }} /><div><strong>{hoverNode.name}</strong><small>{folderOf(hoverNode)} · {hoverNode.degree} connections</small></div><button onClick={() => setLocalRoot(hoverNode.id)}>Show neighbours</button></div>}
+      <div className="graph-zoom"><button aria-label="Zoom out" onClick={() => zoom(1 / 1.2)}>−</button><span data-testid="graph-zoom">{zoomLabel}%</span><button aria-label="Zoom in" onClick={() => zoom(1.2)}>+</button><button aria-label="Fit to canvas" title="Fit to canvas (0)" onClick={fit}>⤢</button></div>
       {showSettings && <aside className="graph-settings">
-        <div className="graph-settings-head"><strong>图谱设置</strong><button onClick={() => { setOptions({ ...DEFAULTS }); setQuery(""); setHideDangling(false); setHideOrphans(false); setHiddenGroups(new Set()); }}>重置</button></div>
-        <label className="graph-search"><span>搜索笔记</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="名称或路径…" /></label>
-        <label className="graph-toggle"><input type="checkbox" checked={hideDangling} onChange={e => setHideDangling(e.target.checked)} />只看已有笔记</label>
-        <label className="graph-toggle"><input type="checkbox" checked={hideOrphans} onChange={e => setHideOrphans(e.target.checked)} />隐藏孤立节点</label>
-        {localRoot && <label className="graph-range">链接深度 <output>{depth}</output><input aria-label="链接深度" type="range" min="1" max="4" value={depth} onChange={e => setDepth(+e.target.value)} /></label>}
-        <details open><summary>颜色分组</summary><div className="graph-group-list">{folders.map(([f, n]) => <button key={f} className={hiddenGroups.has(f) ? "is-hidden" : ""} aria-pressed={!hiddenGroups.has(f)} onClick={() => setHiddenGroups(prev => { const next = new Set(prev); next.has(f) ? next.delete(f) : next.add(f); return next; })}><i style={{ background: colorOf(f) }} /><span>{f}</span><small>{n}</small></button>)}</div></details>
-        <details open><summary>显示</summary>{([["nodeSize", "节点大小", 0.5, 2, 0.1], ["linkWidth", "连线粗细", 0.3, 2, 0.1], ["labels", "文字淡出阈值", 0.1, 1.6, 0.1]] as const).map(([key, name, min, max, step]) => <label key={key} className="graph-range">{name}<output>{options[key].toFixed(1)}</output><input aria-label={name} type="range" min={min} max={max} step={step} value={options[key]} onChange={e => setOption(key, +e.target.value)} /></label>)}<label className="graph-toggle"><input type="checkbox" checked={options.arrows} onChange={e => setOption("arrows", e.target.checked)} />显示链接方向</label></details>
-        <details><summary>布局力量</summary>{([["repel", "斥力", 30, 600, 10], ["distance", "链接距离", 40, 220, 5], ["center", "中心引力", 0.005, 0.1, 0.005], ["linkForce", "链接拉力", 0.05, 0.6, 0.05]] as const).map(([key, name, min, max, step]) => <label key={key} className="graph-range">{name}<output>{options[key] < 1 ? options[key].toFixed(3) : options[key]}</output><input aria-label={name} type="range" min={min} max={max} step={step} value={options[key]} onChange={e => setOption(key, +e.target.value)} /></label>)}</details>
-        <details><summary>笔记列表 · {view.nodes.length}</summary><div className="graph-note-list">{view.nodes.slice(0, 100).map(n => <button key={n.id} disabled={!n.exists} onClick={() => onOpen?.(n.id)}>{n.name}</button>)}</div></details>
-        <button className="graph-reload" onClick={() => void load()} disabled={loading}>{loading ? "载入中…" : "重新载入链接"}</button>
+        <div className="graph-settings-head"><strong>Graph settings</strong><button onClick={() => { setOptions({ ...DEFAULTS }); setQuery(""); setHideDangling(false); setHideOrphans(false); setHiddenGroups(new Set()); }}>Reset</button></div>
+        <label className="graph-search"><span>Search notes</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Name or path…" /></label>
+        <label className="graph-toggle"><input type="checkbox" checked={hideDangling} onChange={e => setHideDangling(e.target.checked)} />Only show existing notes</label>
+        <label className="graph-toggle"><input type="checkbox" checked={hideOrphans} onChange={e => setHideOrphans(e.target.checked)} />Hide isolated nodes</label>
+        {localRoot && <label className="graph-range">Link depth <output>{depth}</output><input aria-label="Link depth" type="range" min="1" max="4" value={depth} onChange={e => setDepth(+e.target.value)} /></label>}
+        <details open><summary>Colour groups</summary><div className="graph-group-list">{folders.map(([f, n]) => <button key={f} className={hiddenGroups.has(f) ? "is-hidden" : ""} aria-pressed={!hiddenGroups.has(f)} onClick={() => setHiddenGroups(prev => { const next = new Set(prev); next.has(f) ? next.delete(f) : next.add(f); return next; })}><i style={{ background: colorOf(f) }} /><span>{f}</span><small>{n}</small></button>)}</div></details>
+        <details open><summary>Display</summary>{([["nodeSize", "Node size", 0.5, 2, 0.1], ["linkWidth", "Link width", 0.3, 2, 0.1], ["labels", "Label fade threshold", 0.1, 1.6, 0.1]] as const).map(([key, name, min, max, step]) => <label key={key} className="graph-range">{name}<output>{options[key].toFixed(1)}</output><input aria-label={name} type="range" min={min} max={max} step={step} value={options[key]} onChange={e => setOption(key, +e.target.value)} /></label>)}<label className="graph-toggle"><input type="checkbox" checked={options.arrows} onChange={e => setOption("arrows", e.target.checked)} />Show link direction</label></details>
+        <details><summary>Layout forces</summary>{([["repel", "Repulsion", 30, 600, 10], ["distance", "Link distance", 40, 220, 5], ["center", "Centre gravity", 0.005, 0.1, 0.005], ["linkForce", "Link pull", 0.05, 0.6, 0.05]] as const).map(([key, name, min, max, step]) => <label key={key} className="graph-range">{name}<output>{options[key] < 1 ? options[key].toFixed(3) : options[key]}</output><input aria-label={name} type="range" min={min} max={max} step={step} value={options[key]} onChange={e => setOption(key, +e.target.value)} /></label>)}</details>
+        <details><summary>Note list · {view.nodes.length}</summary><div className="graph-note-list">{view.nodes.slice(0, 100).map(n => <button key={n.id} disabled={!n.exists} onClick={() => onOpen?.(n.id)}>{n.name}</button>)}</div></details>
+        <button className="graph-reload" onClick={() => void load()} disabled={loading}>{loading ? "Loading…" : "Reload links"}</button>
       </aside>}
     </div>
-    <footer className="graph-footer"><div className="graph-legend">{folders.slice(0, 6).map(([f, n]) => <span key={f}><i style={{ background: colorOf(f) }} />{f}（{n}）</span>)}</div><span>实心 = 已有笔记 · 空心 = 未创建</span><span>拖拽移动 · 滚轮缩放</span>{data?.truncated && <span title={`库里共 ${data.totalDocs} 篇笔记`}>已显示前 {data.nodes.length} 个节点</span>}</footer>
+    <footer className="graph-footer"><div className="graph-legend">{folders.slice(0, 6).map(([f, n]) => <span key={f}><i style={{ background: colorOf(f) }} />{f} ({n})</span>)}</div><span>Solid = existing note · Hollow = not created</span><span>Drag to move · scroll to zoom</span>{data?.truncated && <span title={`${data.totalDocs} notes in the vault`}>Showing the first {data.nodes.length} nodes</span>}</footer>
   </div>;
 }

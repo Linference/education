@@ -72,7 +72,7 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
         // 索引完成后如果已有查询词，重查一次（否则用户看到的是旧索引的结果）
         setQ((cur) => { if (cur.trim()) void doSearch(cur); return cur; });
       } else if (chan === "search:error") {
-        setErr(String(p?.error ?? "索引出错"));
+        setErr(String(p?.error ?? "Index error"));
       }
     });
     return off;
@@ -122,9 +122,9 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
   }, [raw]);
 
   const strategyLabel =
-    strategy === "fts" ? "FTS 索引" :
-    strategy === "like" ? "LIKE 扫描（短词）" :
-    strategy === "like-fallback" ? "LIKE 兜底（索引无结果）" : "";
+    strategy === "fts" ? "FTS index" :
+    strategy === "like" ? "LIKE scan (short term)" :
+    strategy === "like-fallback" ? "LIKE fallback (no index hits)" : "";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
@@ -135,7 +135,7 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") { setQ(""); inputRef.current?.blur(); } }}
-          placeholder={vaultPath ? "搜索全部笔记内容…" : "先打开一个库"}
+          placeholder={vaultPath ? "Search all note content…" : "Open a vault first"}
           disabled={!vaultPath}
           style={{
             width: "100%", fontSize: 13, padding: "6px 9px",
@@ -146,14 +146,14 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
 
         {/* 状态行：索引规模 + 本次查询的策略与耗时 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5, fontSize: 11, color: "var(--text-faint)" }}>
-          {stats && <span>已索引 {stats.docs} 篇 / {stats.chunks} 块</span>}
+          {stats && <span>Indexed {stats.docs} notes / {stats.chunks} chunks</span>}
           {strategyLabel && (
             <>
               <span>·</span>
               <span title={
                 strategy === "fts"
-                  ? "查询词 ≥3 字，走 trigram 全文索引"
-                  : "查询词 ≤2 字：SQLite 的 trigram 不索引这么短的片段，改用扫描（这个规模下同样很快）"
+                  ? "Query is 3+ characters, so it uses the trigram full-text index"
+                  : "Query is 2 characters or fewer: SQLite's trigram tokenizer does not index such short fragments, so a scan is used (still fast at this scale)"
               }>
                 {strategyLabel}
               </span>
@@ -165,7 +165,7 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
 
         {dirtyCount > 0 && (
           <div style={{ marginTop: 4, fontSize: 11, color: "var(--orange)" }}>
-            有 {dirtyCount} 个文件未保存 —— 检索的是磁盘上的内容
+            {dirtyCount} files have unsaved changes — search reads what is on disk
           </div>
         )}
         {err && <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--red)" }}>{err}</div>}
@@ -173,20 +173,20 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
 
       {/* 结果 */}
       <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0 }}>
-        {!vaultPath && <div className="tree-empty">打开一个库后可以搜索笔记内容</div>}
+        {!vaultPath && <div className="tree-empty">Open a vault to search note content</div>}
 
         {vaultPath && !q.trim() && (
           <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--text-faint)", lineHeight: 1.9 }}>
-            <div>输入关键词搜索全部笔记。</div>
-            <div style={{ marginTop: 8, color: "var(--text-muted)" }}>说明：</div>
-            <div>· 3 字以上走全文索引，很快</div>
-            <div>· <b>2 字词</b>（如「电场」「函数」）走扫描（SQLite 的 trigram 不索引这么短的片段）</div>
-            <div>· 结果按笔记聚合，点一条直接跳过去</div>
+            <div>Type a keyword to search across all notes.</div>
+            <div style={{ marginTop: 8, color: "var(--text-muted)" }}>Notes:</div>
+            <div>· 3 characters or more goes through the full-text index and is fast</div>
+            <div>· <b>2-character terms</b> (e.g. “电场”, “函数”) use a scan, because SQLite's trigram tokenizer does not index such short fragments</div>
+            <div>· Results are grouped by note; click one to jump straight to it</div>
           </div>
         )}
 
         {vaultPath && q.trim() && !busy && groups.length === 0 && !err && (
-          <div className="tree-empty">没有匹配「{q}」的内容</div>
+          <div className="tree-empty">No content matches “{q}”</div>
         )}
 
         {groups.map((g) => (
@@ -232,7 +232,7 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
           background: "var(--bg-secondary)", display: "flex", alignItems: "center", gap: 8, fontSize: 11.5,
         }}>
           <span style={{ color: "var(--text-faint)", flex: "1 1 auto" }}>
-            {busy ? "检索中…" : "索引在打开库时自动更新"}
+            {busy ? "Searching…" : "The index updates automatically when a vault is opened"}
           </span>
           <button
             onClick={async () => {
@@ -242,7 +242,7 @@ export default function SearchPanel({ vaultPath, onOpen, dirtyCount = 0 }: Props
             }}
             style={{ color: "var(--accent)", fontSize: 11.5, textDecoration: "underline" }}
           >
-            重建索引
+            Rebuild index
           </button>
         </div>
       )}

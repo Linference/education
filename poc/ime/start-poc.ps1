@@ -49,7 +49,7 @@ if ($chrome) { Start-Process $chrome -ArgumentList $url }
 else { Start-Process $url }
 
 Write-Host ""
-Write-Host "请在打开的页面里按《测试清单.md》做 15–20 分钟手测。" -ForegroundColor Cyan
+Write-Host "请在打开的页面里按test-checklist.md做 15–20 分钟手测。" -ForegroundColor Cyan
 Write-Host "测完回到这个窗口按 Ctrl+C 结束服务器。" -ForegroundColor Cyan
 Write-Host ""
 try { while ($true) { Start-Sleep -Seconds 2 } }

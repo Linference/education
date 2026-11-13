@@ -32,15 +32,15 @@ try {
   let catalog = await page.evaluate(vault => window.gezhi.learning.catalog({ vault }), a);
   assert.equal(catalog.activities.length, 0);
   assert.equal((await page.evaluate(vault => window.gezhi.learning.summary({ vault }), a)).evidence.length, 0);
-  check('空文件夹不再自动出现二次函数示例题与示例概念');
+  check('empty folder no longer auto-populates quadratic-function example questions and example concepts');
   const examples = page.getByRole('checkbox', { name: '显示内置示例（非当前资料库内容）' });
   await examples.check(); await page.locator('.learning-exercise').waitFor();
   catalog = await page.evaluate(vault => window.gezhi.learning.catalog({ vault, includeExamples: true }), a);
-  assert.equal(catalog.activities.length, 16); check('内置示例通过明确开关展示，保留全部示例功能');
+  assert.equal(catalog.activities.length, 16); check('built-in examples are shown via an explicit toggle, keeping all example features');
   await page.evaluate(dir => window.__gezhiTest.openVault(dir), b);
   await page.getByRole('tab', { name: '自信度练习', exact: true }).click();
   await page.getByText('没有匹配的练习', { exact: true }).waitFor();
-  assert.equal(await examples.isChecked(), false); check('切换资料库清空示例开关与旧练习选择');
+  assert.equal(await examples.isChecked(), false); check('switching vaults clears the example toggle and previous exercise selection');
   await page.getByRole('button', { name: '打开题库', exact: true }).click();
   await page.locator('input[type=file]').setInputFiles(imported);
   await page.getByRole('button', { name: '确认导入 1 道题', exact: true }).click();
@@ -48,15 +48,15 @@ try {
   const bank = await page.evaluate(vault => window.gezhi.bank.list({ vault }), b);
   assert.equal(bank.total, 1); assert.equal(bank.questions[0].subject, '生物');
   assert.equal(bank.questions[0].solution, '细胞膜控制物质进出。\n它具有选择透过性。');
-  check('真实文件选择导入成功，不依赖 File.path，保留多行解析');
+  check('real file selection import succeeds without relying on File.path, keeping multi-line parsing');
   await page.locator('input[type=file]').setInputFiles(imported);
   await page.getByRole('checkbox', { name: '跳过当前库中题干、选项和答案相同的重复题' }).uncheck();
   await page.getByRole('button', { name: '确认导入 1 道题', exact: true }).click();
-  await page.getByText('共 2 道', { exact: true }).waitFor(); check('同一文件可以再次选择导入');
+  await page.getByText('共 2 道', { exact: true }).waitFor(); check('the same file can be selected and imported again');
   const assembled = await page.evaluate(vault => window.gezhi.learning.catalog({ vault }), b);
   assert.equal(assembled.activities.length, 2); assert.ok(assembled.activities.every(q => q.concept === '细胞'));
   assert.equal((await page.evaluate(vault => window.gezhi.bank.list({ vault }), a)).total, 0);
-  check('导入题进入当前库的学习工作室，其他资料库不串题');
+  check("imported questions enter the current vault's learning studio, no cross-contamination between vaults");
   await page.getByRole('button', { name: '题库组卷', exact: false }).first().click().catch(() => {});
   await page.evaluate(dir => window.__gezhiTest.openVault(dir), a);
   await page.getByRole('button', { name: '学习工作室', exact: true }).click();
@@ -66,19 +66,19 @@ try {
   await page.getByRole('button', { name: /Markdown.*原样另存/ }).click();
   await page.getByText(/已导出 Markdown/).waitFor();
   const mdCopy = path.join(a,'导出笔记.导出.md');
-  assert.equal(fs.readFileSync(mdCopy,'utf8'), md); check('Markdown 菜单另存为实际落盘，内容与原文完全一致');
+  assert.equal(fs.readFileSync(mdCopy,'utf8'), md); check('Markdown menu save-as actually writes to disk, content identical to the original');
   const directoryExport = await page.evaluate(vault => window.gezhi.exporter.run({ format:'markdown', markdown:'# 学习记录', sourcePath:vault, defaultName:'学习记录' }), a);
   assert.equal(directoryExport.ok,true); assert.equal(path.dirname(directoryExport.path),a);
   const secondExport = await page.evaluate(vault => window.gezhi.exporter.run({ format:'markdown', markdown:'第二份', sourcePath:vault, defaultName:'学习记录' }), a);
   assert.notEqual(directoryExport.path, secondExport.path);
-  assert.equal(fs.readFileSync(directoryExport.path,'utf8'),'# 学习记录'); check('目录来源导出留在库内，多次自动导出不覆盖旧副本');
+  assert.equal(fs.readFileSync(directoryExport.path,'utf8'),'# 学习记录'); check('directory-sourced exports stay in the vault, repeated auto-exports do not overwrite older copies');
   for (const format of ['pdf','docx']) {
     const r = await page.evaluate(({format,note,md}) => window.gezhi.exporter.run({format,markdown:md,sourcePath:note,defaultName:'验证输出'}), {format,note,md});
-    assert.equal(r.ok,true,r.error); assert.ok(fs.statSync(r.path).size>1000); check('Markdown 转 '+format+' 使用真实转换器生成文件');
+    assert.equal(r.ok,true,r.error); assert.ok(fs.statSync(r.path).size>1000); check('Markdown to '+format+' uses the real converter to produce a file');
   }
   const invalid = await page.evaluate(note => window.gezhi.exporter.run({ format:'markdown',markdown:'内容',sourcePath:note,defaultName:'不合法/名称' }), note);
-  assert.equal(invalid.ok,false); assert.ok(invalid.error); check('非法输出文件名返回明确错误，不产生未处理异常');
-  assert.deepEqual(errors,[]); check('全过程无渲染异常');
+  assert.equal(invalid.ok,false); assert.ok(invalid.error); check('invalid output filename returns a clear error without unhandled exceptions');
+  assert.deepEqual(errors,[]); check('no renderer exceptions during the whole flow');
   await page.screenshot({path:path.join(run,'final.png')});
 } finally {
   await app.close();

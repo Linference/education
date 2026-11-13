@@ -1,15 +1,16 @@
-// 题库与组卷
+// Question bank and paper assembly
 //
-// 三块：左筛选题库 · 中间题目列表 · 右组卷篮
+// Three panes: filters on the left · question list in the middle · paper basket on the right
 //
-// ★ 组卷的输出必须是**能直接打印的 PDF**，而且按产品硬规矩：
-//   生成的试卷**不带任何产品署名**（不能出现"格致"）。
-//   所以走的是已有的 Typst 导出链路（templates/typst/handout.typ），
-//   而不是自己拼 HTML 再转。
+// ★ Paper output must be a **print-ready PDF**, and product rules are strict:
+//   the generated paper carries **no product branding** (the word "Gezhi" must not appear).
+//   So we reuse the existing Typst export pipeline (templates/typst/handout.typ)
+//   instead of assembling HTML ourselves and converting it.
 //
-// ★ 为什么要有"组卷篮"而不是直接勾选就导出：
-//   组卷是反复调整的过程（这道不要、再加一道难的），
-//   篮子里能看总题数、总分、删掉某道题 —— 直接导出会让人不敢点。
+// ★ Why a "paper basket" instead of exporting straight from checkboxes:
+//   assembling a paper is iterative (drop this one, add a harder one),
+//   and the basket shows the count, total score and lets you remove a question —
+//   exporting immediately would make people afraid to click.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BankQuestion, BankStats } from "../types";
 
@@ -19,9 +20,9 @@ interface Props {
   onPractice?: (id: number, previewedAnswer?: boolean) => void;
 }
 
-const DIFF_LABEL = ["", "很简单", "简单", "中等", "较难", "很难"];
+const DIFF_LABEL = ["", "Very easy", "Easy", "Medium", "Hard", "Very hard"];
 
-/** 一页试卷能放多少题（粗略，用于提示用户卷子会不会太长） */
+/** Rough number of questions per page (used to warn whether the paper will be too long) */
 const PER_PAGE_GUESS = 6;
 
 export default function BankView({ vaultPath, onPractice }: Props) {
@@ -33,20 +34,20 @@ export default function BankView({ vaultPath, onPractice }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // 筛选条件
+  // Filter conditions
   const [type, setType] = useState("");
   const [source, setSource] = useState("");
   const [kp, setKp] = useState("");
   const [diffMin, setDiffMin] = useState("");
   const [keyword, setKeyword] = useState("");
 
-  // 组卷篮
+  // Paper basket
   const [basket, setBasket] = useState<BankQuestion[]>([]);
   const [paperTitle, setPaperTitle] = useState("");
   const [withAnswers, setWithAnswers] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  /** 展开看解析的那道题 */
+  /** Question whose solution is expanded */
   const [openId, setOpenId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importPreview,setImportPreview] = useState<{ name: string; questions: Array<Record<string,unknown>>; warnings: string[] } | null>(null);
@@ -76,7 +77,7 @@ export default function BankView({ vaultPath, onPractice }: Props) {
         }),
       ]);
       if (seq !== refreshSequence.current) return;
-      if (!s.ok || !l.ok) throw new Error(s.error || l.error || '读取题库失败');
+      if (!s.ok || !l.ok) throw new Error(s.error || l.error || 'Failed to load the question bank');
       setStats(s);
       setList(l.questions ?? []);
       setTotal(l.total ?? 0);
@@ -90,7 +91,7 @@ export default function BankView({ vaultPath, onPractice }: Props) {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  /** 组卷篮总难度/题数统计 */
+  /** Basket totals: average difficulty and question count */
   const summary = useMemo(() => {
     if (!basket.length) return null;
     const byType = new Map<string, number>();
@@ -111,19 +112,19 @@ export default function BankView({ vaultPath, onPractice }: Props) {
     setBasket((b) => (b.some((x) => x.id === q.id) ? b.filter((x) => x.id !== q.id) : [...b, q]));
   };
 
-  /** 导入：选 Markdown 文件 → 解析 → 让用户确认 → 入库 */
+  /** Import: pick a Markdown file → parse → confirm → add to the bank */
   const importFile = async (file: File) => {
-    if (!vaultPath) { setErr("请先打开一个库"); return; }
+    if (!vaultPath) { setErr("Open a library first"); return; }
     setNotice(null);
     setErr(null);
     setImportBusy(true);
     try {
-      if (file.size > 32 * 1024 * 1024) { setErr('文件超过 32 MB，建议拆成几个再导入'); return; }
+      if (file.size > 32 * 1024 * 1024) { setErr('The file exceeds 32 MB; split it and import the parts separately'); return; }
       const r = await window.gezhi.bank.parseDocument({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
       if (!importAlive.current) return;
-      if (!r.ok) { setErr(r.error ?? "解析失败"); return; }
+      if (!r.ok) { setErr(r.error ?? "Parsing failed"); return; }
       if (!r.count) {
-        setNotice("这个文件里没解析出题目。格式要求：用 ### 分块，字段写成「题型：选择题」这种形式。");
+        setNotice("No questions could be parsed from this file. Separate blocks with ### and write the fields as in \"题型：选择题\" (field names must stay in Chinese).");
         return;
       }
       setImportPreview({ name:file.name,questions:r.questions || [],warnings:r.warnings || [] });
@@ -137,40 +138,40 @@ export default function BankView({ vaultPath, onPractice }: Props) {
     try {
       const add = await window.gezhi.bank.addMany({ vault:vaultPath,questions:importPreview.questions,skipDuplicates });
       if (!importAlive.current) return;
-      if (!add.ok) throw new Error(add.error || '导入失败');
-      setNotice(`已导入 ${add.added} 道题${add.skipped ? `，跳过 ${add.skipped} 道重复题` : ''}${add.failed?.length ? `，${add.failed.length} 道失败` : ''}。`);
+      if (!add.ok) throw new Error(add.error || 'Import failed');
+      setNotice(`Imported ${add.added} questions${add.skipped ? `, skipped ${add.skipped} duplicates` : ''}${add.failed?.length ? `, ${add.failed.length} failed` : ''}.`);
       setImportPreview(null); await refresh();
     } catch (e) { if (importAlive.current) setErr((e as Error).message); }
     finally { if (importAlive.current) setImportBusy(false); }
   };
 
   /**
-   * 组卷导出 PDF。
+   * Export the assembled paper as PDF.
    *
-   * ★ 拼成 Markdown 再走既有导出链路（Typst），不自己写 PDF：
-   *   那条链路已经解决好了中文排版、公式、页码、目录，
-   *   而且**不带产品署名**（产品硬规矩）。
+   * ★ Build Markdown and reuse the existing export pipeline (Typst) rather than writing PDF ourselves:
+   *   that pipeline already handles CJK typesetting, formulas, page numbers and tables of contents,
+   *   and it adds **no product branding** (a hard product rule).
    */
   const exportPaper = async () => {
     if (!basket.length) return;
-    if (!vaultPath) { setErr("请先打开一个库"); return; }
+    if (!vaultPath) { setErr("Open a library first"); return; }
     setExporting(true);
     setErr(null);
     setNotice(null);
     try {
-      const title = paperTitle.trim() || "试卷";
+      const title = paperTitle.trim() || "Exam Paper";
       const md = buildPaperMarkdown(title, basket, { withAnswers });
 
       /*
-       * 试卷导出到**系统"下载"文件夹**，不是库目录。
+       * The paper is exported to the **system Downloads folder**, not the library folder.
        *
-       * 用户的诉求就是"拿到一份卷子"（要打印/发给学生），
-       * 那是**文件交付**，不是往知识库里加东西。
-       * 而且混进库里会被索引、出现在文件树里，反而把库弄乱。
+       * The user just wants "a paper" (to print or hand out),
+       * which is **file delivery**, not adding something to the knowledge base.
+       * Mixing it into the library would get it indexed and shown in the file tree, cluttering the library.
        *
-       * 路径由主进程用 app.getPath("downloads") 解析 ——
-       * 不在这里拼 "C:\Users\x\Downloads"，因为用户可能改过下载位置，
-       * 也可能被组策略重定向（本机的"文档"目录就是重定向过的）。
+       * The path is resolved by the main process via app.getPath("downloads") —
+       * we do not build "C:\Users\x\Downloads" here, because the user may have moved Downloads
+       * or group policy may redirect it (this machine's Documents folder is redirected).
        */
       const r = await window.gezhi.exporter.run({
         format: "pdf",
@@ -181,10 +182,10 @@ export default function BankView({ vaultPath, onPractice }: Props) {
         toDownloads: true,
       });
       if (!r.ok) {
-        setErr(`导出失败：${r.error ?? "未知原因"}`);
+        setErr(`Export failed: ${r.error ?? "Unknown reason"}`);
         return;
       }
-      // 记住这份卷子，方便"再来一份同规格的"
+      // Remember this paper so the user can create a matching one later
       await window.gezhi.bank.savePaper({
         vault: vaultPath,
         title,
@@ -192,7 +193,7 @@ export default function BankView({ vaultPath, onPractice }: Props) {
         config: { type, source, kp, diffMin },
       }).catch(() => null);
 
-      setNotice(`已导出到下载文件夹：${r.path ?? "（路径未知）"}（${basket.length} 题）`);
+      setNotice(`Exported to the Downloads folder: ${r.path ?? "(path unknown)"} (${basket.length} questions)`);
     } catch (e: any) {
       setErr(e?.message ?? String(e));
     } finally {
@@ -206,21 +207,21 @@ export default function BankView({ vaultPath, onPractice }: Props) {
     color: "var(--text-normal)", outline: "none", width: "100%",
   };
 
-  if (!vaultPath) return <div className="tree-empty">打开一个库后可以使用题库</div>;
+  if (!vaultPath) return <div className="tree-empty">Open a library to use the question bank</div>;
 
   return (
     <div className="bank-view" data-testid="bank-view" style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-      {importPreview && <div className="bank-import-backdrop"><section className="bank-import-preview" role="dialog" aria-modal="true" aria-labelledby="bank-import-title"><header><div><span className="learning-eyebrow">REVIEW BEFORE IMPORT</span><h2 id="bank-import-title">检查题目后再导入</h2><p>{importPreview.name} · 识别到 {importPreview.questions.length} 道题</p></div><button disabled={importBusy} onClick={() => setImportPreview(null)}>取消导入</button></header>{importPreview.warnings.map((w,i) => <p className="learning-callout" key={i}>{w}</p>)}<p className="learning-muted">请核对 PDF / Word 的顺序、公式和选项。扫描 PDF 需要先 OCR；软件不会为缺失的答案编造标准答案。</p><div className="bank-import-list">{importPreview.questions.map((q,i) => <article key={i}><h3>第 {i+1} 题 <button onClick={() => setImportPreview(p => p && {...p,questions:p.questions.filter((_,index) => index!==i)})}>移除</button></h3>{[['stem','题干'],['answer','答案'],['solution','解析']].map(([field,label]) => <label key={field}>{label}<textarea aria-label={`导入第${i+1}题${label}`} value={String(q[field] || '')} rows={field==='stem'?3:2} onChange={e => setImportPreview(p => p && {...p,questions:p.questions.map((item,index) => index===i ? {...item,[field]:e.target.value} : item)})} /></label>)}{Array.isArray(q.options) && q.options.length>0 && <div className="import-options">{(q.options as Array<{label:string;text:string}>).map((o,j) => <label key={j}>{o.label}<input aria-label={`导入第${i+1}题选项${o.label}`} value={o.text} onChange={e => setImportPreview(p => p && {...p,questions:p.questions.map((item,index) => index===i ? {...item,options:(item.options as typeof q.options).map((option: typeof o, oi: number) => oi===j ? {...option,text:e.target.value} : option)} : item)})} /></label>)}</div>}<small>{String(q.subject || '科目未标注')} · {Array.isArray(q.kps) ? q.kps.join('、') : '知识点未标注'} · {String(q.source || '来源未标注')}</small></article>)}</div><footer><label><input type="checkbox" checked={skipDuplicates} onChange={e => setSkipDuplicates(e.target.checked)} /> 跳过当前库中题干、选项和答案相同的重复题</label><button className="learning-primary" disabled={importBusy || !importPreview.questions.length} onClick={() => void confirmImport()}>{importBusy ? '正在导入…' : `确认导入 ${importPreview.questions.length} 道题`}</button></footer></section></div>}
+      {importPreview && <div className="bank-import-backdrop"><section className="bank-import-preview" role="dialog" aria-modal="true" aria-labelledby="bank-import-title"><header><div><span className="learning-eyebrow">REVIEW BEFORE IMPORT</span><h2 id="bank-import-title">Check the questions before importing</h2><p>{importPreview.name} · {importPreview.questions.length} questions found</p></div><button disabled={importBusy} onClick={() => setImportPreview(null)}>Cancel import</button></header>{importPreview.warnings.map((w,i) => <p className="learning-callout" key={i}>{w}</p>)}<p className="learning-muted">Check the order, formulas, and options from the PDF / Word file. Scanned PDFs need OCR first; the app will not invent an answer that is missing.</p><div className="bank-import-list">{importPreview.questions.map((q,i) => <article key={i}><h3>Question {i+1} <button onClick={() => setImportPreview(p => p && {...p,questions:p.questions.filter((_,index) => index!==i)})}>Remove</button></h3>{[['stem','Question stem'],['answer','Answer'],['solution','Explanation']].map(([field,label]) => <label key={field}>{label}<textarea aria-label={`Import question ${i+1} ${label}`} value={String(q[field] || '')} rows={field==='stem'?3:2} onChange={e => setImportPreview(p => p && {...p,questions:p.questions.map((item,index) => index===i ? {...item,[field]:e.target.value} : item)})} /></label>)}{Array.isArray(q.options) && q.options.length>0 && <div className="import-options">{(q.options as Array<{label:string;text:string}>).map((o,j) => <label key={j}>{o.label}<input aria-label={`Import question ${i+1} option ${o.label}`} value={o.text} onChange={e => setImportPreview(p => p && {...p,questions:p.questions.map((item,index) => index===i ? {...item,options:(item.options as typeof q.options).map((option: typeof o, oi: number) => oi===j ? {...option,text:e.target.value} : option)} : item)})} /></label>)}</div>}<small>{String(q.subject || 'Subject not marked')} · {Array.isArray(q.kps) ? q.kps.join(', ') : 'Knowledge point not marked'} · {String(q.source || 'Source not marked')}</small></article>)}</div><footer><label><input type="checkbox" checked={skipDuplicates} onChange={e => setSkipDuplicates(e.target.checked)} /> Skip duplicates already in the bank with the same stem, options, and answer</label><button className="learning-primary" disabled={importBusy || !importPreview.questions.length} onClick={() => void confirmImport()}>{importBusy ? 'Importing…' : `Import ${importPreview.questions.length} questions`}</button></footer></section></div>}
       {/* 顶栏 */}
       <div className="bank-toolbar" style={{
         flex: "0 0 auto", display: "flex", alignItems: "center", gap: 8,
         padding: "6px 12px", borderBottom: "1px solid var(--bd)",
         background: "var(--bg-secondary)", fontSize: 12,
       }}>
-        <span style={{ fontWeight: 600 }}>题库组卷</span>
+        <span style={{ fontWeight: 600 }}>Question Bank</span>
         <span style={{ color: "var(--text-muted)" }}>
-          {stats?.total ? `共 ${stats.total} 道` : "还没有题目"}
-          {total !== stats?.total ? ` · 当前筛选 ${total} 道` : ""}
+          {stats?.total ? `${stats.total} questions` : "No questions yet"}
+          {total !== stats?.total ? ` · ${total} in the current filter` : ""}
         </span>
         <div style={{ flex: "1 1 auto" }} />
         <input
@@ -242,7 +243,7 @@ export default function BankView({ vaultPath, onPractice }: Props) {
             background: "var(--accent)", color: "var(--on-accent)",
           }}
         >
-          {importBusy ? '正在识别…' : '导入题目'}
+          {importBusy ? 'Reading…' : 'Import questions'}
         </button>
       </div>
 
@@ -259,43 +260,43 @@ export default function BankView({ vaultPath, onPractice }: Props) {
       <div className="bank-layout" style={{ flex: "1 1 auto", display: "flex", minHeight: 0 }}>
         {/* ---- 左：筛选 ---- */}
         <div className="bank-filters" style={{ width: 200, flex: "0 0 auto", borderRight: "1px solid var(--bd)", overflow: "auto", padding: "8px 10px" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 5 }}>筛选</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", marginBottom: 5 }}>Filters</div>
 
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>题型</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Question type</div>
           <select value={type} onChange={(e) => setType(e.target.value)} style={{ ...inputSt, marginBottom: 8 }}>
-            <option value="">全部</option>
+            <option value="">All</option>
             {(stats?.byType ?? []).map((t) => (
               <option key={t.type} value={t.type}>{t.type}（{t.n}）</option>
             ))}
           </select>
 
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>来源</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Source</div>
           <select value={source} onChange={(e) => setSource(e.target.value)} style={{ ...inputSt, marginBottom: 8 }}>
-            <option value="">全部</option>
+            <option value="">All</option>
             {(stats?.bySource ?? []).map((s) => (
               <option key={s.source} value={s.source}>{s.source}（{s.n}）</option>
             ))}
           </select>
 
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>最低难度</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Minimum difficulty</div>
           <select value={diffMin} onChange={(e) => setDiffMin(e.target.value)} style={{ ...inputSt, marginBottom: 8 }}>
-            <option value="">不限</option>
+            <option value="">Any</option>
             {[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>{d} · {DIFF_LABEL[d]}</option>)}
           </select>
 
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>搜索（题干/答案/解析）</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Search (question / answer / explanation)</div>
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="关键词…"
+            placeholder="Keywords…"
             style={{ ...inputSt, marginBottom: 8 }}
           />
 
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>知识点</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>Knowledge point</div>
           <input
             value={kp}
             onChange={(e) => setKp(e.target.value)}
-            placeholder="如：二次函数"
+            placeholder="e.g. quadratic functions"
             style={{ ...inputSt, marginBottom: 6 }}
           />
           {(stats?.byKp ?? []).length > 0 && (
@@ -304,7 +305,7 @@ export default function BankView({ vaultPath, onPractice }: Props) {
                 <button
                   key={k.kp}
                   onClick={() => setKp(kp === k.kp ? "" : k.kp)}
-                  title={`${k.n} 道题`}
+                  title={`${k.n} questions`}
                   style={{
                     fontSize: 10.5, padding: "1px 6px", borderRadius: 9,
                     background: kp === k.kp ? "var(--accent)" : "var(--bg-secondary)",
@@ -323,21 +324,21 @@ export default function BankView({ vaultPath, onPractice }: Props) {
               onClick={() => { setType(""); setSource(""); setKp(""); setDiffMin(""); setKeyword(""); }}
               style={{ fontSize: 11, color: "var(--accent)", textDecoration: "underline" }}
             >
-              清空筛选
+              Clear filters
             </button>
           )}
         </div>
 
         {/* ---- 中：题目列表 ---- */}
         <div className="bank-list" style={{ flex: "1 1 auto", overflow: "auto", minWidth: 0, padding: "8px 12px" }}>
-          {loading && <div className="tree-empty">载入中…</div>}
+          {loading && <div className="tree-empty">Loading…</div>}
           {!loading && !list.length && (
             <div style={{ fontSize: 12.5, color: "var(--text-faint)", lineHeight: 2 }}>
-              {stats?.total ? "当前筛选条件下没有题目。" : (
+              {stats?.total ? "No questions match the current filters." : (
                 <>
-                  题库还是空的。点右上角「导入题目」开始，支持 Markdown、Word、文字 PDF、TXT 和 JSON。
+                  The question bank is still empty. Click "Import questions" at the top right to start; Markdown, Word, text PDF, TXT and JSON are supported.
                   <div style={{ marginTop: 8, fontSize: 11.5 }}>
-                    题目格式（用 ### 分块，字段一行一个）：
+                    Question format (blocks separated by ###, one field per line — field names must stay in Chinese):
                     <pre style={{
                       marginTop: 6, padding: "8px 10px", borderRadius: 5, fontSize: 11,
                       background: "var(--bg-secondary)", color: "var(--text-muted)",
@@ -375,7 +376,7 @@ B. (-h, k)
                 <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, fontSize: 10.5, color: "var(--text-faint)" }}>
                   <span>#{q.id}</span>
                   <span>{q.typeLabel}</span>
-                  <span>难度 {q.difficulty} · {DIFF_LABEL[q.difficulty]}</span>
+                  <span>Difficulty {q.difficulty} · {DIFF_LABEL[q.difficulty]}</span>
                   {q.source && <span>{q.source}{q.year ? ` ${q.year}` : ""}</span>}
                   {q.kps.length > 0 && <span>{q.kps.join("、")}</span>}
                   <div style={{ flex: "1 1 auto" }} />
@@ -388,9 +389,9 @@ B. (-h, k)
                       border: "1px solid var(--accent)",
                     }}
                   >
-                    {inBasket ? "已加入" : "加入组卷"}
+                    {inBasket ? "Added" : "Add to paper"}
                   </button>
-                  {onPractice && <button className="bank-practice-button" onClick={() => onPractice(q.id, viewedAnswers.current.has(q.id))}>记录自信度练习</button>}
+                  {onPractice && <button className="bank-practice-button" onClick={() => onPractice(q.id, viewedAnswers.current.has(q.id))}>Record confidence practice</button>}
                 </div>
 
                 <div style={{ fontSize: 12.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{q.stem}</div>
@@ -407,25 +408,25 @@ B. (-h, k)
                   onClick={() => { if (!open) viewedAnswers.current.add(q.id); setOpenId(open ? null : q.id); }}
                   style={{ marginTop: 5, fontSize: 11, color: "var(--accent)", textDecoration: "underline" }}
                 >
-                  {open ? "收起答案" : "看答案与解析"}
+                  {open ? "Hide the answer" : "Show answer and explanation"}
                 </button>
                 {open && (
                   <div style={{
                     marginTop: 5, padding: "6px 8px", borderRadius: 5, fontSize: 12,
                     background: "var(--bg-primary)", lineHeight: 1.8, whiteSpace: "pre-wrap",
                   }}>
-                    <div><b>答案：</b>{q.answer || "（未填）"}</div>
-                    {q.solution && <div style={{ marginTop: 3 }}><b>解析：</b>{q.solution}</div>}
+                    <div><b>Answer:</b> {q.answer || "(not filled in)"}</div>
+                    {q.solution && <div style={{ marginTop: 3 }}><b>Explanation:</b> {q.solution}</div>}
                     <button
                       onClick={async () => {
-                        if (!window.confirm("删除这道题？")) return;
+                        if (!window.confirm("Delete this question?")) return;
                         await window.gezhi.bank.delete({ vault: vaultPath, id: q.id });
                         setBasket((b) => b.filter((x) => x.id !== q.id));
                         await refresh();
                       }}
                       style={{ marginTop: 5, fontSize: 11, color: "var(--red, #dc2626)", textDecoration: "underline" }}
                     >
-                      删除这道题
+                      Delete this question
                     </button>
                   </div>
                 )}
@@ -437,23 +438,23 @@ B. (-h, k)
         {/* ---- 右：组卷篮 ---- */}
         <div className="bank-basket" style={{ width: 232, flex: "0 0 auto", borderLeft: "1px solid var(--bd)", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--bd)" }}>
-            <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 5 }}>组卷篮</div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 5 }}>Paper basket</div>
             <input
               value={paperTitle}
               onChange={(e) => setPaperTitle(e.target.value)}
-              placeholder="试卷标题（如：二次函数专项）"
+              placeholder="Paper title (e.g. Quadratic functions)"
               style={{ ...inputSt, marginBottom: 6 }}
             />
             <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, cursor: "pointer" }}>
               <input type="checkbox" checked={withAnswers} onChange={(e) => setWithAnswers(e.target.checked)} />
-              卷末附答案与解析
+              Append answers and explanations at the end
             </label>
           </div>
 
           <div style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0, padding: "6px 10px" }}>
             {!basket.length && (
               <div style={{ fontSize: 11.5, color: "var(--text-faint)", lineHeight: 1.8 }}>
-                还没有选题。在左边的题上点「加入组卷」。
+                Nothing selected yet. Click "Add to paper" on a question on the left.
               </div>
             )}
             {basket.map((q, i) => (
@@ -468,7 +469,7 @@ B. (-h, k)
                 <button
                   onClick={() => toggleBasket(q)}
                   style={{ color: "var(--text-faint)", flex: "0 0 auto" }}
-                  title="移出"
+                  title="Remove"
                 >✕</button>
               </div>
             ))}
@@ -477,12 +478,12 @@ B. (-h, k)
           <div style={{ flex: "0 0 auto", padding: "8px 10px", borderTop: "1px solid var(--bd)" }}>
             {summary ? (
               <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.7, marginBottom: 6 }}>
-                {summary.count} 题 · 平均难度 {summary.avgDiff} · 约 {summary.pages} 页
+                {summary.count} questions · average difficulty {summary.avgDiff} · about {summary.pages} pages
                 <br />
                 {summary.byType.map(([k, n]) => `${k} ${n}`).join(" · ")}
               </div>
             ) : (
-              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 6 }}>还没选题</div>
+              <div style={{ fontSize: 11, color: "var(--text-faint)", marginBottom: 6 }}>No questions selected</div>
             )}
             <button
               onClick={() => void exportPaper()}
@@ -495,14 +496,14 @@ B. (-h, k)
                 fontWeight: 500,
               }}
             >
-              {exporting ? "正在生成…" : "导出试卷 PDF"}
+              {exporting ? "Generating…" : "Export paper PDF"}
             </button>
             {basket.length > 0 && (
               <button
                 onClick={() => setBasket([])}
                 style={{ width: "100%", marginTop: 5, fontSize: 11, color: "var(--text-faint)" }}
               >
-                清空组卷篮
+                Clear basket
               </button>
             )}
           </div>
@@ -527,7 +528,7 @@ function buildPaperMarkdown(title: string, questions: BankQuestion[], { withAnsw
   out.push(`# ${title}`);
   out.push("");
   const totalDiff = (questions.reduce((s, q) => s + q.difficulty, 0) / questions.length).toFixed(1);
-  out.push(`共 ${questions.length} 题　平均难度 ${totalDiff}　满分 100 分　建议用时 ${Math.max(30, questions.length * 6)} 分钟`);
+  out.push(`${questions.length} questions · average difficulty ${totalDiff} · out of 100 · suggested time ${Math.max(30, questions.length * 6)} minutes`);
   out.push("");
   out.push("---");
   out.push("");
@@ -554,10 +555,10 @@ function buildPaperMarkdown(title: string, questions: BankQuestion[], { withAnsw
     out.push("");
     out.push("---");
     out.push("");
-    out.push("# 参考答案与解析");
+    out.push("# Answers and explanations");
     out.push("");
     sorted.forEach((q, i) => {
-      out.push(`**${i + 1}.** ${q.answer || "（未填）"}`);
+      out.push(`**${i + 1}.** ${q.answer || "(not filled in)"}`);
       if (q.solution) {
         out.push("");
         out.push(q.solution);
