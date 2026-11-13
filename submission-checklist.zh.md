@@ -1,6 +1,6 @@
 # 格致 · 交件清单与检查表（截止 2026-10-09）
 
-> 依据：`2026全球青少年人工智能未來創新競賽_澳門中學生賽區_章程摘要.md`。本文只做一件事——把章程里「要交什么」抽成一张能对着打勾的表。
+> 依据：`competition-charter-summary-macau-secondary-2026.zh.md`。本文只做一件事——把章程里「要交什么」抽成一张能对着打勾的表。
 > ⏰ **今天 2026-10-01，距交件还有 8 天。**
 
 ---
@@ -162,7 +162,7 @@ DemoVideo_Gezhi.mp4
 | --- | --- |
 | **Project Introduction** | `research\07` 第〇节的两张实验对比表（直接当 Introduction 的开场论证） |
 | **Research Report** | `docs\00`～`docs\03`（环境与集成实测）、`research\01`～`08`（各项技术选型与学习法证据）、`research\07` 第九节的参考文献（23 条，已标 ✅ 核实过） |
-| **Poster** | `brand\格致-Logo-AI提示词包.md`（配色 `#141414` / `#C8452F` / `#F7F3EC`、锁定方式）、`research\sketches\xiaoge-states.svg`（数字人形象）、`research\07` 的"一句话主张"（*Expose the gap. Explain it. Defend it. Master it.*） |
+| **Poster** | `brand/gezhi-logo-ai-prompt-pack.md`（配色 `#141414` / `#C8452F` / `#F7F3EC`、锁定方式）、`research\sketches\xiaoge-states.svg`（数字人形象）、`research\07` 的"一句话主张"（*Expose the gap. Explain it. Defend it. Master it.*） |
 | **示范影片** | 演示**「会犯错的学弟」完整闭环**（预试 → 讲述 → 被质疑 → 说服 → 亮起一格）——这是最能讲清差异的一段 |
 
 ---

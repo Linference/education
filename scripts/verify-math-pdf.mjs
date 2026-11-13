@@ -36,4 +36,4 @@ assert.ok(conversions.every(r=>r.warnings.length===0));
 assert.match(conversions[0].typst,/A x \+ B y lt.eq b/);
 assert.match(conversions[5].typst,/upright\("subject to Ax and By"\)/);
 fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({ok:true,formulas:formulas.length,inlineAndDisplay:true,pdf,conversions},null,2));
-console.log('[PASS] '+formulas.length+' 类公式的行内和块级公式经真实 Typst 编译，PDF 已生成：'+pdf);
+console.log('[PASS] '+formulas.length+' formula types compiled as inline and display formulas via the real Typst compiler; PDF written to: '+pdf);

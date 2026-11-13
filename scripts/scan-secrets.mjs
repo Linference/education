@@ -1,17 +1,19 @@
 #!/usr/bin/env node
-// 格致 · 密钥泄露扫描
+// Gezhi · secret leak scanner.
 //
-// 为什么要有：本项目已经踩过两次 ——
-//   1) ~/.config/opencode/opencode.json 里明文躺着 DeepSeek 与智谱的 key，
-//      那份还被复制进了比赛项目的 docs/opencode-config-sample.json
-//   2) 腾讯云的 SecretId/SecretKey 直接贴进了聊天记录
-// 靠人记性是不可靠的，所以做成可执行的检查：
-//   - 手动跑：node scripts/scan-secrets.mjs [目录...]
-//   - 提交时自动跑：.githooks/pre-commit
-//   - CI 里跑：node scripts/scan-secrets.mjs
+// Why it exists: this project has been bitten twice —
+//   1) DeepSeek and Zhipu keys sat in plaintext in
+//      ~/.config/opencode/opencode.json, and that file was even copied into
+//      the competition project's docs/opencode-config-sample.json
+//   2) Tencent Cloud SecretId/SecretKey were pasted directly into chat logs
+// Memory is unreliable, so this is an executable check:
+//   - manual: node scripts/scan-secrets.mjs [dirs...]
+//   - on commit: .githooks/pre-commit
+//   - in CI: node scripts/scan-secrets.mjs
 //
-// 设计原则：**宁可误报，不可漏报**。误报只需在 EXEMPT 里加一条并写清理由；
-// 漏报的代价是密钥泄露。
+// Design principle: **better a false positive than a miss**. A false positive
+// only needs one entry in the skip list with a clear reason; the cost of a miss
+// is a leaked secret.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -20,51 +22,51 @@ import path from "node:path";
 const RULES = [
   {
     id: "tencent-secret-id",
-    label: "腾讯云 SecretId",
+    label: "Tencent Cloud SecretId",
     re: /\bAKID[A-Za-z0-9]{13,}\b/g,
-    why: "腾讯云 SecretId 泄露 + SecretKey 一起就能调用账号下所有已开通服务",
+    why: "A leaked Tencent Cloud SecretId plus SecretKey can call every enabled service under the account",
   },
   {
     id: "deepseek-key",
-    label: "DeepSeek / OpenAI 风格密钥",
+    label: "DeepSeek / OpenAI-style key",
     re: /\bsk-[A-Za-z0-9_-]{16,}\b/g,
-    why: "模型 API key 泄露会被刷额度",
+    why: "A leaked model API key can be used to drain your quota",
   },
   {
     id: "zhipu-key",
-    label: "智谱 API key（形如 id.secret）",
+    label: "Zhipu API key (id.secret form)",
     re: /\b[0-9a-f]{32}\.[A-Za-z0-9]{12,}\b/g,
-    why: "智谱 key 泄露会被刷额度",
+    why: "A leaked Zhipu key can be used to drain your quota",
   },
   {
     id: "github-token",
     label: "GitHub token",
     re: /\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g,
-    why: "GitHub token 泄露可被用来改代码、读私库",
+    why: "A leaked GitHub token can be used to modify code and read private repos",
   },
   {
     id: "aws-key",
     label: "AWS Access Key",
     re: /\b(AKIA|ASIA)[A-Z0-9]{16}\b/g,
-    why: "AWS 密钥泄露会直接产生账单",
+    why: "A leaked AWS key directly produces a bill",
   },
   {
     id: "private-key-block",
-    label: "私钥文件内容",
+    label: "Private key file content",
     re: /-----BEGIN (RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/g,
-    why: "私钥绝不该出现在仓库里",
+    why: "A private key must never appear in the repo",
   },
   {
     id: "generic-assignment",
-    label: "疑似硬编码密钥的赋值",
-    // 形如 secretKey = "xxxx" / api_key: 'xxxxxxxx' —— 但排除明显的占位符与非密钥值
+    label: "Assignment that looks like a hardcoded secret",
+    // e.g. secretKey = "xxxx" / api_key: 'xxxxxxxx' — but exclude obvious placeholders and non-secret values
     re: /(secret[_-]?key|secret[_-]?id|api[_-]?key|access[_-]?token|password|passwd)\s*[:=]\s*["'`]([^"'`\s]{16,})["'`]/gi,
-    why: "把密钥写进代码或配置是最常见的泄露方式",
+    why: "Writing a secret into code or config is the most common way it leaks",
     filter: (m, lineText) => {
       const v = (m[2] ?? "");
       const lower = v.toLowerCase();
 
-      // ① 占位符与示例值
+      // ① Placeholders and sample values
       const placeholders = [
         /^(your|my|xxx+|placeholder|example|test|demo|sample|dummy|fake|redacted|todo)/,
         /^\$\{/, /^<.*>$/, /^\{\{/, /^(process\.)?env\./,
@@ -73,13 +75,15 @@ const RULES = [
       ];
       if (placeholders.some((r) => r.test(lower))) return false;
 
-      // ② ★ 全大写下划线形式的值 —— 那是**环境变量名 / 常量名**，不是密钥
-      //    真实密钥不会长成 "TENCENT_SECRET_ID" 这样。
-      //    （这条是实测逼出来的：把 process.env.X 拆成常量后，
-      //      `secretId: "TENCENT_SECRET_ID"` 被误判成泄露。）
+      // ② ★ ALL_CAPS_UNDERSCORE values — those are **environment variable /
+      //     constant names**, not secrets. A real secret never looks like
+      //     "TENCENT_SECRET_ID".
+      //     (This rule was forced by a real case: after extracting
+      //      process.env.X into constants, `secretId: "TENCENT_SECRET_ID"`
+      //      was misreported as a leak.)
       if (/^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$/.test(v)) return false;
 
-      // ③ 该行本身就出现了环境变量访问 —— 说明值来自 env 而非硬编码
+      // ③ The line itself references an environment variable — so the value comes from env, not a hardcoded secret
       if (lineText && /process\.env|import\.meta\.env|env\[|os\.environ|getenv/i.test(lineText)) return false;
 
       return true;
@@ -87,7 +91,7 @@ const RULES = [
   },
 ];
 
-// 允许清单：命中的文件/路径直接跳过（每条都要写清理由）
+// Allow list: matched files/paths are skipped outright (each entry needs a clear reason)
 const SKIP_PATH = [
   /[\\/]node_modules[\\/]/,
   /[\\/]\.git[\\/]/,
@@ -95,11 +99,11 @@ const SKIP_PATH = [
   /[\\/]产出[\\/]/,
   /package-lock\.json$/,
   /pnpm-lock\.yaml$/,
-  // 本扫描器自身（它必须包含这些正则）
+  // This scanner itself (it must contain these regexes)
   /scan-secrets\.mjs$/,
-  // 自测文件：里面的"密钥"是用字符串拼接构造的伪造样本，用于证明规则真的会命中
+  // The self-test: its "secrets" are fake samples built by string concatenation, to prove the rules really match
   /scan-secrets\.test\.mjs$/,
-  // 许可门禁自测：里面有 license 字符串，与本扫描无关
+  // The license-gate self-test: it contains license strings, unrelated to this scan
   /check-licenses\.test\.mjs$/,
 ];
 
@@ -130,7 +134,7 @@ function walk(dir, out = []) {
 
 function mask(s) {
   if (s.length <= 10) return s[0] + "***";
-  return s.slice(0, 6) + "…" + s.slice(-4) + `（${s.length} 字符）`;
+  return s.slice(0, 6) + "…" + s.slice(-4) + ` (${s.length} chars)`;
 }
 
 export function scanFiles(files) {
@@ -149,7 +153,7 @@ export function scanFiles(files) {
     } catch {
       continue;
     }
-    if (text.includes("\u0000")) continue;   // 二进制
+    if (text.includes("\u0000")) continue;   // binary
 
     const lines = text.split(/\r?\n/);
     for (const rule of RULES) {
@@ -159,8 +163,8 @@ export function scanFiles(files) {
         const idx = m.index;
         const lineNo = text.slice(0, idx).split(/\r?\n/).length;
         const lineText = lines[lineNo - 1] ?? "";
-        // filter 同时拿到匹配与所在行 —— 有些误报要结合整行才能排除
-        // （例如 `secretId: "TENCENT_SECRET_ID"` 里的值是环境变量名而非密钥）
+        // filter gets both the match and its line — some false positives need the whole line to rule out
+        // (e.g. the value in `secretId: "TENCENT_SECRET_ID"` is an env var name, not a secret)
         if (rule.filter && !rule.filter(m, lineText)) {
           if (rule.re.lastIndex === m.index) rule.re.lastIndex++;
           continue;
@@ -174,7 +178,7 @@ export function scanFiles(files) {
           preview: mask(m[0]),
           context: lineText.trim().slice(0, 120),
         });
-        if (rule.re.lastIndex === m.index) rule.re.lastIndex++;  // 防零宽死循环
+        if (rule.re.lastIndex === m.index) rule.re.lastIndex++;  // prevent zero-width infinite loop
       }
     }
   }
@@ -196,14 +200,14 @@ function main() {
   }
   files = [...new Set(files)];
 
-  console.log("=== 格致 · 密钥泄露扫描 ===");
-  console.log(`  扫描 ${files.length} 个文件，${RULES.length} 条规则`);
+  console.log("=== Gezhi · secret leak scan ===");
+  console.log(`  Scanning ${files.length} file(s) with ${RULES.length} rule(s)`);
   console.log("");
 
   const findings = scanFiles(files);
 
   if (findings.length === 0) {
-    console.log("  ✔ 未发现疑似密钥");
+    console.log("  ✔ No suspected secrets found");
     console.log("");
     return 0;
   }
@@ -215,19 +219,19 @@ function main() {
   }
 
   for (const [rule, items] of byRule) {
-    console.log(`  ✖ ${items[0].label}（${items.length} 处）`);
-    console.log(`     为什么危险：${items[0].why}`);
+    console.log(`  ✖ ${items[0].label} (${items.length} occurrence(s))`);
+    console.log(`     Why dangerous: ${items[0].why}`);
     for (const it of items.slice(0, 10)) {
       console.log(`     ${path.relative(process.cwd(), it.file)}:${it.line}  ${it.preview}`);
       if (it.context) console.log(`        ${it.context}`);
     }
-    if (items.length > 10) console.log(`     …另有 ${items.length - 10} 处`);
+    if (items.length > 10) console.log(`     …another ${items.length - 10} occurrence(s)`);
     console.log("");
   }
 
-  console.log(`  === 结果：发现 ${findings.length} 处疑似密钥 → 失败 ===`);
-  console.log("  处理办法：① 立刻吊销该密钥并重发  ② 把新密钥放进 %APPDATA%\\gezhi\\credentials.enc");
-  console.log("            ③ 若确属误报，在 scan-secrets.mjs 的 SKIP_PATH 或规则 filter 里加例外并写清理由");
+  console.log(`  === Result: ${findings.length} suspected secret(s) found → fail ===`);
+  console.log("  Next steps: ① revoke and reissue the secret immediately  ② store the new secret in %APPDATA%\\gezhi\\credentials.enc");
+  console.log("              ③ if it is a false positive, add an exception with a clear reason in scan-secrets.mjs's SKIP_PATH or a rule filter");
   return 1;
 }
 

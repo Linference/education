@@ -1,79 +1,78 @@
-# ⚠️ 中文参考版 —— 仅供内部使用，切勿提交
+# ⚠️ Chinese reference version — for internal use only, never submit
 
-## 这两份文件是什么
+## What these two files are
 
-| 文件 | 页数 | 用途 |
+| File | Pages | Purpose |
 | --- | --- | --- |
-| `ProjectIntroduction_Gezhi_中文.pdf` | 2 | 与英文版结构一一对应的中文稿 |
-| `ResearchReport_Gezhi_中文.pdf` | 10 | 同上 |
+| `ProjectIntroduction_Gezhi_zh.pdf` | 2 | Chinese draft structurally corresponding one-to-one with the English version |
+| `ResearchReport_Gezhi_zh.pdf` | 10 | Same as above |
 
-它们是英文正式稿的**中文对照版**，供：指导老师审阅、队内讨论、答辩前梳理逻辑、以及准备中文讲解时使用。
+They are the **Chinese counterparts** of the formal English drafts, for: review by the supervising teacher, internal team discussion, organizing the logic before the defense, and preparing a Chinese presentation.
 
-## 🚫 为什么不能提交
+## 🚫 Why they cannot be submitted
 
-竞赛章程原文：
+Exact wording from the competition charter:
 
-> **2026 年度所有报名资料、作品内容、附件、海报、影片字幕、演示简报及答辩均只接受英文。**
+> **For the 2026 competition, all registration materials, work content, attachments, posters, film subtitles, presentation slides, and defenses are accepted in English only.**
 
-而且附则明确列出，**「未使用英文」属于可「不予评审」的情形之一**，且章程写明「不设作品内容覆核或申辩程序」——**没有补救机会**。
+Moreover, the supplementary provisions explicitly list **"not using English" as one of the circumstances under which a submission may be "not reviewed"**, and the charter states that "there is no work-content review or appeal procedure" — **there is no chance to remedy it**.
 
-**正式提交请用上一级目录的两份英文 PDF：**
+**For formal submission, use the two English PDFs in the parent directory:**
 
 ```
-../ProjectIntroduction_Gezhi.pdf      ← 提交这个
-../ResearchReport_Gezhi.pdf           ← 和这个
+../ProjectIntroduction_Gezhi.pdf      ← submit this
+../ResearchReport_Gezhi.pdf           ← and this
 ```
 
-## 两份文档的结构对应关系
+## Structural correspondence between the two documents
 
-中文版与英文版**章节号、表号完全一致**，方便左右对照修改。改任何一份时记得同步另一份。
+The Chinese and English versions have **identical section numbers and table numbers**, making side-by-side comparison and editing easy. When changing either one, remember to sync the other.
 
-| 章节 | 英文版 | 中文版 |
+| Section | English version | Chinese version |
 | --- | --- | --- |
-| 1 | Background | 背景 |
-| 2 | Problem Definition | 问题定义 |
-| 3 | Related Work | 相关工作 |
-| 4 | System Design | 系统设计 |
-| 5 | Technical Methods | 技术方法 |
-| 6 | Data Sources | 资料来源 |
-| 7 | Testing and Evaluation | 测试与评估 |
-| 8 | Results | 结果 |
-| 9 | Limitations | 局限性 |
-| 10 | Ethics, Safety and Privacy | 伦理、安全与隐私 |
-| 11 | Conclusion and Future Work | 结论与未来工作 |
-| 附录 A | AI Tool Disclosure | 生成式 AI 工具使用披露 |
+| 1 | Background | Background |
+| 2 | Problem Definition | Problem Definition |
+| 3 | Related Work | Related Work |
+| 4 | System Design | System Design |
+| 5 | Technical Methods | Technical Methods |
+| 6 | Data Sources | Data Sources |
+| 7 | Testing and Evaluation | Testing and Evaluation |
+| 8 | Results | Results |
+| 9 | Limitations | Limitations |
+| 10 | Ethics, Safety and Privacy | Ethics, Safety and Privacy |
+| 11 | Conclusion and Future Work | Conclusion and Future Work |
+| Appendix A | AI Tool Disclosure | Generative AI Tool Usage Disclosure |
 
-## 编译
+## Compiling
 
-中文版必须用 **XeLaTeX**（英文版用 pdfLaTeX 也可以，但中文字体必须 XeLaTeX）：
+The Chinese version must use **XeLaTeX** (the English version can also use pdfLaTeX, but Chinese fonts require XeLaTeX):
 
 ```powershell
 $mik = 'D:\MiKTeX\miktex\bin\x64'
 cd 'D:\Users\LINKIT\Desktop\格致\submission\zh-reference'
 
-# 每份跑两遍
-foreach ($f in 'ProjectIntroduction_Gezhi_中文','ResearchReport_Gezhi_中文') {
+# Run each one twice
+foreach ($f in 'ProjectIntroduction_Gezhi_zh','ResearchReport_Gezhi_zh') {
   & "$mik\xelatex.exe" -interaction=nonstopmode "$f.tex" > $null
   & "$mik\xelatex.exe" -interaction=nonstopmode "$f.tex" > $null
 }
 ```
 
-字体配置为 `fontset=windows`，使用系统自带的宋体 / 黑体 / 楷体，本机已验证可用。
+The font configuration is `fontset=windows`, using the system's built-in SimSun / SimHei / KaiTi, which has been verified to work on this machine.
 
-**踩坑提醒**：如果上一次编译失败留下了半成品 PDF，下一次编译会报
-`dvipdfmx:fatal: Unable to open ...`——这是文件被占用。先删掉 `*.pdf *.aux *.log *.out`
-再重新编译即可。
+**Pitfall reminder**: if a previous failed compile left behind a half-finished PDF, the next compile will report
+`dvipdfmx:fatal: Unable to open ...` — this means the file is in use. Delete `*.pdf *.aux *.log *.out` first, then recompile.
 
-## 占位符
+## Placeholders
 
-同样使用红色 `【待填：…】` 标记，与英文版一一对应。查找：
+They likewise use red `【待填：…】` markers, corresponding one-to-one with the English version. To find them:
 
 ```powershell
 Select-String -Path *.tex -Pattern '\\fillin\{|\\fillc\{'
 ```
 
-**中文版填了数据之后，务必把同样的数字填进英文版**——提交的是英文版。
+**After filling data into the Chinese version, be sure to put the same numbers into the English version** — the English version is what gets submitted.
 
 ## `_preview/`
 
-逐页 PNG 预览，用于快速检查排版，**不是交付物**，可随时删除。
+Page-by-page PNG previews for quick layout checks; **not a deliverable**, can be deleted at any time.

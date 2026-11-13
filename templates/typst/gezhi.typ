@@ -1,46 +1,51 @@
-// 格致 · Typst 公共样式与字体栈
+// Gezhi · Typst shared styles and font stack
 //
-// 为什么 PDF 这条线用 Typst 而不是 JavaScript 拼：
-//   中文排版（断行、标点挤压、字体嵌入、公式、页码、目录）在 Typst/LaTeX 里有
-//   十几年积累，Node 生态没有等价物。硬用 JS 拼出来的版式每次都不一样，不能当交付物。
+// Why the PDF pipeline uses Typst instead of assembling output with JavaScript:
+//   Chinese typesetting (line breaking, punctuation compression, font embedding,
+//   math, page numbers, table of contents) has over a decade of accumulated work
+//   in Typst/LaTeX, and the Node ecosystem has no equivalent. Layouts hacked
+//   together with JS differ every time and cannot be shipped as deliverables.
 //
-// ⚠⚠ 字体血泪教训（本机实测，务必照做）：
+// ⚠⚠ Hard-won font lessons (measured on this machine, follow them):
 //
-//   1) 本机的中文字体里有**可变字体（Variable Font）**：
-//        Noto Sans SC  → NotoSansSC-VF.ttf   Weight: 100-900，**Default: 100**
-//        Noto Serif SC → NotoSerifSC-VF.ttf  Weight: 200-900，**Default: 200**
-//      实测：**Typst 0.15.1 在这台 Windows 上无法实例化它们**，
-//      无论写 weight: "regular" 还是 weight: 400，嵌进 PDF 的始终是
-//      NotoSansSC-Thin / NotoSerifSC-ExtraLight —— 中文正文细到几乎看不清，
-//      而且**不报任何错**，只有去查嵌入字体才发现。
-//      → 结论：**字体栈里不要放 Noto Serif SC / Noto Sans SC**。
+//   1) The Chinese fonts installed here include **variable fonts**:
+//        Noto Sans SC  → NotoSansSC-VF.ttf   Weight: 100-900, **Default: 100**
+//        Noto Serif SC → NotoSerifSC-VF.ttf  Weight: 200-900, **Default: 200**
+//      Measured: **Typst 0.15.1 on this Windows machine cannot instantiate them**.
+//      Whether you write weight: "regular" or weight: 400, what gets embedded in
+//      the PDF is always NotoSansSC-Thin / NotoSerifSC-ExtraLight — Chinese body
+//      text becomes so thin it is nearly unreadable, and **no error is reported**;
+//      you only notice by inspecting the embedded fonts.
+//      → Conclusion: **do not put Noto Serif SC / Noto Sans SC in the font stack**.
 //
-//   2) 换用静态字体后字重正常。实测对照（渲染成图逐行看粗细）：
-//        DengXian（等线）  regular/bold 粗细分明、字形清秀  ← 正文首选
-//        Microsoft YaHei   regular/bold 区分清楚          ← 标题首选
-//        SimSun / SimHei / KaiTi / STSong                 可用，SimSun 偏细
+//   2) Weights are correct after switching to static fonts. Measured comparison
+//      (rendered to images and inspected line by line):
+//        DengXian (DengXian)    regular/bold clearly distinct, elegant glyphs  ← first choice for body
+//        Microsoft YaHei        regular/bold clearly distinct                 ← first choice for headings
+//        SimSun / SimHei / KaiTi / STSong  usable, SimSun is on the thin side
 //
-//   3) 即便如此，**正文仍显式写 weight: "regular"，标题写 "bold"**，别省。
+//   3) Even so, **body text still explicitly sets weight: "regular" and headings "bold"**; don't omit it.
 
-// 字体栈按优先级排列。注意：**只列本机真的装了的字体** —— 列了没装的会刷
-// "unknown font family" 警告（不影响输出，但会淹没真正的错误）。
-// 跨平台时再按需追加 mac 的 PingFang SC / Songti SC。
+// Font stack in priority order. Note: **list only fonts actually installed here** —
+// listing missing ones floods the output with "unknown font family" warnings (they
+// don't affect output but drown out real errors).
+// When going cross-platform, append mac fonts such as PingFang SC / Songti SC as needed.
 
-// 中文正文：等线 → 微软雅黑 → 宋体
+// Chinese body text: DengXian → Microsoft YaHei → SimSun
 #let gezhi-fonts = (
   "DengXian",
   "Microsoft YaHei",
   "SimSun",
 )
 
-// 中文标题 / 无衬线：微软雅黑 → 黑体 → 等线
+// Chinese headings / sans-serif: Microsoft YaHei → SimHei → DengXian
 #let gezhi-sans = (
   "Microsoft YaHei",
   "SimHei",
   "DengXian",
 )
 
-// 代码
+// Code
 #let gezhi-mono = (
   "Cascadia Code",
   "Consolas",

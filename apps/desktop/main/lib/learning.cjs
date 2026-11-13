@@ -20,11 +20,11 @@ function bankActivity(q) {
   const choiceAnswer = String(q.answer || '').normalize('NFKC').trim().match(/^(?:答案[:：]?\s*)?([A-Z])[.、。．]?$/i)?.[1]?.toUpperCase();
   const grading = q.type === 'choice' && q.options.some(o => o.label === choiceAnswer) ? 'choice'
     : ['fill', 'calc'].includes(q.type) && numeric(q.answer) !== null ? 'numeric' : 'self';
-  return { id: 'bank:' + q.id, mode: 'practice', concept: q.kps[0] || '未标注知识点', concepts: q.kps,
-    title: '题库练习 #' + q.id, prompt: q.stem, options: q.type === 'choice' ? q.options : [],
+  return { id: 'bank:' + q.id, mode: 'practice', concept: q.kps[0] || 'Unlabeled knowledge point', concepts: q.kps,
+    title: 'Question bank practice #' + q.id, prompt: q.stem, options: q.type === 'choice' ? q.options : [],
     answer: grading === 'choice' ? choiceAnswer : q.answer, grading, tolerance: 1e-8,
-    explanation: q.solution || '本题没有解析，请结合原始资料核对。', source: q.source || '用户导入题目 · 来源未填写',
-    hint: q.kps.length ? '先回顾：' + q.kps.join('、') + '。把已知条件与待求量分开列出。' : '先列出已知条件与待求量，再检查使用的方法。' };
+    explanation: q.solution || 'This question has no solution; please verify against the original material.', source: q.source || 'User-imported question · source not provided',
+    hint: q.kps.length ? 'First review: ' + q.kps.join(', ') + '. Separate the given conditions from the quantities to find.' : 'First list the given conditions and the quantities to find, then check the method used.' };
 }
 function catalog(db, bank, vault, includeActivityId, includeExamples = false) {
   const passes = new Set(db.prepare("SELECT DISTINCT activity_id FROM learning_attempts WHERE vault=? AND correct=1 AND grading!='self'").all(vault).map(r => r.activity_id));
@@ -42,26 +42,26 @@ function resolveActivity(db, bank, vault, id) {
   if (/^bank:\d+$/.test(id)) { const q = bank.byIds({ vault, ids: [Number(id.slice(5))] }).questions?.[0]; if (q) return bankActivity(q); }
   const row = db.prepare('SELECT data FROM learning_labs WHERE vault=? AND id=?').get(vault, id);
   if (row) return JSON.parse(row.data);
-  throw new Error('题目不存在或已从当前资料库删除，请刷新。');
+  throw new Error('The activity does not exist or was removed from the current library. Please refresh.');
 }
 function rowAttempt(row) { return { ...JSON.parse(row.data), id: row.id, activityId: row.activity_id, concept: row.concept, mode: row.mode, at: row.at, correct: row.correct === null ? null : Boolean(row.correct), confidence: row.confidence, hints: row.hints, grading: row.grading }; }
 function submit(db, bank, p) {
-  if (typeof p.submissionId !== 'string' || !/^[a-zA-Z0-9-]{8,100}$/.test(p.submissionId)) throw new Error('提交标识无效');
+  if (typeof p.submissionId !== 'string' || !/^[a-zA-Z0-9-]{8,100}$/.test(p.submissionId)) throw new Error('Invalid submission identifier');
   const existing = db.prepare('SELECT * FROM learning_attempts WHERE id=?').get(p.submissionId);
-  if (existing) { if (existing.vault !== p.vault || existing.activity_id !== p.activityId) throw new Error('提交标识已经用于另一项练习'); return { ok: true, attempt: rowAttempt(existing), duplicate: true }; }
-  if (![1, 2, 3].includes(p.confidence)) throw new Error('请在揭晓答案前选择自信度');
+  if (existing) { if (existing.vault !== p.vault || existing.activity_id !== p.activityId) throw new Error('This submission identifier has already been used for another exercise'); return { ok: true, attempt: rowAttempt(existing), duplicate: true }; }
+  if (![1, 2, 3].includes(p.confidence)) throw new Error('Choose a confidence level before revealing the answer');
   const a = resolveActivity(db, bank, p.vault, p.activityId);
-  if (a.requires && !db.prepare("SELECT 1 FROM learning_attempts WHERE vault=? AND activity_id=? AND correct=1 AND grading!='self'").get(p.vault, a.requires)) throw new Error('请先完成前一关，再进行迁移挑战。');
+  if (a.requires && !db.prepare("SELECT 1 FROM learning_attempts WHERE vault=? AND activity_id=? AND correct=1 AND grading!='self'").get(p.vault, a.requires)) throw new Error('Complete the previous level before attempting this transfer challenge.');
   const response = String(p.response ?? '').trim();
   const reflection = String(p.reflection ?? '').trim();
-  if (!response || response.length > 12000 || reflection.length > 6000) throw new Error('请填写有效答案');
-  if (a.mode === 'detective' && (!reflection || (a.correctionOptions && !p.correction))) throw new Error('请给出修正方案，并说明错误原因。');
-  if (a.mode === 'lab' && !reflection) throw new Error('请写下预测依据，再进行验证。');
-  if (a.mode === 'transfer' && !reflection) throw new Error('请记录你在新情境中使用的方法。');
+  if (!response || response.length > 12000 || reflection.length > 6000) throw new Error('Please enter a valid answer');
+  if (a.mode === 'detective' && (!reflection || (a.correctionOptions && !p.correction))) throw new Error('Please provide the correction and explain what went wrong.');
+  if (a.mode === 'lab' && !reflection) throw new Error('Write down your prediction and reasoning before verifying.');
+  if (a.mode === 'transfer' && !reflection) throw new Error('Record the method you used in the new situation.');
   let correct = null;
-  if (a.grading === 'choice') { if (!a.options.some(o => o.label === response)) throw new Error('请选择一个有效选项'); correct = response === a.answer; }
-  if (a.grading === 'numeric') { const n = numeric(response), expected = numeric(a.answer); if (n === null || !Number.isFinite(n)) throw new Error('请填写一个数值，也可以使用分数。单位已显示在题目中。'); if (expected === null || !Number.isFinite(expected)) throw new Error('参考答案无法核验，请核对题库'); correct = Math.abs(n - expected) <= (a.tolerance ?? 1e-8) * (a.relative ? Math.max(1, Math.abs(expected)) : 1); }
-  if (a.mode === 'detective' && a.correctionOptions) { if (!['A', 'B', 'C'].includes(p.correction)) throw new Error('修正选项无效'); correct = correct && p.correction === a.correctionAnswer; }
+  if (a.grading === 'choice') { if (!a.options.some(o => o.label === response)) throw new Error('Please choose a valid option'); correct = response === a.answer; }
+  if (a.grading === 'numeric') { const n = numeric(response), expected = numeric(a.answer); if (n === null || !Number.isFinite(n)) throw new Error('Enter a number (fractions are allowed). Units are shown in the question.'); if (expected === null || !Number.isFinite(expected)) throw new Error('Cannot verify against the reference answer; please check the question bank'); correct = Math.abs(n - expected) <= (a.tolerance ?? 1e-8) * (a.relative ? Math.max(1, Math.abs(expected)) : 1); }
+  if (a.mode === 'detective' && a.correctionOptions) { if (!['A', 'B', 'C'].includes(p.correction)) throw new Error('Invalid correction option'); correct = correct && p.correction === a.correctionAnswer; }
   const at = new Date().toISOString();
   const data = { title: a.title, prompt: a.prompt, response, reflection, correction: typeof p.correction === 'string' ? p.correction : null, answer: String(a.answer ?? ''), explanation: a.explanation, source: a.source, level: a.level || null, chain: a.chain || null, params: a.params || null, labKind: a.labKind || null, selfVerdict: null, observation: null, usedHint: p.usedHint === true, previewedAnswer: p.previewedAnswer === true };
   Object.assign(data, { sourceRef: a.sourceRef || null, focus: a.focus || '', sampleSeed: a.sampleSeed ?? null, previousLabId: a.previousLabId || null, measurement: null, labVerified: false });
@@ -70,10 +70,10 @@ function submit(db, bank, p) {
 }
 function annotate(db, p) {
   const row = db.prepare('SELECT * FROM learning_attempts WHERE vault=? AND id=?').get(p.vault, p.id);
-  if (!row) throw new Error('学习记录不存在');
+  if (!row) throw new Error('Learning record not found');
   const data = JSON.parse(row.data);
-  if (p.selfVerdict !== undefined) { if (row.grading !== 'self' || !['correct', 'partial', 'incorrect'].includes(p.selfVerdict)) throw new Error('自评结果无效'); data.selfVerdict = p.selfVerdict; }
-  if (p.observation !== undefined) { if (row.mode !== 'lab' || typeof p.observation !== 'string' || p.observation.trim().length < 3 || p.observation.length > 6000) throw new Error('请填写实验观察与解释'); data.observation = p.observation.trim(); }
+  if (p.selfVerdict !== undefined) { if (row.grading !== 'self' || !['correct', 'partial', 'incorrect'].includes(p.selfVerdict)) throw new Error('Invalid self-assessment result'); data.selfVerdict = p.selfVerdict; }
+  if (p.observation !== undefined) { if (row.mode !== 'lab' || typeof p.observation !== 'string' || p.observation.trim().length < 3 || p.observation.length > 6000) throw new Error('Please fill in the lab observation and explanation'); data.observation = p.observation.trim(); }
   db.prepare('UPDATE learning_attempts SET data=? WHERE id=? AND vault=?').run(JSON.stringify(data), p.id, p.vault);
   return { ok: true, attempt: rowAttempt(db.prepare('SELECT * FROM learning_attempts WHERE id=?').get(p.id)) };
 }
@@ -82,24 +82,24 @@ function summary(db, bank, vault, now = Date.now(), includeExamples = false) {
   const attempts = rows.map(rowAttempt);
   const imported = bank.listQuestions({ vault, limit: 500, offset: 0 }).questions || [];
   const nodes = new Map((includeExamples ? content.concepts : []).map(c => [c.id, { ...c }]));
-  for (const q of imported) for (const kp of q.kps) if (!nodes.has(kp)) nodes.set(kp, { id: kp, subject: q.subject || '题库' });
-  for (const a of attempts) if (!nodes.has(a.concept)) nodes.set(a.concept, { ...(content.concepts.find(c => c.id === a.concept) || { subject: '题库' }), id: a.concept });
+  for (const q of imported) for (const kp of q.kps) if (!nodes.has(kp)) nodes.set(kp, { id: kp, subject: q.subject || 'Question bank' });
+  for (const a of attempts) if (!nodes.has(a.concept)) nodes.set(a.concept, { ...(content.concepts.find(c => c.id === a.concept) || { subject: 'Question bank' }), id: a.concept });
   const edges = content.edges.filter(e => nodes.has(e.from) && nodes.has(e.to));
   const seen = new Set(edges.map(e => e.from + '\0' + e.to));
   for (const q of imported) for (let i = 0; i < q.kps.length; i++) for (let j = i + 1; j < q.kps.length; j++) {
     const [from, to] = [q.kps[i], q.kps[j]].sort(); const key = from + '\0' + to;
-    if (from !== to && !seen.has(key)) { seen.add(key); edges.push({ from, to, kind: 'related', source: '同一题目中的知识点标签' }); }
+    if (from !== to && !seen.has(key)) { seen.add(key); edges.push({ from, to, kind: 'related', source: 'Knowledge point tags from the same question' }); }
   }
   const evidence = [...nodes.values()].map(node => {
     const history = attempts.filter(a => a.concept === node.id);
     const verified = history.filter(a => a.grading !== 'self' && a.correct !== null && (a.mode !== 'lab' || a.labVerified));
     const latest = verified[0];
-    let status = history.length ? 'unverified' : 'untested', reason = history.length ? '已有作答或自评，尚缺可核验的独立练习。' : '还没有学习证据，完成一道练习开始验证。';
+    let status = history.length ? 'unverified' : 'untested', reason = history.length ? 'There are responses or self-assessments, but no verifiable independent practice yet.' : 'Complete an exercise to start collecting evidence.';
     if (latest) {
-      if (!latest.correct) { status = latest.confidence === 3 ? 'misconception' : 'needsPractice'; reason = latest.confidence === 3 ? '最近一次很确定的作答未通过，建议用反例检验理解。' : '最近一次验证未通过，建议回顾条件后再练习。'; }
-      else if (latest.hints) { status = 'needsPractice'; reason = '最近一次有提示或参考帮助，建议完成一次独立练习。'; }
-      else if (now - Date.parse(latest.at) >= 86400000) { status = 'needsRetest'; reason = '上次独立通过已超过一天，可以进行延迟复测。'; }
-      else { status = 'supported'; reason = '最近一次独立作答通过。继续用不同题目和延迟复测验证。'; }
+      if (!latest.correct) { status = latest.confidence === 3 ? 'misconception' : 'needsPractice'; reason = latest.confidence === 3 ? 'A confident answer did not pass. Test the idea with a counterexample.' : 'The latest verification did not pass; review the conditions before practicing again.'; }
+      else if (latest.hints) { status = 'needsPractice'; reason = 'The latest attempt used a hint or reference; complete an independent exercise.'; }
+      else if (now - Date.parse(latest.at) >= 86400000) { status = 'needsRetest'; reason = 'The last independent pass was more than a day ago; a delayed retest is due.'; }
+      else { status = 'supported'; reason = 'An independent answer passed recently. Verify again with a different task and a delayed retest.'; }
     }
     const independent = verified.filter(a => a.correct && !a.hints);
     const delayed = independent.some((a, i) => independent.slice(i + 1).some(b => a.activityId !== b.activityId && Date.parse(a.at) - Date.parse(b.at) >= 86400000));
@@ -111,9 +111,9 @@ function summary(db, bank, vault, now = Date.now(), includeExamples = false) {
   return { ok: true, total: attempts.length, independent: attempts.filter(a => a.correct && !a.hints && a.grading !== 'self' && (a.mode !== 'lab' || a.labVerified)).length, highConfidenceWrong: attempts.filter(a => a.correct === false && a.confidence === 3).length, evidence, edges, recommendations, history: attempts.slice(0, 120), historyShown: Math.min(attempts.length, 120) };
 }
 function sourceById(db, vault, id) {
-  if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) throw new Error('资料引用无效，请重新选择章节。');
+  if (typeof id !== 'string' || !/^[a-f0-9]{24}$/.test(id)) throw new Error('Invalid source reference; please reselect the section.');
   const row = db.prepare('SELECT data FROM learning_sources WHERE vault=? AND id=?').get(vault, id);
-  if (!row) throw new Error('当前资料库没有这份资料引用，请重新载入。');
+  if (!row) throw new Error('The current library has no such source reference; please reload it.');
   return JSON.parse(row.data);
 }
 function saveSource(db, vault, source) { db.prepare('INSERT OR IGNORE INTO learning_sources VALUES(?,?,?)').run(source.id, vault, JSON.stringify(source)); return source; }
@@ -122,7 +122,7 @@ function linkReports(result, reports) {
   for (const report of reports) {
     const concept = report.sourceRef?.concept || report.topic;
     let node = result.evidence.find(n => n.id === concept);
-    if (!node) { node = { id: concept, subject: '讲解资料', status: 'unverified', reason: '已有 AI 讲解反馈，尚缺可核验的独立作答。', total: 0, verified: 0, independent: 0, delayed: false, transferLevel: 0, latestAt: report.at, evidence: [] }; result.evidence.push(node); }
+    if (!node) { node = { id: concept, subject: 'Explanation material', status: 'unverified', reason: 'There is AI explanation feedback, but no verifiable independent responses yet.', total: 0, verified: 0, independent: 0, delayed: false, transferLevel: 0, latestAt: report.at, evidence: [] }; result.evidence.push(node); }
     node.aiReports ||= []; node.reportCount = (node.reportCount || 0) + 1;
     if (node.aiReports.length < 5) node.aiReports.push(report);
   }

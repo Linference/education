@@ -54,10 +54,10 @@ export interface LearningApi {
   schedule(p: { vault: string; concept: string }): Promise<{ ok: boolean; error?: string; id?: string; dueAt?: string; duplicate?: boolean }>;
 }
 export const STATUS: Record<EvidenceStatus, { label: string; color: string }> = {
-  untested: { label: '待验证', color: '#8c91a6' }, unverified: { label: '待核验', color: '#b38a55' },
-  misconception: { label: '疑似误区', color: '#db718b' }, needsPractice: { label: '需要练习', color: '#d7a35d' },
-  needsRetest: { label: '等待复测', color: '#9982dd' }, supported: { label: '近期独立通过', color: '#51b4a4' },
+  untested: { label: 'Not tested', color: '#8c91a6' }, unverified: { label: 'Awaiting check', color: '#b38a55' },
+  misconception: { label: 'Suspected misconception', color: '#db718b' }, needsPractice: { label: 'Needs practice', color: '#d7a35d' },
+  needsRetest: { label: 'Awaiting retest', color: '#9982dd' }, supported: { label: 'Independent pass recently', color: '#51b4a4' },
 };
-export const CONFIDENCE = ['', '猜测', '大概', '确定'];
-export const MODE_LABEL: Record<LearningMode, string> = { practice: '自信度练习', detective: '错误侦探', transfer: '迁移挑战', lab: '概念实验' };
-export function supportLabel(a: LearningAttempt): string { return a.previewedAnswer ? a.usedHint ? '看过参考答案并使用提示' : '看过参考答案' : a.hints ? '使用提示' : '无提示或参考帮助'; }
+export const CONFIDENCE = ['', 'Guess', 'Fairly sure', 'Certain'];
+export const MODE_LABEL: Record<LearningMode, string> = { practice: 'Confidence practice', detective: 'Error Detective', transfer: 'Transfer Challenge', lab: 'Concept experiment' };
+export function supportLabel(a: LearningAttempt): string { return a.previewedAnswer ? a.usedHint ? 'Previewed the reference and used a hint' : 'Previewed the reference' : a.hints ? 'Used a hint' : 'No hint or reference help'; }

@@ -1,7 +1,8 @@
-// 题库组卷的 IPC
+// IPC for the question bank and paper assembly
 //
-// 数据库落在 %APPDATA%\gezhi\bank.db（与索引库、日历库同目录）。
-// 不放库目录里 —— 库可能在 OneDrive 下，WAL 文件会引发同步冲突。
+// The database lives at %APPDATA%\gezhi\bank.db (same directory as the index
+// and calendar databases). It is not kept in the library directory — the
+// library may be under OneDrive, and WAL files would cause sync conflicts.
 const path = require("node:path");
 const fs = require("node:fs");
 const bank = require("./lib/bank.cjs");
@@ -15,7 +16,7 @@ function registerBank(ipcMain, getWindow, app) {
     return db;
   };
 
-  /** 统一包装：异常也要返回 {ok,error}，不能让渲染进程收到空对象 */
+  /** Uniform wrapper: exceptions must also return {ok,error}; the renderer must never receive an empty object */
   const wrap = (fn) => (_e, arg) => {
     try {
       const r = fn(arg ?? {});
@@ -26,26 +27,27 @@ function registerBank(ipcMain, getWindow, app) {
     }
   };
 
-  // ---- 查询 ----
+  // ---- Queries ----
   ipcMain.handle("bank:list", wrap((p) => bank.listQuestions(open(), p)));
   ipcMain.handle("bank:stats", wrap((p) => bank.bankStats(open(), p)));
   ipcMain.handle("bank:byIds", wrap((p) => bank.getQuestionsByIds(open(), p)));
 
-  // ---- 增删改 ----
+  // ---- Create / update / delete ----
   ipcMain.handle("bank:add", wrap((p) => bank.addQuestion(open(), p)));
   ipcMain.handle("bank:addMany", wrap((p) => bank.addQuestions(open(), p)));
   ipcMain.handle("bank:update", wrap((p) => bank.updateQuestion(open(), p)));
   ipcMain.handle("bank:delete", wrap((p) => bank.deleteQuestion(open(), p)));
 
-  // ---- 从 Markdown 文件导入 ----
+  // ---- Import from a Markdown file ----
   //
-  // 先解析、把"解析出几道题"告诉用户，**不直接入库**：
-  // 让用户看一眼再决定导不导。直接入库几百道错题，清理起来很痛苦。
+  // Parse first and tell the user "how many questions were found", **without
+  // importing yet**: let the user glance before deciding. Importing hundreds
+  // of wrong questions straight in would be painful to clean up.
   ipcMain.handle("bank:parseFile", wrap(({ filePath }) => {
-    if (!filePath) return { ok: false, error: "没有给文件路径" };
+    if (!filePath) return { ok: false, error: "No file path given" };
     const st = fs.statSync(filePath);
-    if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
-    if (st.size > 8 * 1024 * 1024) return { ok: false, error: "文件超过 8 MB，建议拆成几个再导入" };
+    if (st.isDirectory()) return { ok: false, error: "This is a directory" };
+    if (st.size > 8 * 1024 * 1024) return { ok: false, error: "File exceeds 8 MB; split it into smaller files before importing" };
     const text = fs.readFileSync(filePath, "utf8");
     const r = parseQuestionsFromMarkdown(text);
     return { ok: true, questions: r.questions, warnings: r.warnings, count: r.questions.length };
@@ -53,8 +55,8 @@ function registerBank(ipcMain, getWindow, app) {
 
   // Read browser File contents rather than the removed Electron File.path.
   ipcMain.handle("bank:parseText", wrap(({ text }) => {
-    if (typeof text !== 'string') return { ok: false, error: '没有可解析的文本' };
-    if (Buffer.byteLength(text, 'utf8') > 8 * 1024 * 1024) return { ok: false, error: '文件超过 8 MB，建议拆成几个再导入' };
+    if (typeof text !== 'string') return { ok: false, error: 'No text to parse' };
+    if (Buffer.byteLength(text, 'utf8') > 8 * 1024 * 1024) return { ok: false, error: 'File exceeds 8 MB; split it into smaller files before importing' };
     const r = parseQuestionsFromMarkdown(text);
     return { ...r, count: r.questions.length };
   }));
@@ -63,21 +65,21 @@ function registerBank(ipcMain, getWindow, app) {
     catch (e) { return { ok: false, error: e.message }; }
   });
 
-  // ---- 导出成 Markdown（把库里的题变成可编辑文档） ----
+  // ---- Export to Markdown (turn bank questions into an editable document) ----
   ipcMain.handle("bank:toMarkdown", wrap(({ vault, ids }) => {
     const r = bank.getQuestionsByIds(open(), { vault, ids });
     return { ok: true, markdown: questionsToMarkdown(r.questions), count: r.questions.length };
   }));
 
-  // ---- 试卷留档 ----
+  // ---- Paper archive ----
   ipcMain.handle("bank:savePaper", wrap((p) => bank.savePaper(open(), p)));
   ipcMain.handle("bank:papers", wrap((p) => bank.listPapers(open(), p)));
   ipcMain.handle("bank:deletePaper", wrap((p) => bank.deletePaper(open(), p)));
 
-  // ---- 库信息 ----
+  // ---- Bank info ----
   ipcMain.handle("bank:info", wrap(() => {
     let size = 0;
-    try { size = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0; } catch { /* 忽略 */ }
+    try { size = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0; } catch { /* ignore */ }
     return { ok: true, path: dbPath, size, exists: size > 0 };
   }));
 }

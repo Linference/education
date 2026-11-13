@@ -83,7 +83,7 @@ function registerSearch(ipcMain, getWindow, app) {
   /** 手动重建（全量） */
   ipcMain.handle("search:reindex", async (_e, vault) => {
     currentVault = vault ?? currentVault;
-    if (!currentVault) return { ok: false, error: "还没有打开库" };
+    if (!currentVault) return { ok: false, error: "No library is open" };
     const r = await runIndex(currentVault, { incremental: false });
     return r;
   });

@@ -31,7 +31,7 @@ export default function DocxViewer({ bytes, path, ext }: Props) {
     // .doc 是 OLE 复合文档，docx-preview / mammoth 都不认
     if (ext === ".doc") {
       setError(
-        "旧版 .doc 格式无法在软件内预览。请用 WPS/Word 打开，或另存为 .docx 后重试。"
+        "Legacy .doc files cannot be previewed in the app. Open it in WPS/Word, or save it as .docx and try again."
       );
       return;
     }
@@ -67,7 +67,7 @@ export default function DocxViewer({ bytes, path, ext }: Props) {
         const arrayBuffer = bytes.slice(0).buffer;
         const r = await mammoth.convertToHtml({ arrayBuffer });
         if (cancelled) return;
-        setHtml(r.value || "<p>（文档内容为空）</p>");
+        setHtml(r.value || "<p>(The document is empty)</p>");
         setMode("mammoth");
       } catch (e: any) {
         if (!cancelled) setError(e?.message ?? String(e));
@@ -80,7 +80,7 @@ export default function DocxViewer({ bytes, path, ext }: Props) {
   if (error) {
     return (
       <div className="empty-state">
-        <div style={{ fontSize: 15 }}>无法预览这个 Word 文件</div>
+        <div style={{ fontSize: 15 }}>This Word file cannot be previewed</div>
         <div style={{ maxWidth: 480, textAlign: "center", lineHeight: 1.7 }}>{error}</div>
       </div>
     );
@@ -92,7 +92,7 @@ export default function DocxViewer({ bytes, path, ext }: Props) {
         {html ? (
           <div className="markdown-body selectable" dangerouslySetInnerHTML={{ __html: html }} />
         ) : (
-          <div style={{ color: "var(--text-faint)" }}>正在转换…</div>
+          <div style={{ color: "var(--text-faint)" }}>Converting…</div>
         )}
       </div>
     );
@@ -100,7 +100,7 @@ export default function DocxViewer({ bytes, path, ext }: Props) {
 
   return (
     <div className="docx-wrap">
-      {!mode && <div style={{ color: "var(--text-faint)" }}>正在渲染 Word 文档…</div>}
+      {!mode && <div style={{ color: "var(--text-faint)" }}>Rendering the Word document…</div>}
       <div ref={hostRef} />
     </div>
   );

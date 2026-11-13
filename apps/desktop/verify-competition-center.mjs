@@ -35,9 +35,9 @@ try{
   assert.match(await page.getByTestId('offline-step').innerText(),/double mass/);
   assert.equal(await app.evaluate(()=>globalThis.__competitionQA.calls),0);
   assert.equal((await page.evaluate(v=>window.gezhi.companions.history({vault:v}),vault)).reports.length,0);
-  pass('纯英文离线示范按角色改变问题，不调用模型、不生成评分记录');await shot('offline-english');
-  await button('AI method').click();await noChinese();assert.match(await panel().innerText(),/25%/);assert.match(await panel().innerText(),/Literal quotation matching/);pass('英文技术解释显示实际 AI 作用、独立核验、数据边界及评分权重');
-  await button('Evaluation evidence').click();await noChinese();assert.match(await panel().innerText(),/Exact agreement: Not available/);pass('无人工复核时统计为尚不可用，不补零分或虚假成效');
+  pass('pure-English offline demo changes questions by role, without calling the model or generating scoring records');await shot('offline-english');
+  await button('AI method').click();await noChinese();assert.match(await panel().innerText(),/25%/);assert.match(await panel().innerText(),/Literal quotation matching/);pass('English technical explanation shows the actual AI role, independent verification, data boundaries, and scoring weights');
+  await button('Evaluation evidence').click();await noChinese();assert.match(await panel().innerText(),/Exact agreement: Not available/);pass('without human review the statistic is marked unavailable, not backfilled with zero scores or fake results');
   await button('Demonstration').click();await button('Live AI').click();await button('Open isolated English library').click();
   await page.waitForFunction(()=>document.querySelector('.competition-live-source strong')?.textContent==='Force-and-acceleration.md');
   const sampleVault=(await page.evaluate(()=>window.gezhi.fsx.currentVault())).vault;
@@ -50,7 +50,7 @@ try{
   const h=await page.evaluate(v=>window.gezhi.companions.history({vault:v}),sampleVault);assert.equal(h.reports[0].locale,'en');assert.equal(h.reports[0].dialogue.length,4);assert.equal(h.reports[0].transcript.includes('Distinguish the quantity'),false);
   assert.equal((await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),sampleVault)).independent,0);
   assert.ok((await app.evaluate(()=>globalThis.__competitionQA.prompts)).every(task=>task.includes('entirely in English')));
-  pass('联网流程使用隔离英语资料、多轮学生发言与真实评分通道（模型替身）');await shot('live-english');
+  pass('online flow uses isolated English materials, multiple student turns, and the real scoring channel (model double)');await shot('live-english');
   await page.getByTestId('english-live-report').evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await shot('six-dimension-english');
   const review=page.getByTestId('english-live-report').getByTestId('assessment-review');
   await review.getByRole('button',{name:/Review the six dimensions/}).click();
@@ -61,12 +61,12 @@ try{
   await review.getByRole('button',{name:'Save human review',exact:true}).click();await review.getByRole('status').filter({hasText:'Human review saved.'}).waitFor();
   const rs=await page.evaluate(v=>window.gezhi.companions.reviews({vault:v}),sampleVault);assert.equal(rs.summary.comparable,1);assert.equal(rs.summary.agreement,0);assert.equal(rs.summary.meanAbsoluteDifference,1);
   assert.equal((await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),sampleVault)).independent,0);
-  pass('人工评分理由保存，差异由主进程计算，复核不变成独立通过');
+  pass('human review reason is saved, the difference is computed by the main process, and review does not become an independent pass');
   await button('AI disclosure').click();await noChinese();
   await panel().getByRole('textbox',{name:'DeepSeek Harness version'}).fill('QA-version');
   await panel().getByRole('textbox',{name:'DeepSeek Harness studentWork'}).fill('QA-only contribution text, not an actual team claim.');
   await button('Save AI-use record').click();await panel().getByRole('status').filter({hasText:'AI-use disclosure saved locally.'}).waitFor();
-  const d=await page.evaluate(v=>window.gezhi.companions.disclosure({vault:v}),sampleVault);assert.equal(d.tools[0].version,'QA-version');assert.equal(d.tools[1].version,'');pass('AI 工具版本与学生工作可记录，未知字段保持空白');
+  const d=await page.evaluate(v=>window.gezhi.companions.disclosure({vault:v}),sampleVault);assert.equal(d.tools[0].version,'QA-version');assert.equal(d.tools[1].version,'');pass('AI tool version and student work can be recorded, unknown fields stay blank');
   await button('Evaluation evidence').click();
   await app.evaluate(({dialog},dir)=>{dialog.showSaveDialog=async(_w,o)=>({canceled:false,filePath:dir+'/Evidence.'+(o.filters?.[0]?.extensions?.[0]||'md')});},sampleVault);
   await panel().getByRole('combobox',{name:'Evidence export format'}).selectOption('markdown');await button('Export English evidence').click();
@@ -74,19 +74,19 @@ try{
   const md=fs.readFileSync(path.join(sampleVault,'Evidence.md'),'utf8');assert.match(md,/INCOMPLETE/);assert.match(md,/not measured learning gains/);assert.equal(md.includes('T01'),false);assert.equal(md.includes('Velocity can remain nonzero.'),false);assert.equal(/[\u3400-\u9fff]/.test(md),false);
   await panel().getByRole('combobox',{name:'Evidence export format'}).selectOption('pdf');await button('Export English evidence').click();
   await page.waitForFunction(()=>[...document.querySelectorAll('.competition-notice[role=status]')].some(el=>el.textContent.includes('Evidence.pdf')));
-  assert.equal(fs.readFileSync(path.join(sampleVault,'Evidence.pdf')).subarray(0,4).toString(),'%PDF');pass('英文证据真实导出 MD 和 PDF，标注不完整披露并排除别名与原文');
+  assert.equal(fs.readFileSync(path.join(sampleVault,'Evidence.pdf')).subarray(0,4).toString(),'%PDF');pass('English evidence is truly exported to MD and PDF, marking incomplete disclosure and excluding aliases and verbatim text');
   await button('Demonstration').click();await page.emulateMedia({reducedMotion:'reduce'});await button('Offline walkthrough').click();
   assert.equal(await page.getByTestId('offline-step').evaluate(el=>getComputedStyle(el).animationName),'none');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1050,760));
-  assert.ok(await panel().evaluate(el=>el.scrollWidth<=el.clientWidth+1));await noChinese();await shot('english-compact');pass('英文展示紧凑窗口不溢出，并尊重减少动态效果设置');
+  assert.ok(await panel().evaluate(el=>el.scrollWidth<=el.clientWidth+1));await noChinese();await shot('english-compact');pass('English presentation does not overflow in a compact window and respects the reduced-motion setting');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(760,720));
-  await button('AI method').click();assert.ok(await panel().evaluate(el=>el.scrollWidth<=el.clientWidth+1));await noChinese();pass('更窄窗口仍可通过横向导航访问全部英文展示页面');
+  await button('AI method').click();assert.ok(await panel().evaluate(el=>el.scrollWidth<=el.clientWidth+1));await noChinese();pass('an even narrower window still allows accessing all English presentation pages via horizontal navigation');
   await button('Exit presentation').click();await panel().waitFor({state:'hidden'});
   await page.waitForFunction(v=>document.querySelector('.titlebar button')?.textContent.includes('Actual-library'),vault);
   assert.equal((await page.evaluate(()=>window.gezhi.fsx.currentVault())).vault,vault);
   assert.equal((await page.evaluate(v=>window.gezhi.companions.history({vault:v}),vault)).reports.length,0);
-  pass('退出后回到原资料库，示范对话、复核和披露不混入实际库');
-  assert.deepEqual(errors,[]);pass('完整评审展示、复核与导出无未处理异常');
+  pass('after exiting, returns to the original vault, and the demo dialogue, review, and disclosure do not leak into the actual vault');
+  assert.deepEqual(errors,[]);pass('full review display, review, and export have no unhandled exceptions');
 }catch(e){checks.push({name:'integration',pass:false,detail:e.stack||String(e)});console.error(e);await shot('failure').catch(()=>{});process.exitCode=1;}
 finally{fs.writeFileSync(path.join(OUT,'verification.json'),JSON.stringify({at:new Date().toISOString(),checks,errors,dir,cloud:'Model double; real Electron/preload/SQLite/source parsing/export. No student outcomes fabricated.'},null,2));await app.close();}
 console.log(`${checks.filter(c=>c.pass).length} passed, ${checks.filter(c=>!c.pass).length} failed`);

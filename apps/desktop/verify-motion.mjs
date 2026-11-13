@@ -30,18 +30,18 @@ try {
  });
  await page.evaluate(v=>window.__gezhiTest.openVault(v),vault);
  assert.equal(await page.getByRole('tab',{name:'数字人',exact:true}).count(),0);
- assert.equal(await page.locator('.ribbon-btn[title^="数字人"]').count(),0);pass('独立数字人页签与侧边按钮已移除');
+ assert.equal(await page.locator('.ribbon-btn[title^="数字人"]').count(),0);pass('数字人 (Digital Human) tab and ribbon button removed');
  await page.getByRole('button',{name:'学习工作室',exact:true}).click();
  await page.getByTestId('companion-lobby').waitFor();await page.waitForFunction(()=>document.querySelectorAll('.companion-card').length===5);
  assert.equal(await page.locator('.companion-card .role-portrait').count(),5);
  const delays=await page.locator('.companion-card').evaluateAll(cards=>cards.map(c=>getComputedStyle(c).animationDelay));
- assert.equal(new Set(delays).size,5);pass('五个角色保留，卡片依次入场');
+ assert.equal(new Set(delays).size,5);pass('five characters kept, cards enter in sequence');
  await page.getByRole('tab',{name:'自信度练习',exact:true}).click();
  await page.waitForFunction(()=>window.__motionEvents.includes('learning-panel'));
- assert.equal(await page.locator('.learning-coach .avatar-stage').count(),0);pass('学习页签切换触发过渡，旧小格形象改为文字引导');
+ assert.equal(await page.locator('.learning-coach .avatar-stage').count(),0);pass('study tab switch triggers transition, old small-grid avatar replaced by text guidance');
  await page.getByRole('tab',{name:'角色空间',exact:true}).click();
  await page.locator('.companion-card').nth(1).click();await page.getByTestId('companion-room').waitFor();
- await page.waitForFunction(()=>window.__motionEvents.some(c=>c.includes('companion-room')));pass('进入角色空间触发独立过渡');
+ await page.waitForFunction(()=>window.__motionEvents.some(c=>c.includes('companion-room')));pass('entering 角色空间 (Character Space) triggers its own transition');
  const transcript='矩阵乘法需要满足维度条件。A 是 m 乘 n 的矩阵，x 是 n 维列向量，Ax 才有定义。';
  await page.getByRole('textbox',{name:'角色文字讲解'}).fill(transcript);
  await page.getByRole('textbox',{name:'角色讲解主题'}).fill('矩阵维度与约束');
@@ -51,7 +51,7 @@ try {
  await page.getByTestId('companion-report').waitFor();
  assert.equal(await page.locator('.assessment-dimensions section').count(),6);
  assert.equal(await page.getByRole('textbox',{name:'角色文字讲解'}).inputValue(),transcript);
- await page.waitForFunction(()=>window.__motionEvents.some(c=>c.includes('room-report')));pass('评估等待状态和六维反馈展开正常，输入内容保留（AI 测试替身）');
+ await page.waitForFunction(()=>window.__motionEvents.some(c=>c.includes('room-report')));pass('assessment wait state and six-dimension feedback expand correctly, input preserved (AI test stub)');
  await page.screenshot({path:path.join(run,'six-dimension-feedback.png'),animations:'disabled'});
  await page.getByRole('button',{name:'返回角色空间',exact:false}).click();
  await page.getByTestId('companion-lobby').waitFor();
@@ -62,18 +62,18 @@ try {
  await page.emulateMedia({reducedMotion:'reduce'});
  assert.equal(await page.getByRole('textbox',{name:'角色文字讲解'}).inputValue(),transcript);
  assert.equal(await page.getByRole('textbox',{name:'角色文字讲解'}).evaluate(e=>e===document.activeElement),true);
- assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0);pass('减少动态效果立即停止动画，不重建表单或丢失焦点');
+ assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0);pass('reduced motion stops animations immediately without rebuilding the form or losing focus');
  await page.getByRole('button',{name:'返回角色空间',exact:false}).click();
  await page.getByRole('tab',{name:'自信度练习',exact:true}).click();
- assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0);pass('减少动态效果下新页面也不启动过渡');
+ assert.equal(await page.evaluate(()=>document.getAnimations().filter(a=>a.playState==='running').length),0);pass('with reduced motion, new pages also do not start transitions');
  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1050,760));
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));pass('小窗口无整页横向溢出');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));pass('no full-page horizontal overflow at small window size');
  await page.getByRole('button',{name:'学习工作室',exact:true}).click();
  await page.evaluate(p=>window.__gezhiTest.openFileByPath(p),note);
  const result=await page.evaluate(({md,note})=>window.gezhi.exporter.run({format:'pdf',markdown:md,sourcePath:note,defaultName:'矩阵公式验证'}),{md,note});
  assert.equal(result.ok,true,result.error);
- assert.equal(fs.readFileSync(result.path).subarray(0,4).toString(),'%PDF');pass('截图同款 Ax + By 公式经当前应用 IPC 成功导出 PDF');
- assert.deepEqual(errors,[]);pass('全过程无渲染异常');
+ assert.equal(fs.readFileSync(result.path).subarray(0,4).toString(),'%PDF');pass('the same Ax + By formula as in the screenshot exports to PDF via the current app IPC');
+ assert.deepEqual(errors,[]);pass('no rendering errors throughout the whole process');
 } finally {
  await app.close();fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify({checks,errors,run,packaged:Boolean(process.env.GEZHI_TEST_EXE)},null,2));
 }

@@ -77,7 +77,7 @@ function inline(text, ctx) {
     if (!parsed) return original;
     const src = parsed.attrGet('src');
     const resolved = ctx.imageResolver ? ctx.imageResolver(src) : src;
-    if (!resolved) return protect(ctx, escapeTypst('[图片未能嵌入：' + (alt || src) + ']'));
+    if (!resolved) return protect(ctx, escapeTypst('[Image could not be embedded: ' + (alt || src) + ']'));
     return protect(ctx, `#figure(image("${escapeTypstString(resolved)}", width: 70%), caption: [${escapeTypst(alt)}])`);
   });
 
@@ -349,7 +349,7 @@ function markdownToTypst(md, { imageResolver } = {}) {
  */
 function buildTypstDocument(md, opts = {}) {
   const { body, title } = markdownToTypst(md);
-  const docTitle = opts.title ?? title ?? "未命名文档";
+  const docTitle = opts.title ?? title ?? "Untitled document";
   const authorLine = opts.author ? `author: "${escapeTypstString(opts.author)}",` : "";
 
   return `// 由「格致」导出 —— 本注释在编译进 PDF 后不可见

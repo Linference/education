@@ -1,18 +1,24 @@
-// 题库与组卷
+// Question bank and paper assembly
 //
-// ★ 为什么题库要放 SQLite 而不是 Markdown 文件：
-//   组卷是**按条件抽题**（"广东中考 + 二次函数 + 难度 3 以上 + 只抽选择题"），
-//   这是查询，不是浏览。用文件存就得每次全量读盘再过滤，
-//   几百道题就开始卡；SQLite 加索引是毫秒级。
-//   题目**也可以**同时留在 Markdown 里（导入后仍可阅读编辑）——
-//   这里存的是"可检索的副本"，不是唯一真相。
+// ★ Why the bank lives in SQLite rather than Markdown files:
+//   Assembling a paper is a **conditional query** ("Guangdong exam + quadratic
+//   functions + difficulty 3 or higher + multiple choice only"). That is a
+//   query, not browsing. With files you would re-read and filter everything on
+//   every request, and a few hundred questions already start to lag; SQLite
+//   with an index is millisecond-fast.
+//   Questions **can** also stay in Markdown (still readable/editable after
+//   import) — what is stored here is a "searchable copy", not the only truth.
 //
-// ★ 题目字段设计的取舍：
-//   · kps（知识点）存 JSON 数组而不是关联表：知识点数量少（每道题 1~4 个），
-//     建关联表会让导入导出变复杂，收益不大。真要按知识点统计时再拆。
-//   · options 存 JSON：选择题选项数固定，结构化后组卷排版才好办。
-//   · source 单独一个字段：广东中考 / 港澳台联考 / 四校联考 / 澳门保送
-//     这些来源是用户明确要求的筛选维度，不能混在标题里。
+// ★ Trade-offs in the question field design:
+//   · kps (knowledge points) stored as a JSON array instead of a relation
+//     table: there are few knowledge points (1~4 per question), and a relation
+//     table would complicate import/export for little gain. Split it out only
+//     when we actually need per-knowledge-point statistics.
+//   · options stored as JSON: choice questions have a fixed number of options,
+//     and structuring them makes paper layout much easier.
+//   · source as its own field: Guangdong exam / Hong Kong-Macau-Taiwan joint
+//     exam / four-school joint exam / Macau recommendation are filter
+//     dimensions users explicitly asked for and must not be mixed into titles.
 const path = require("node:path");
 const fs = require("node:fs");
 
@@ -22,14 +28,14 @@ function sqlite() {
   return DatabaseSync;
 }
 
-/** 题型 */
+/** Question types */
 const Q_TYPES = ["choice", "fill", "answer", "proof", "calc"];
 const TYPE_LABEL = {
-  choice: "选择题",
-  fill: "填空题",
-  answer: "解答题",
-  proof: "证明题",
-  calc: "计算题",
+  choice: "Multiple choice",
+  fill: "Fill in the blank",
+  answer: "Free response",
+  proof: "Proof",
+  calc: "Calculation",
 };
 
 function openBankDb(dbPath) {
@@ -43,14 +49,14 @@ function openBankDb(dbPath) {
       vault      text not null,
       type       text not null default 'answer',
       stem       text not null,
-      options    text,                 -- JSON 数组（选择题）
+      options    text,                 -- JSON array (multiple choice)
       answer     text,
-      solution   text,                 -- 解析
-      kps        text,                 -- JSON 数组（知识点）
+      solution   text,                 -- explanation
+      kps        text,                 -- JSON array (knowledge points)
       difficulty integer not null default 3,   -- 1~5
-      source     text,                 -- 广东中考 / 港澳台联考 / 四校联考 / 澳门保送 …
+      source     text,                 -- Guangdong exam / Hong Kong-Macau-Taiwan joint exam / four-school joint exam / Macau recommendation …
       year       integer,
-      subject    text,                 -- 数学 / 物理 …
+      subject    text,                 -- Math / Physics …
       created_at text not null,
       updated_at text not null
     );
@@ -59,13 +65,13 @@ function openBankDb(dbPath) {
     create index if not exists idx_q_src   on questions(vault, source);
     create index if not exists idx_q_type  on questions(vault, type);
 
-    -- 试卷：组好的卷子留档，下次可以直接再导一次
+    -- Papers: archive assembled papers so they can be exported again later
     create table if not exists papers(
       id         integer primary key autoincrement,
       vault      text not null,
       title      text not null,
-      qids       text not null,        -- JSON 数组（题目 id，按卷面顺序）
-      config     text,                 -- JSON（组卷条件，便于"再来一份同规格的"）
+      qids       text not null,        -- JSON array (question ids, in paper order)
+      config     text,                 -- JSON (assembly conditions, for "another paper of the same spec")
       created_at text not null
     );
     create index if not exists idx_papers_vault on papers(vault);
@@ -77,13 +83,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-/** 安全 JSON.parse */
+/** Safe JSON.parse */
 function parseJson(s, fallback) {
   if (!s) return fallback;
   try { return JSON.parse(s); } catch { return fallback; }
 }
 
-/** 把数据库行转成前端要的形状（拆掉 JSON 字符串） */
+/** Convert a database row to the shape the frontend expects (unpack JSON strings) */
 function rowToQuestion(r) {
   return {
     id: r.id,
@@ -101,11 +107,11 @@ function rowToQuestion(r) {
   };
 }
 
-// ---------------------------------------------------------------- 增删改查
+// ---------------------------------------------------------------- CRUD
 
 function addQuestion(db, p) {
   const stem = String(p?.stem ?? "").trim();
-  if (!stem) return { ok: false, error: "题干不能为空" };
+  if (!stem) return { ok: false, error: "Question stem cannot be empty" };
   const type = Q_TYPES.includes(p?.type) ? p.type : "answer";
   const diff = Math.max(1, Math.min(5, Number(p?.difficulty) || 3));
   const info = db.prepare(
@@ -127,15 +133,16 @@ function addQuestion(db, p) {
 }
 
 /**
- * 批量导入。
+ * Bulk import.
  *
- * ★ 用事务：几百道题逐条 insert 不加事务会慢几十倍
- *   （每条一次 fsync）。而且导入到一半失败会留半份数据，
- *   事务能保证"要么全进，要么全不进"。
+ * ★ Use a transaction: inserting a few hundred questions one by one without
+ *   a transaction is dozens of times slower (one fsync per row). A failure
+ *   halfway through would also leave half the data behind; a transaction
+ *   guarantees "all in, or none in".
  */
 function addQuestions(db, { vault, questions, skipDuplicates = false }) {
   if (!Array.isArray(questions) || !questions.length) {
-    return { ok: false, error: "没有要导入的题目" };
+    return { ok: false, error: "No questions to import" };
   }
   const stmt = db.prepare(
     `insert into questions(vault, type, stem, options, answer, solution, kps, difficulty, source, year, subject, created_at, updated_at)
@@ -150,7 +157,7 @@ function addQuestions(db, { vault, questions, skipDuplicates = false }) {
   try {
     for (const [i, q] of questions.entries()) {
       const stem = String(q?.stem ?? "").trim();
-      if (!stem) { failed.push({ index: i, reason: "题干为空" }); continue; }
+      if (!stem) { failed.push({ index: i, reason: "Question stem is empty" }); continue; }
       if (skipDuplicates && seen.has(signature(q))) { skipped++; continue; }
       try {
         stmt.run(
@@ -176,14 +183,14 @@ function addQuestions(db, { vault, questions, skipDuplicates = false }) {
     db.exec("commit");
   } catch (e) {
     db.exec("rollback");
-    return { ok: false, error: "导入失败已回滚：" + String(e?.message ?? e) };
+    return { ok: false, error: "Import failed and was rolled back: " + String(e?.message ?? e) };
   }
-  return { ok: added > 0 || skipped > 0, added, skipped, failed, ...(added || skipped ? {} : { error: '没有成功导入题目，请检查题干与字段格式' }) };
+  return { ok: added > 0 || skipped > 0, added, skipped, failed, ...(added || skipped ? {} : { error: 'No questions were imported successfully; check the stem and field format' }) };
 }
 
 function updateQuestion(db, { vault, id, patch }) {
   const cur = db.prepare("select * from questions where id = ? and vault = ?").get(id, vault);
-  if (!cur) return { ok: false, error: "找不到这道题" };
+  if (!cur) return { ok: false, error: "Question not found" };
   const map = {
     type: "type", stem: "stem", answer: "answer", solution: "solution",
     difficulty: "difficulty", source: "source", year: "year", subject: "subject",
@@ -209,14 +216,16 @@ function deleteQuestion(db, { vault, id }) {
   return { ok: true, removed: Number(r.changes ?? 0) };
 }
 
-// ---------------------------------------------------------------- 查询
+// ---------------------------------------------------------------- Queries
 
 /**
- * 按条件抽题。
+ * Draw questions by condition.
  *
- * ★ 所有条件都是**可选的组合**（用户要的就是"广东中考 + 二次函数 + 难度≥3"这种叠加）。
- *   知识点用 LIKE 匹配 JSON 字符串 —— 因为 kps 存的是 JSON 数组文本，
- *   对 1~4 个知识点这种规模，LIKE 完全够用，不值得为它建关联表。
+ * ★ Every condition is an **optional combination** (users want stacks like
+ *   "Guangdong exam + quadratic functions + difficulty ≥ 3").
+ *   Knowledge points are matched with LIKE over the JSON string — because kps
+ *   is stored as JSON array text, LIKE is plenty for 1~4 knowledge points and
+ *   it is not worth a relation table for that scale.
  */
 function listQuestions(db, { vault, type, source, difficultyMin, difficultyMax, kp, keyword, subject, limit = 200, offset = 0 }) {
   const where = ["vault = ?"];
@@ -240,7 +249,7 @@ function listQuestions(db, { vault, type, source, difficultyMin, difficultyMax, 
   return { ok: true, questions: rows.map(rowToQuestion), total };
 }
 
-/** 题库概览：总数、各来源/题型/难度的分布（界面上的筛选项据此生成） */
+/** Bank overview: totals and the distribution by source/type/difficulty (used to build the UI filters) */
 function bankStats(db, { vault }) {
   const total = db.prepare("select count(*) as n from questions where vault = ?").get(vault)?.n ?? 0;
   const byType = db.prepare("select type, count(*) as n from questions where vault = ? group by type").all(vault);
@@ -248,7 +257,7 @@ function bankStats(db, { vault }) {
   const byDiff = db.prepare("select difficulty, count(*) as n from questions where vault = ? group by difficulty order by difficulty").all(vault);
   const bySubject = db.prepare("select subject, count(*) as n from questions where vault = ? and subject is not null group by subject").all(vault);
 
-  // 知识点：把 JSON 数组拆开统计（题目量级在几千以内，全表扫可接受）
+  // Knowledge points: unpack the JSON array and count (a full scan is fine up to a few thousand questions)
   const kpRows = db.prepare("select kps from questions where vault = ? and kps is not null").all(vault);
   const kpMap = new Map();
   for (const r of kpRows) {
@@ -261,22 +270,22 @@ function bankStats(db, { vault }) {
   return { ok: true, total, byType, bySource, byDiff, bySubject, byKp };
 }
 
-/** 按 id 取题（组卷导出要用） */
+/** Fetch questions by id (used for paper export) */
 function getQuestionsByIds(db, { vault, ids }) {
   if (!ids?.length) return { ok: true, questions: [] };
   const ph = ids.map(() => "?").join(",");
   const rows = db.prepare(`select * from questions where vault = ? and id in (${ph})`).all(vault, ...ids);
-  // 按传入的 ids 顺序返回（卷面顺序由用户决定，不能按数据库顺序）
+  // Return in the order the ids were given (paper order is user-determined, not database order)
   const byId = new Map(rows.map((r) => [r.id, r]));
   return { ok: true, questions: ids.map((id) => byId.get(Number(id))).filter(Boolean).map(rowToQuestion) };
 }
 
-// ---------------------------------------------------------------- 试卷留档
+// ---------------------------------------------------------------- Paper archive
 
 function savePaper(db, { vault, title, qids, config }) {
   const info = db.prepare(
     "insert into papers(vault, title, qids, config, created_at) values(?,?,?,?,?)"
-  ).run(vault, String(title ?? "未命名试卷"), JSON.stringify(qids ?? []), config ? JSON.stringify(config) : null, nowIso());
+  ).run(vault, String(title ?? "Untitled paper"), JSON.stringify(qids ?? []), config ? JSON.stringify(config) : null, nowIso());
   return { ok: true, id: Number(info.lastInsertRowid) };
 }
 

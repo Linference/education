@@ -72,7 +72,7 @@ test('failed learner responses persist; explicit retry restores pending and neve
   const f=fixture();try{
     const s=await f.start((await f.source()).id);await f.reply(s);
     const id=randomUUID();f.mode='fail';const failure=await f.reply(s,supplement,id);
-    assert.match(failure.error,/余额/);assert.equal(failure.session.turns.length,3);assert.equal(failure.session.request.state,'failed');
+    assert.match(failure.error,/insufficient balance/);assert.equal(failure.session.turns.length,3);assert.equal(failure.session.request.state,'failed');
     assert.equal((await f.reply(s,supplement)).ok,false);
     assert.equal((await f.reply(s,supplement+'改动',id)).ok,false);
     f.mode='ok';const retry=await f.reply(s,supplement,id);

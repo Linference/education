@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// 格致 · 密钥扫描的自测
+// Gezhi · secret scanner self-test.
 //
-// 动机：这个门禁的日常输出是「✔ 未发现疑似密钥」。如果它其实坏了，
-// 输出一模一样 —— 你永远不会发现。所以必须构造真实的泄露样本去撞它。
+// Motivation: this gate's normal output is "✔ No suspected secrets found".
+// If it were actually broken, the output would be identical — you would never
+// notice. So it must be hit with real leak samples.
 //
-// 注意：本文件里的"密钥样本"是用字符串拼接拼出来的**伪造值**，不是真密钥。
-// 这样做既能让扫描规则命中（证明规则有效），又不会真的泄露任何东西，
-// 同时避免本文件自己被扫描器误报（同时也加进了 SKIP_PATH）。
+// Note: the "secret samples" in this file are **fake values** built by string
+// concatenation, not real secrets. That way the scan rules match (proving they
+// work), nothing is actually leaked, and this file does not get falsely
+// reported by the scanner itself (it is also added to SKIP_PATH).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -36,8 +38,8 @@ function expect(name, files, wantFail, mustMention = []) {
   const r = run(files);
   const didFail = r.code !== 0;
   const problems = [];
-  if (didFail !== wantFail) problems.push(`期望${wantFail ? "拦截" : "放行"}，实际${didFail ? "拦截" : "放行"}`);
-  for (const m of mustMention) if (!r.out.includes(m)) problems.push(`输出未提到「${m}」`);
+  if (didFail !== wantFail) problems.push(`expected ${wantFail ? "block" : "allow"}, got ${didFail ? "block" : "allow"}`);
+  for (const m of mustMention) if (!r.out.includes(m)) problems.push(`output did not mention "${m}"`);
   if (problems.length) {
     failed++;
     console.log(`  [FAIL] ${name}`);
@@ -49,7 +51,7 @@ function expect(name, files, wantFail, mustMention = []) {
   }
 }
 
-// 用拼接构造伪造样本，避免本文件出现"看起来像真 key 的字面量"
+// Build fake samples by concatenation, so this file never contains a literal that "looks like a real key"
 const FAKE = {
   tencentId: "AKID" + "DQSHuMdgVTK9IKMJ5f3EDyWq22sExample",
   tencentKey: "vd9brtjMM" + "GyXv78xc6OURBZs0xiJJxzs",
@@ -59,39 +61,39 @@ const FAKE = {
   aws: "AKIA" + "IOSFODNN7EXAMPLE",
 };
 
-console.log("=== 密钥扫描自测 ===");
-console.log("（样本均为拼接构造的伪造值）\n");
+console.log("=== Secret scanner self-test ===");
+console.log("(all samples are fake values built by concatenation)\n");
 
-// ---- 必须拦截的
-expect("拦住腾讯云 SecretId（本次真实遇到的情况）",
-  { "config.json": `{"secretId":"${FAKE.tencentId}"}` }, true, ["腾讯云 SecretId"]);
+// ---- Must block
+expect("Blocks Tencent Cloud SecretId (the real case encountered here)",
+  { "config.json": `{"secretId":"${FAKE.tencentId}"}` }, true, ["Tencent Cloud SecretId"]);
 
-expect("拦住硬编码的 SecretKey 赋值",
-  { "svc.py": `SECRET_KEY = "${FAKE.tencentKey}"\n` }, true, ["硬编码"]);
+expect("Blocks a hardcoded SecretKey assignment",
+  { "svc.py": `SECRET_KEY = "${FAKE.tencentKey}"\n` }, true, ["hardcoded"]);
 
-expect("拦住 DeepSeek / OpenAI 风格 key",
+expect("Blocks a DeepSeek / OpenAI-style key",
   { "opencode.json": `{"apiKey":"${FAKE.deepseek}"}\n` }, true, ["DeepSeek"]);
 
-expect("拦住智谱 id.secret 形式",
-  { "conf.yaml": `apiKey: ${FAKE.zhipu}\n` }, true, ["智谱"]);
+expect("Blocks the Zhipu id.secret form",
+  { "conf.yaml": `apiKey: ${FAKE.zhipu}\n` }, true, ["Zhipu"]);
 
-expect("拦住 GitHub token",
+expect("Blocks a GitHub token",
   { ".env": `GITHUB_TOKEN=${FAKE.github}\n` }, true, ["GitHub"]);
 
-expect("拦住 AWS Access Key",
+expect("Blocks an AWS Access Key",
   { "creds.txt": `aws_access_key_id=${FAKE.aws}\n` }, true, ["AWS"]);
 
-expect("拦住私钥文件内容",
-  { "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n" }, true, ["私钥"]);
+expect("Blocks private key file content",
+  { "id_rsa": "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----\n" }, true, ["Private key"]);
 
-expect("拦住嵌套在 JS 里的赋值",
-  { "src/a.js": `const client = new X({ secretKey: "${FAKE.tencentKey}" });\n` }, true, ["硬编码"]);
+expect("Blocks an assignment nested in JS",
+  { "src/a.js": `const client = new X({ secretKey: "${FAKE.tencentKey}" });\n` }, true, ["hardcoded"]);
 
-expect("拦住藏在 markdown 里的密钥",
-  { "notes.md": `我的腾讯云 key 是 ${FAKE.tencentId} 请帮我调用\n` }, true, ["腾讯云 SecretId"]);
+expect("Blocks a secret hidden in markdown",
+  { "notes.md": `我的腾讯云 key 是 ${FAKE.tencentId} 请帮我调用\n` }, true, ["Tencent Cloud SecretId"]);
 
-// ---- 必须放行的（避免误报到没法用）
-expect("放行占位符写法",
+// ---- Must allow (to avoid unusable false positives)
+expect("Allows placeholder syntax",
   {
     "a.json": `{"apiKey":"YOUR_API_KEY_HERE"}\n`,
     "b.yaml": `secretKey: <your-secret-key>\n`,
@@ -101,13 +103,14 @@ expect("放行占位符写法",
     "f.json": `{"secret_key":"xxxxxxxxxxxxxxxx"}\n`,
   }, false);
 
-expect("放行 node_modules（依赖里总有测试用的假 key）",
+expect("Allows node_modules (dependencies always have test fake keys)",
   { "node_modules/pkg/test.js": `apiKey = "${FAKE.deepseek}"\n` }, false);
 
-// 回归用例：这条是真实误报逼出来的 ——
-// 把 process.env.X 抽成常量后，`secretId: "TENCENT_SECRET_ID"` 被当成硬编码密钥。
-// 真实密钥不会长成全大写下划线形式，所以要放行。
-expect("放行环境变量名常量（实测误报的回归用例）",
+// Regression case: forced by a real false positive — after extracting
+// process.env.X into a constant, `secretId: "TENCENT_SECRET_ID"` was treated
+// as a hardcoded secret. A real secret never takes the ALL_CAPS_UNDERSCORE
+// form, so this must be allowed.
+expect("Allows env-var-name constants (regression case from a real false positive)",
   {
     "src/env.mjs": [
       `export const ENV_KEYS = {`,
@@ -118,24 +121,24 @@ expect("放行环境变量名常量（实测误报的回归用例）",
     ].join("\n"),
   }, false);
 
-expect("放行同行的 environment 访问",
+expect("Allows same-line environment access",
   { "src/a.mjs": `const k = process.env["MY_SECRET_KEY_VALUE_X"];\n` }, false);
 
-expect("但仍然拦住形似真密钥的赋值（不能因为加了例外就漏）",
-  { "src/b.mjs": `const apiKey = "aB3xK9mQ2pL7vN4zR8tY1wC6";\n` }, true, ["硬编码"]);
+expect("But still blocks assignments that look like real secrets (must not miss just because of the exception)",
+  { "src/b.mjs": `const apiKey = "aB3xK9mQ2pL7vN4zR8tY1wC6";\n` }, true, ["hardcoded"]);
 
-expect("放行锁文件与二进制",
+expect("Allows lockfiles and binaries",
   { "package-lock.json": `{"x":"${FAKE.deepseek}"}\n` }, false);
 
-expect("放行普通源码（没有密钥）",
+expect("Allows ordinary source code (no secrets)",
   {
     "src/index.mjs": `export function add(a,b){return a+b}\n`,
     "README.md": "# 项目说明\n\n这是普通文档，没有密钥。\n",
   }, false);
 
-// 清理
+// Cleanup
 fs.rmSync(root, { recursive: true, force: true });
 
 console.log("");
-console.log(`=== 结果：${passed} 通过 / ${failed} 失败 ===`);
+console.log(`=== Result: ${passed} passed / ${failed} failed ===`);
 process.exit(failed === 0 ? 0 : 1);

@@ -92,3 +92,6 @@ credentials.enc
 
 # 第三方安装器二进制：保留 README、许可和摘要
 /vendor/dsh/*.exe
+
+# 测试运行产物（renderer 测试在仓库内建临时目录）
+/apps/desktop/renderer/src/output/

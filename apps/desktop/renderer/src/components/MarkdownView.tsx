@@ -50,7 +50,7 @@ export default function MarkdownView({ text, onWikilink, compact, showProps = tr
     <div className="selectable">
       {showProps && !compact && frontmatter && (
         <div className="props">
-          <div className="props-title">笔记属性</div>
+          <div className="props-title">Note properties</div>
           {Object.entries(frontmatter).map(([k, v]) => (
             <div className="prop-row" key={k}>
               <div className="prop-key">

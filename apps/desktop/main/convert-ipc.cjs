@@ -45,14 +45,14 @@ function registerConvert(ipcMain, getWindow, app) {
    */
   ipcMain.handle("convert:toPdf", async (_e, { src }) => {
     try {
-      if (typeof src !== "string" || !src) return { ok: false, error: "没有指定文件" };
+      if (typeof src !== "string" || !src) return { ok: false, error: "No file specified" };
 
       const exe = soffice.findSoffice(process.resourcesPath);
       if (!exe) {
         return {
           ok: false,
-          error: "没有找到 LibreOffice，无法高保真转换",
-          hint: "装上 LibreOffice 之后格致会自动使用它（不用另外配置）",
+          error: "LibreOffice not found; high-fidelity conversion is unavailable",
+          hint: "After installing LibreOffice, Gezhi will use it automatically (no extra configuration needed)",
         };
       }
 

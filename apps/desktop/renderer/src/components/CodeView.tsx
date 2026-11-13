@@ -46,9 +46,9 @@ export default function CodeView({ text, ext, plain }: Props) {
           color: "var(--text-faint)",
         }}
       >
-        <span>{lang ?? "纯文本"}</span>
+        <span>{lang ?? "Plain text"}</span>
         <span>·</span>
-        <span>{lines} 行</span>
+        <span>{lines} lines</span>
       </div>
       <div style={{ display: "flex", padding: "0 20px", fontFamily: "var(--font-mono)" }}>
         <div

@@ -1,12 +1,12 @@
-# 格致 Logo 三方向概念板
+# Gezhi Logo three-direction concept board
 
-用途：供用户比较品牌方向，尚未替换软件正式图标。
+Purpose: for the user to compare brand directions; the official software icon has not yet been replaced.
 
-生成方式：内置 Image 生成工具。原图复制到同目录 `logo-directions-v3-20261006.png`，保持原始字节，没有裁切或编辑。
+Generation method: built-in Image generation tool. The original image was copied to the same directory as `logo-directions-v3-20261006.png`, preserving the original bytes, with no cropping or editing.
 
-设计判断：优先考虑 03 GEZHI SEAL。方形构件呼应“格”，负形 Z 对应 GEZHI，在软件图标和发布片片尾均有明确轮廓。01 更直接对应六维；02 更强调对话关系。
+Design judgment: prioritize 03 GEZHI SEAL. The square components echo "格" (ge), and the negative-space Z corresponds to GEZHI, with a clear silhouette both at software icon size and in the film's end card. 01 corresponds more directly to the six dimensions; 02 emphasizes the dialogue relationship more.
 
-## 生成提示词
+## Generation prompt
 
 Use case: logo-brand.
 Asset type: one premium brand-direction comparison board, landscape, for GEZHI, an educational desktop application centered on digital learning spaces and evidence-based six-dimensional explanation feedback. This is brainstorming artwork, not installed production assets.

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// PPTX Canvas 渲染验证（在真实应用里）
+// PPTX Canvas rendering verification (in the real app)
 //
-// 换掉 LibreOffice 后的验收：
-//   1. 打开 .pptx 能画出 canvas（不是"文字提取模式"）
-//   2. 速度：应该在百毫秒级，不是几十秒
-//   3. 能翻页、渲染内容不是空白
-//   4. 没有残留的外部进程（LibreOffice 已移除）
-//   5. 旧版 .ppt 仍能打开（走文字模式，因为纯 JS 不支持）
+// Acceptance after replacing LibreOffice:
+//   1. opening .pptx draws a canvas (not "text extraction mode")
+//   2. speed: should be in the hundreds of milliseconds, not tens of seconds
+//   3. can flip pages, rendered content is not blank
+//   4. no leftover external processes (LibreOffice removed)
+//   5. legacy .ppt still opens (via text mode, because pure JS doesn't support it)
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +28,7 @@ const SAMPLES = {
   ppt: "D:\\Users\\LINKIT\\Desktop\\物理竞赛\\历屆賽題\\全國物理競賽題集\\高中物理竞赛-热学部分.ppt",
 };
 const have = Object.entries(SAMPLES).filter(([, p]) => fs.existsSync(p));
-if (!have.length) { console.log("缺样本，跳过"); process.exit(0); }
+if (!have.length) { console.log("missing samples, skipping"); process.exit(0); }
 
 const vault = fs.mkdtempSync(path.join(os.tmpdir(), "gezhi-pptxjs-"));
 fs.mkdirSync(path.join(vault, ".gezhi"), { recursive: true });
@@ -39,7 +39,7 @@ for (const [k, p] of have) {
   fs.copyFileSync(p, local[k]);
 }
 
-console.log("=== PPTX Canvas 渲染验证 ===\n");
+console.log("=== PPTX Canvas rendering verification ===\n");
 for (const [k, p] of have) console.log(`  ${k}: ${path.basename(p)} (${(fs.statSync(p).size / 1024 / 1024).toFixed(2)} MB)`);
 console.log();
 
@@ -58,16 +58,18 @@ try {
   await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
   await page.waitForTimeout(700);
 
-  // ---- 1. PPTX Canvas 渲染 ----
+  // ---- 1. PPTX Canvas rendering ----
   if (local.pptx) {
-    console.log("── .pptx（Canvas 渲染）──");
+    console.log("── .pptx (Canvas rendering) ──");
     const t0 = Date.now();
     await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), local.pptx);
 
-    // 等到 canvas 出现**且有内容、有尺寸**。
-    // ⚠️ 不能一看到 canvas 就 break —— canvas 元素在解析完成前就存在于 DOM，
-    //    而"第 1 / 29 页"这些文字要 React 状态更新后才渲染。
-    //    第一版就是 break 太早，导致"总页数"读到空，翻页断言也跟着假失败。
+    // Wait until the canvas appears **and has content and a size**.
+    // ⚠️ Don't break as soon as the canvas is seen — the canvas element exists in the DOM
+    //    before parsing finishes, while text like "第 1 / 29 页" (page 1 / 29) renders only
+    //    after React updates state.
+    //    The first version broke too early, so "total pages" read as empty and the
+    //    page-flip assertions failed falsely.
     let waited = 0;
     let st = null;
     while (waited < 30000) {
@@ -90,31 +92,31 @@ try {
           size: c ? `${c.width}x${c.height}` : "",
           nonWhite,
           textMode: document.body.innerText.includes("文字提取模式"),
-          // 匹配 "第 1 / 29 页"
+          // match "第 1 / 29 页" (page 1 / 29)
           total: (document.body.innerText.match(/第\s*\d+\s*\/\s*(\d+)\s*页/) ?? [])[1] ?? "",
           current: (document.body.innerText.match(/第\s*(\d+)\s*\//) ?? [])[1] ?? "",
           body: document.body.innerText.slice(0, 160),
         };
       });
-      // 三个条件都满足才算加载完：canvas 出现 + 有内容 + 总页数已渲染
+      // only when all three conditions are met is loading done: canvas appears + has content + total pages rendered
       if (st.hasCanvas && st.nonWhite > 30 && st.total) break;
       await new Promise((r) => setTimeout(r, 400));
       waited += 400;
     }
     const elapsed = Date.now() - t0;
 
-    check("★ .pptx 画出 canvas（不是文字列表）", st.hasCanvas, st.size);
-    check("★ canvas 有实际内容（非空白）", st.nonWhite > 30, `非白像素 ${st.nonWhite}`);
-    check("★ 没有退回文字提取模式", st.textMode === false);
-    check("显示了总页数", Number(st.total) > 0, `${st.total} 页`);
-    check("★ 打开速度在 5 秒内（对比 LibreOffice 的 19 秒）", elapsed < 5000, `${elapsed}ms`);
+    check("★ .pptx draws a canvas (not a text list)", st.hasCanvas, st.size);
+    check("★ canvas has actual content (not blank)", st.nonWhite > 30, `non-white pixels ${st.nonWhite}`);
+    check("★ did not fall back to text extraction mode", st.textMode === false);
+    check("total page count shown", Number(st.total) > 0, `${st.total} pages`);
+    check("★ opens within 5 seconds (vs LibreOffice's 19 seconds)", elapsed < 5000, `${elapsed}ms`);
 
-    // 翻页：比较 canvas 的 PNG 数据。
+    // Page flip: compare the canvas PNG data.
     //
-    // 试过两种更弱的办法，都不可靠：
-    //   · 数"非白像素" —— 两页都有彩色背景，都数到采样上限，测不出差异
-    //   · 抽样像素哈希 —— 写出来的哈希恒为 0（自己的 bug）
-    // 直接用 toDataURL 拿到整张图的编码，长度 + 前后片段一起比，简单可靠。
+    // Tried two weaker approaches, both unreliable:
+    //   · count "non-white pixels" — both pages have colored backgrounds, both hit the sampling cap, no difference measurable
+    //   · sample pixel hash — the hash written out was always 0 (my own bug)
+    // Directly take the full image encoding via toDataURL and compare length + head/tail fragments together — simple and reliable.
     const snapshot = () => page.evaluate(() => {
       const c = document.querySelector("canvas");
       if (!c) return null;
@@ -127,17 +129,17 @@ try {
     await page.waitForTimeout(1200);
     const after = await snapshot();
     const pageNo = await page.evaluate(() => (document.body.innerText.match(/第\s*(\d+)\s*\//) ?? [])[1] ?? "");
-    check("键盘右方向键能翻页", pageNo === "2", `当前第 ${pageNo} 页`);
+    check("right arrow key can flip the page", pageNo === "2", `currently on page ${pageNo}`);
     const changed = before && after && (before.len !== after.len || before.head !== after.head || before.tail !== after.tail);
-    check("★ 翻页后渲染了新内容（PNG 数据不同）", Boolean(changed),
-      before && after ? `${before.len} 字节 → ${after.len} 字节` : "拿不到 canvas 数据");
+    check("★ new content rendered after flipping (PNG data differs)", Boolean(changed),
+      before && after ? `${before.len} bytes → ${after.len} bytes` : "cannot read canvas data");
 
     await page.screenshot({ path: path.join(OUT, "ui-pptx-canvas.png") });
   }
 
-  // ---- 2. 旧版 .ppt ----
+  // ---- 2. legacy .ppt ----
   if (local.ppt) {
-    console.log("\n── 旧版 .ppt（应走文字模式）──");
+    console.log("\n── legacy .ppt (should use text mode) ──");
     await page.evaluate((p) => window.__gezhiTest.openFileByPath(p), local.ppt);
     await page.waitForTimeout(6000);
     const pptSt = await page.evaluate(() => ({
@@ -145,24 +147,24 @@ try {
       hasCanvas: Boolean(document.querySelector("canvas")),
       body: document.body.innerText.slice(0, 200).replace(/\n/g, " | "),
     }));
-    check("★ 旧版 .ppt 仍能打开（纯 JS 不支持，走文字模式）",
-      pptSt.textMode || pptSt.hasCanvas, pptSt.textMode ? "文字模式" : `canvas=${pptSt.hasCanvas}`);
-    check("旧版 .ppt 界面有内容", pptSt.body.length > 40, pptSt.body.slice(0, 80));
+    check("★ legacy .ppt still opens (pure JS doesn't support it, uses text mode)",
+      pptSt.textMode || pptSt.hasCanvas, pptSt.textMode ? "text mode" : `canvas=${pptSt.hasCanvas}`);
+    check("legacy .ppt UI has content", pptSt.body.length > 40, pptSt.body.slice(0, 80));
   }
 
-  // ---- 3. 不应再有 LibreOffice 相关的转换 ----
-  console.log("\n── 确认不再走 LibreOffice ──");
+  // ---- 3. should no longer have LibreOffice-related conversion ----
+  console.log("\n── confirm LibreOffice is no longer used ──");
   const conv = await page.evaluate(() => window.gezhi.convert?.probe?.({}) ?? null);
-  check("convert API 仍存在（未破坏接口）", conv !== null, conv ? `available=${conv.available}` : "（已移除）");
+  check("convert API still exists (interface not broken)", conv !== null, conv ? `available=${conv.available}` : "(removed)");
 
-  check("渲染进程无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("renderer process has no JS errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
   await app.close();
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((x) => x.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== result: ${passed}/${results.length} passed ===`);
 for (const x of results) if (!x.pass) console.log(`  FAIL ${x.name}: ${x.detail}`);
-console.log(`\n截图：产出/ui-pptx-canvas.png`);
+console.log(`\nscreenshot: 产出/ui-pptx-canvas.png`);
 process.exit(passed === results.length ? 0 : 1);

@@ -27,7 +27,7 @@ function listZip(filePath) {
   for (let i = buf.length - minEocd; i >= Math.max(0, buf.length - minEocd - maxComment); i--) {
     if (buf.readUInt32LE(i) === SIG_EOCD) { eocd = i; break; }
   }
-  if (eocd < 0) throw new Error("不是有效的 zip（找不到 EOCD）");
+  if (eocd < 0) throw new Error("Not a valid zip (EOCD not found)");
 
   const entryCount = buf.readUInt16LE(eocd + 10);
   const cenOffset = buf.readUInt32LE(eocd + 16);
@@ -59,11 +59,11 @@ function readZipEntry(filePath, name) {
   const buf = fs.readFileSync(filePath);
   const entries = listZip(filePath);
   const e = entries.get(name);
-  if (!e) throw new Error(`zip 里没有条目：${name}`);
+  if (!e) throw new Error(`No such entry in zip: ${name}`);
 
   // 本地头长度可能和中央目录里的 extra 长度不同，必须重新读本地头
   const lp = e.offset;
-  if (buf.readUInt32LE(lp) !== SIG_LOCAL) throw new Error("本地文件头签名不对");
+  if (buf.readUInt32LE(lp) !== SIG_LOCAL) throw new Error("Local file header signature mismatch");
   const nameLen = buf.readUInt16LE(lp + 26);
   const extraLen = buf.readUInt16LE(lp + 28);
   const dataStart = lp + 30 + nameLen + extraLen;
@@ -71,7 +71,7 @@ function readZipEntry(filePath, name) {
 
   if (e.method === 0) return Buffer.from(raw);                      // 直存
   if (e.method === 8) return zlib.inflateRawSync(raw);              // deflate
-  throw new Error(`不支持的压缩方式：${e.method}`);
+  throw new Error(`Unsupported compression method: ${e.method}`);
 }
 
 /** 读出某个条目并当 UTF-8 文本返回 */

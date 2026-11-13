@@ -66,17 +66,17 @@ expect("拦住 SSPL 依赖",
   makeFixture("sspl", { "mongo-like": "SSPL-1.0" }), true, { mustMention: ["SSPL"] });
 
 expect("拦住非商业许可（Nougat 权重那类）",
-  makeFixture("nc", { "nougat-weights": "CC-BY-NC-4.0" }), true, { mustMention: ["商业"] });
+  makeFixture("nc", { "nougat-weights": "CC-BY-NC-4.0" }), true, { mustMention: ["Commercial use forbidden"] });
 
 expect("拦住「禁止生产环境使用」的自定义许可（tldraw 那类）",
   makeFixture("tldraw", { "tldraw-like": "Not to use the Software in Production Environments" }), true,
-  { mustMention: ["生产环境"] });
+  { mustMention: ["production use"] });
 
 expect("拦住未声明许可的包",
-  makeFixture("unknown", { "mystery-pkg": "(未声明)" }), true, { mustMention: ["未声明"] });
+  makeFixture("unknown", { "mystery-pkg": "(undeclared)" }), true, { mustMention: ["undeclared"] });
 
 expect("拦住无法识别的许可（默认拒绝，不是默认放行）",
-  makeFixture("weird", { "weird-pkg": "WTFPL-9.9-Custom" }), true, { mustMention: ["无法识别"] });
+  makeFixture("weird", { "weird-pkg": "WTFPL-9.9-Custom" }), true, { mustMention: ["Unrecognized license"] });
 
 expect("放行正常许可（MIT / Apache / BSD / ISC / MPL）",
   makeFixture("clean", {
@@ -86,7 +86,7 @@ expect("放行正常许可（MIT / Apache / BSD / ISC / MPL）",
 
 expect("GPL/LGPL 只警告、不阻止（标准模式）",
   makeFixture("gpl", { "gpl-pkg": "GPL-3.0", "lgpl-pkg": "LGPL-2.1" }), false,
-  { mustMention: ["警告"] });
+  { mustMention: ["Warnings"] });
 
 expect("严格模式下 GPL 警告即失败",
   makeFixture("gpl2", { "gpl-pkg": "GPL-3.0" }), true, { strict: true });

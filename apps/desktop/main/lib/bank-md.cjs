@@ -1,11 +1,12 @@
-// 题库：把 Markdown 里的题目解析出来
+// Question bank: parse questions out of Markdown.
 //
-// ★ 为什么用 Markdown 当题库的"源"：
-//   用户手里已有的题目大多在 Word / Markdown / 网页里。
-//   与其做一个复杂的导入器，不如定一个**简单到能记住**的格式，
-//   让人手工整理也愿意。格式越简单，题库才建得起来。
+// ★ Why Markdown is the "source" for the question bank:
+//   Most questions users already have live in Word / Markdown / web pages.
+//   Rather than build a complicated importer, we define a format that is
+//   **simple enough to remember**, so people are willing to tidy it up by
+//   hand. The simpler the format, the more likely a bank actually gets built.
 //
-// 支持的格式（字段行可选，题干必须有）：
+// Supported format (field lines are optional; the stem is required):
 //
 //   ### 题目
 //   题型：选择题
@@ -23,11 +24,11 @@
 //   答案：A
 //   解析：顶点式 y = a(x-h)² + k 的顶点就是 (h, k)。
 //
-// ★ 兼容几种常见写法：
-//   · "题型"可写中文（选择题）或英文（choice）
-//   · "答案"也可写 "答案:" / "答案：" 
-//   · 选择题选项支持 A. / A、 / A) / （A） 几种前缀
-//   · 没有"题干："前缀时，题目块的第一段就是题干
+// ★ Tolerates several common spellings:
+//   · "题型" may be Chinese (选择题) or English (choice)
+//   · "答案" may also be written "答案:" / "答案："
+//   · Choice options support the prefixes A. / A、 / A) / （A）
+//   · When there is no "题干：" prefix, the first paragraph of the block is the stem
 const TYPE_ALIAS = {
   "选择题": "choice", "选择": "choice", choice: "choice", "单选": "choice", "多选": "choice",
   "填空题": "fill", "填空": "fill", fill: "fill",
@@ -36,7 +37,7 @@ const TYPE_ALIAS = {
   "计算题": "calc", "计算": "calc", calc: "calc",
 };
 
-/** 解析 "知识点：A, B、C" 这类列表 */
+/** Parse lists such as "知识点：A, B、C". */
 function splitList(s) {
   return String(s ?? "")
     .split(/[,，、;；]/)
@@ -45,8 +46,8 @@ function splitList(s) {
 }
 
 /**
- * 解析选项行。
- * 支持 A. / A、 / A) / （A） / A． 等前缀。
+ * Parse an option line.
+ * Supports the prefixes A. / A、 / A) / （A） / A． and so on.
  */
 function parseOption(line) {
   const m = /^\s*[（(]?\s*([A-Ha-h])\s*[.、．)）:：]\s*(.+)$/.exec(line);
@@ -55,9 +56,9 @@ function parseOption(line) {
 }
 
 /**
- * 从一段文本里解析题目。
+ * Parse questions from a block of text.
  *
- * @param {string} text Markdown 原文
+ * @param {string} text Markdown source text
  * @returns {{ok:boolean, questions:Array, warnings:string[]}}
  */
 function parseQuestionsFromMarkdown(text) {
@@ -65,8 +66,9 @@ function parseQuestionsFromMarkdown(text) {
   const warnings = [];
   if (!text || !text.trim()) return { ok: true, questions, warnings };
 
-  // 按标题行切块。三级以上标题（###、####）都算一道题的开头；
-  // 如果全文没有任何标题，就把全文当成一道题。
+  // Split into blocks by heading lines. Any heading of level three or deeper
+  // (###、####) starts a new question; with no headings at all, treat the
+  // whole text as one question.
   let sourceText = String(text).replace(/^\uFEFF/, '').replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n/, '').replace(/\r\n?/g, "\n");
   // Ordinary question lists from text/Word/PDF also have numbered beginnings.
   if (!/^\s{0,3}#{2,6}\s+/m.test(sourceText)) {
@@ -100,7 +102,7 @@ function parseQuestionsFromMarkdown(text) {
     } else if (cur) {
       cur.lines.push(line);
     } else {
-      // 标题之前的内容，如果非空就自己起一块
+      // Content before any heading starts its own block if non-empty
       if (!hasHeadings && line.trim() && !/^#\s/.test(line)) cur = { heading: "", lines: [line] };
     }
   }
@@ -121,11 +123,11 @@ function parseQuestionsFromMarkdown(text) {
       year: null,
       subject: "",
     };
-    // 当前正在写哪个字段的内容（多行字段：题干/解析）
+    // Which field's content is currently being written (multi-line fields: stem/solution)
     let field = null;
     const stemLines = [];
     const solutionLines = [];
-    const extraLines = [];   // 题干之前、字段之外的散行
+    const extraLines = [];   // loose lines outside fields and before the stem
     let blockFence = null;
     const append = line => {
       if (field === 'stem') stemLines.push(line);
@@ -151,13 +153,13 @@ function parseQuestionsFromMarkdown(text) {
           case "题型": case "类型": {
             const t = TYPE_ALIAS[val.toLowerCase()] ?? TYPE_ALIAS[val];
             if (t) q.type = t;
-            else if (val) warnings.push(`第 ${bi + 1} 块：不认识的题型「${val}」，按解答题处理`);
+            else if (val) warnings.push(`Block ${bi + 1}: unknown question type "${val}", treating as free response`);
             break;
           }
           case "难度": {
             const n = Number(String(val).replace(/[^\d.]/g, ""));
             if (Number.isFinite(n) && n >= 1 && n <= 5) q.difficulty = Math.round(n);
-            else if (val) warnings.push(`第 ${bi + 1} 块：难度「${val}」不是 1~5，按 3 处理`);
+            else if (val) warnings.push(`Block ${bi + 1}: difficulty "${val}" is not 1~5, treating as 3`);
             break;
           }
           case "知识点": case "考点": q.kps = splitList(val); break;
@@ -175,18 +177,18 @@ function parseQuestionsFromMarkdown(text) {
         continue;
       }
 
-      // 选项行
+      // Option line
       const opt = field === 'stem' || field === null ? parseOption(line) : null;
       if (opt) { q.options.push(opt); continue; }
 
-      // 续行
+      // Continuation line
       if (field === "stem") stemLines.push(line);
       else if (field === "solution") solutionLines.push(line);
       else if (field === "answer") q.answer += (q.answer ? "\n" : "") + line.trim();
       else extraLines.push(line);
     }
 
-    // 题干：优先用显式"题干："下的内容；没有再退回散行
+    // Stem: prefer content under an explicit "题干：" line; otherwise fall back to loose lines
     if (!stemLines.length && extraLines.length) {
       stemLines.push(...extraLines);
     }
@@ -197,14 +199,15 @@ function parseQuestionsFromMarkdown(text) {
     q.answer = q.answer.trim();
     if (!q.solution && solutionLines.length) q.solution = solutionLines.join("\n").trim();
 
-    // 没有题干就跳过（可能是纯说明性的标题块）
+    // Skip blocks with no stem (they may be purely descriptive heading blocks)
     if (!q.stem) {
       if (b.heading || extraLines.some((l) => l.trim())) {
-        warnings.push(`第 ${bi + 1} 块${b.heading ? `「${b.heading}」` : ""}没有题干，已跳过`);
+        warnings.push(`Block ${bi + 1}${b.heading ? ` "${b.heading}"` : ""} has no stem, skipped`);
       }
       continue;
     }
-    // 标题如果不像"题目/第 N 题"这类，就当作题干的一部分（有些整理稿把题干写在标题里）
+    // If the heading doesn't look like "题目/第 N 题", treat it as part of the
+    // stem (some notes put the stem in the heading)
     if (!headingIsStem && b.heading && !/^题目|^第\s*\d+\s*题|^例题|^练习/.test(b.heading)) {
       q.stem = `${b.heading}\n${q.stem}`;
     }
@@ -215,8 +218,8 @@ function parseQuestionsFromMarkdown(text) {
 }
 
 /**
- * 从题库反向生成 Markdown。
- * 用于"把库里已有的题导出成可编辑的文档"。
+ * Generate Markdown from the question bank.
+ * Used to "export existing questions into an editable document".
  */
 function questionsToMarkdown(questions, { withAnswers = true } = {}) {
   const TYPE_NAME = { choice: "选择题", fill: "填空题", answer: "解答题", proof: "证明题", calc: "计算题" };

@@ -1,49 +1,49 @@
-# 格致
+# Gezhi
 
-**当前版本：0.0.8 · 2026 年 10 月 7 日**
+**Current version: 0.0.8 · 7 October 2026**
 
-格致已从本地资料管理工具，发展为以讲解、追问和可追溯反馈为核心的 AI 学习工作室。
+Gezhi has grown from a local source-material management tool into an AI Learning Studio centred on explanation, follow-up questioning and traceable feedback.
 
-## 发展历程
+## Development History
 
-完整记录见 **[格致的发展历程](docs/发展历程.md)**。最初的 23 个 Git 提交完整保留，后续版本在原历史之上追加。
+For the complete record, see **[Gezhi's Development History](docs/history.md)**. The original 23 Git commits are fully preserved, and later versions are appended on top of the original history.
 
-| 阶段 | 主要进展 |
+| Stage | Main progress |
 | --- | --- |
-| 2026-10-01 | 工程地基、中文编辑与检索、Electron 桌面端、文档查看、AI 助手、语音与费曼讲解。 |
-| 2026-10-02 | 设置、关系图谱、题库组卷、工作区设计与交接清单。 |
-| 0.0.2 | 自信度记录、错误侦探、学习证据地图、迁移挑战和概念实验。 |
-| 0.0.3 · 2026-10-06 | 五个角色空间、六维讲解反馈、首次连接引导，改进题库导入与文档导出。 |
-| 0.0.4 · 2026-10-06 | 统一数字空间入口与动效，修复矩阵乘积等公式的 PDF 导出。 |
-| 0.0.5 · 2026-10-06 | 采用“六维之窗”标志，软件与安装包图标使用真实透明背景。 |
-| 0.0.6 · 2026-10-07 | 资料按章节 / 页段进入学习流程；实验关联原文与控制变量；六维反馈连接任务、再次讲解和证据地图；保留草稿及阅读位置。 |
-| 0.0.7 · 2026-10-07 | 数字空间加入多轮追问与回应；整段反馈只评价学习者发言；原文引用可高亮定位；草稿、未发送回答与对话跨重启恢复。 |
-| 0.0.8 · 2026-10-07 | 英文比赛展示、离线备用示范、实时英文 AI 对话、六维人工复核、AI 使用披露与英文证据导出。 |
+| 2026-10-01 | Engineering foundation, Chinese editing and retrieval, Electron desktop app, document viewing, AI assistant, voice and Feynman explanation. |
+| 2026-10-02 | Settings, relationship graph, question-bank paper generation, workspace design and handover checklist. |
+| 0.0.2 | Confidence recording, Error Detective, learning Evidence Map, Transfer Challenge and concept experiments. |
+| 0.0.3 · 2026-10-06 | Five role spaces, six-dimensional explanation feedback, first-connection guidance, improved question-bank import and document export. |
+| 0.0.4 · 2026-10-06 | Unified Digital Space entry and motion, fixed PDF export of formulas such as matrix products. |
+| 0.0.5 · 2026-10-06 | Adopted the "Six-Dimensional Window" logo; app and installer icons use genuinely transparent backgrounds. |
+| 0.0.6 · 2026-10-07 | Source material enters the learning flow by chapter / page segment; experiments link to the original text and control variables; six-dimensional feedback connects tasks, re-explanation and the Evidence Map; drafts and reading positions are retained. |
+| 0.0.7 · 2026-10-07 | Digital Space adds multi-turn follow-up questioning and responses; whole-segment feedback evaluates only the learner's speech; original quotations can be highlighted and located; drafts, unsent answers and conversations are restored across restarts. |
+| 0.0.8 · 2026-10-07 | English competition showcase, offline backup demonstration, real-time English AI dialogue, six-dimensional human review, AI usage disclosure and English evidence export. |
 
-## 当前功能与说明
+## Current Features and Notes
 
-- 五种听众：同学、教师、学生、考官、研究伙伴，采用不同追问策略。
-- 多轮对话：每段最多 12 轮，根据角色选择条件检查、生活迁移、边界挑战或可检验预测；断线后保留回答并重试。
-- 六维反馈：准确性、条件、推理、表达、举例与迁移，附讲解原话、判断原因和下一步建议；证据不足时保留未评分状态。
-- 学习活动：自信度练习、错误侦探、证据地图、迁移挑战与函数 / 受力 / 概率实验。
-- 资料工作区、全文检索、笔记图谱、题库预览导入与组卷，以及 Markdown / PDF / Word 导出。
-- 深浅主题、减少动态效果设置与透明 Logo。
-- 当前资料栏支持 Markdown / TXT、DOCX 提取文字与 PDF 页段；选择原文片段后可创建开放探究任务。
-- 实验记录包含资料快照、实际模型运行数据及两轮对照；预测尚未完成实验时不计入实验通过。
-- 六维薄弱项可创建针对性任务；再次讲解展示同一资料、主题与角色下已评分维度的变化；AI 分数不计入独立通过。
-- 数字空间草稿和对话按资料库、角色与资料快照保存在本机；原文引用逐字匹配后可高亮定位。
-- 比赛展示入口提供纯英文界面、五角色离线示范和联网 AI；隔离英语资料库在退出时回到原资料库。
-- 六维人工复核记录评分理由，按报告去重统计一致率与平均绝对差；复核身份为自声明，尚未校准。
-- AI 使用披露保留真实版本、用途与学生工作；聚合证据导出为英文 MD / PDF，未填写字段明确标为不完整。
+- Five audiences: classmate, teacher, student, examiner and research partner, using different follow-up questioning strategies.
+- Multi-turn dialogue: at most 12 rounds per segment; depending on the role, it checks conditions, life transfer, boundary challenges or testable predictions; after a disconnection, answers are retained and retried.
+- Six-dimensional feedback: accuracy, conditions, reasoning, expression, examples and transfer, with the original explanation words, the reason for the judgment and next-step suggestions; when evidence is insufficient, the unscored state is retained.
+- Learning activities: confidence practice, Error Detective, Evidence Map, Transfer Challenge and function / force / probability experiments.
+- Source-material workspace, full-text search, note graph, question-bank preview and import and paper generation, plus Markdown / PDF / Word export.
+- Light and dark themes, reduced-motion setting and a transparent logo.
+- The current source-material pane supports Markdown / TXT, DOCX text extraction and PDF page segments; after selecting a passage from the original text, an open inquiry task can be created.
+- Experiment records include source snapshots, actual model run data and two rounds of comparison; a prediction is not counted as a passed experiment until the experiment has been completed.
+- Six-dimensional weak items can create targeted tasks; re-explanation shows changes in scored dimensions under the same source material, topic and role; AI scores do not count toward independent passing.
+- Digital Space drafts and conversations are saved locally by vault, role and source snapshot; original quotations can be highlighted and located after a verbatim match.
+- The competition showcase entry provides an English-only interface, offline demonstrations of five roles and online AI; the isolated English vault returns to the original vault on exit.
+- Six-dimensional human review records scoring reasons, and counts the agreement rate and mean absolute difference by report with duplicates removed; reviewer identity is self-declared and has not yet been calibrated.
+- AI usage disclosure retains the real version, purpose and student work; aggregated evidence is exported as English MD / PDF, and unfilled fields are explicitly marked as incomplete.
 
-实现文档：[学习工作室](docs/学习工作室-实现与验证.md) · [数字空间](docs/多角色学习空间-0.0.3.md) · [动效与公式修复](docs/数字空间与动效-0.0.4.md) · [品牌记录](brand/identity-v3.md)。
-本轮说明：[比赛评审与人工复核 0.0.8](docs/比赛展示与人工复核-0.0.8.md)；前序：[多轮学习对话 0.0.7](docs/数字空间多轮对话-0.0.7.md)、[资料驱动的学习闭环 0.0.6](docs/资料驱动学习闭环-0.0.6.md)。
+Implementation documents: [Learning Studio](docs/learning-studio-implementation-and-validation.md) · [Digital Space](docs/multi-role-learning-space-0.0.3.md) · [Motion and formula fixes](docs/digital-space-and-motion-0.0.4.md) · [Brand record](brand/identity-v3.md).
+Notes for this round: [Competition judging and human review 0.0.8](docs/competition-showcase-and-human-review-0.0.8.md); previous: [Multi-turn learning dialogue 0.0.7](docs/digital-space-multi-turn-dialogue-0.0.7.md), [Source-driven learning loop 0.0.6](docs/source-driven-learning-loop-0.0.6.md).
 
-AI 反馈属于形成性反馈，目前没有真实学生试用数据，评分尚未经教师校准。扫描 PDF 需要先 OCR；云端 AI 与语音需要相应账号和网络。
+AI feedback is formative feedback; there is currently no real student trial data, and the scoring has not been calibrated by teachers. Scanned PDFs require OCR first; cloud AI and voice require the corresponding accounts and network access.
 
-## 开发与构建
+## Development and Build
 
-推荐 Windows x64 与 Node.js 24.x。在仓库根目录安装锁定依赖并构建：
+Windows x64 and Node.js 24.x are recommended. Install the locked dependencies and build in the repository root:
 
 ```powershell
 npm ci
@@ -53,125 +53,125 @@ npm --prefix apps/desktop run build:renderer
 & .\apps\desktop\node_modules\.bin\electron.cmd .\apps\desktop
 ```
 
-完整安装包需按 [Typst](vendor/typst/README.md)、[LibreOffice](vendor/soffice/README.md)、[DeepSeek Harness](vendor/dsh/README.md) 的说明准备第三方程序，然后运行 `node scripts/build-installer.mjs`。输出位于 `dist/installer/0.0.8/`。
+The complete installer requires preparing the third-party programs according to the instructions for [Typst](vendor/typst/README.md), [LibreOffice](vendor/soffice/README.md) and [DeepSeek Harness](vendor/dsh/README.md), then running `node scripts/build-installer.mjs`. Output is located in `dist/installer/0.0.8/`.
 
-核心验证：`node --test apps/desktop/learning.test.mjs apps/desktop/bank-import.test.mjs apps/desktop/companions.test.mjs`；公式验证：`node scripts/latex2typst.test.cjs` 与 `node scripts/verify-math-pdf.mjs`。真实模型测试需额外服务配置，可能产生费用。
+Core validation: `node --test apps/desktop/learning.test.mjs apps/desktop/bank-import.test.mjs apps/desktop/companions.test.mjs`; formula validation: `node scripts/latex2typst.test.cjs` and `node scripts/verify-math-pdf.mjs`. Real-model tests require additional service configuration and may incur costs.
 
 <details>
-<summary>初始工程阶段说明（保留作为历史资料）</summary>
+<summary>Initial engineering phase notes (retained as historical material)</summary>
 
-> 本地优先的个人学习操作系统 —— 像 Obsidian 一样管知识，像 VSCode 一样编辑文档，
-> 让 AI 站在**你自己的书上**说话，能出卷、能考你、能替你排计划。
+> A local-first personal learning operating system — manage knowledge like Obsidian, edit documents like VSCode,
+> let AI speak **standing on your own books**, able to generate exam papers, quiz you and plan for you.
 
-产品名取自「格物致知」。
+The product name comes from "investigate things to extend knowledge".
 
 ---
 
-## 现在能跑什么
+## What Can Run Now
 
 ```bash
-# 一条命令跑完全部地基检查（P0）
+# Run all foundation checks (P0) with one command
 node scripts/p0.mjs
 
-# 看"文档"目录是怎么解析出来的（库默认放这儿）
+# See how the "Documents" directory is resolved (the vault goes here by default)
 node packages/db/src/cli.mjs where
 
-# 建一个库
-node packages/db/src/cli.mjs init 高二下 --subject 英语 --grade 高二
+# Create a vault
+node packages/db/src/cli.mjs init grade-11-2 --subject English --grade "Grade 11"
 
-# 列出所有库
+# List all vaults
 node packages/db/src/cli.mjs list
 
-# 依赖许可门禁（拦住 AGPL / 非商业 / 禁止生产使用等）
+# Dependency license gate (blocks AGPL / non-commercial / production-use-prohibited, etc.)
 node scripts/check-licenses.mjs
-node scripts/check-licenses.test.mjs    # 门禁自测：证明它真的会拦
+node scripts/check-licenses.test.mjs    # gate self-test: proves it really blocks
 
-# 数据库结构断言（含中文双 FTS 索引）
+# Database schema assertions (including the Chinese dual FTS index)
 node packages/db/src/assert-schema.mjs
 
-# DSH 桥冒烟（真实调用 AI + 受控改库内文件）
+# DSH bridge smoke test (real AI call + controlled modification of files in the vault)
 node packages/dsh-bridge/smoke.mjs
 ```
 
-> **不需要 `npm install`** —— 目前所有代码只用 Node 内置模块（含 `node:sqlite`）。
-> 这正是刻意的：地基阶段不引入任何依赖，就不可能有供应链与许可风险。
+> **No `npm install` required** — all code currently uses only Node built-in modules (including `node:sqlite`).
+> This is deliberate: at the foundation stage, introducing no dependencies means there can be no supply-chain or licensing risk.
 
 ---
 
-## 目录结构
+## Directory Structure
 
 ```
-格致/
-├─ 格致-开发计划.md          ← 总纲：选型、架构、数据模型、P0–P11、风险登记册
-├─ docs/                     ← 实测文档（环境勘察 / DSH 选型 / 存储 / DSH 集成）
-│  └─ templates/             ← 可复跑的探针脚本与 DSH 配置样本
-├─ research/                 ← 六份技术调研（编辑器图谱 / 文档内核 / 教材题库 / 数字人 / 日历）
-├─ poc/ime/                  ← 中文输入法 PoC（CodeMirror 6，自动测试 8/8 通过）
+Gezhi/
+├─ gezhi-development-plan.md  ← master plan: selection, architecture, data model, P0–P11, risk register
+├─ docs/                     ← measurement documents (environment survey / DSH selection / storage / DSH integration)
+│  └─ templates/             ← rerunnable probe scripts and DSH configuration samples
+├─ research/                 ← six technical research reports (editor graph / document engine / textbook question bank / avatars / calendar)
+├─ poc/ime/                  ← Chinese input method PoC (CodeMirror 6, automated tests 8/8 passing)
 ├─ packages/
-│  ├─ db/                    ← SQLite 结构与检索（node:sqlite + FTS5 双索引）
-│  ├─ core/                  ← 库（Vault）脚手架、路径解析
-│  └─ dsh-bridge/            ← DeepSeek Harness 桥：把 dsh headless 封成事件流
-├─ apps/desktop/             ← Electron 桌面端（P1 起）
-└─ scripts/                  ← P0 总入口与 CI 门禁
+│  ├─ db/                    ← SQLite schema and retrieval (node:sqlite + FTS5 dual index)
+│  ├─ core/                  ← vault scaffolding and path resolution
+│  └─ dsh-bridge/            ← DeepSeek Harness bridge: wraps dsh headless into an event stream
+├─ apps/desktop/             ← Electron desktop app (from P1)
+└─ scripts/                  ← P0 entry point and CI gates
 ```
 
 ---
 
-## 四条不妥协的原则
+## Four Non-Negotiable Principles
 
-1. **数据在你电脑上** —— 库就是一个普通文件夹，Markdown 是唯一真源，随时能用别的软件打开。
-2. **AI 必须站在证据上** —— 回答教材问题要给「哪本书、哪一页」；找不到出处就明说，不许编。
-3. **可操作、可验收** —— 每个阶段都能跑、能演示、能回退；不做"看起来快完成"的半成品。
-4. **不重复造引擎** —— Agent 内核用 DeepSeek Harness，文档内核用现成开源件，格致只做学习领域真正缺的东西。
+1. **Data lives on your computer** — a vault is just an ordinary folder; Markdown is the single source of truth and can be opened with other software at any time.
+2. **AI must stand on evidence** — answering textbook questions must give "which book, which page"; if the source cannot be found, say so plainly; do not make things up.
+3. **Operable and verifiable** — every stage can run, be demonstrated and be rolled back; no half-finished products that "look almost done".
+4. **Don't rebuild engines** — the Agent kernel uses DeepSeek Harness, the document engine uses existing open-source components, and Gezhi only builds what is genuinely missing in the learning domain.
 
 ---
 
-## 已知的硬约束（都是实测得出的，别再踩）
+## Known Hard Constraints (All Measured — Don't Step on Them Again)
 
-| 约束 | 说明 |
+| Constraint | Explanation |
 | --- | --- |
-| **中文 FTS 必须用 trigram** | SQLite 默认 `unicode61` 把汉字视为 token 字符而中文无空格 → 整句变成一个 token，**检索静默返回 0 条**。已用双索引解决（trigram 召回 + jieba 预分词排序） |
-| **库路径不能硬编码** | 「文档」可能被重定向（本机就在 D 盘）。用 `app.getPath('documents')`，纯 Node 下读注册表 |
-| **索引与缓存放 `%APPDATA%`** | 库若在 OneDrive 等同步目录里，WAL 模式的 SQLite 会被云盘打断写入而损坏 |
-| **不要 spawn `.cmd` 文件** | Node 24 起报 `EINVAL`。DSH 桥直接调 `DeepSeek Harness.exe` + `ELECTRON_RUN_AS_NODE=1`，**绕开 shell 也就绕开了命令注入面** |
-| **DSH 的 cwd 就是沙箱边界** | `sandbox-policy.workspaceRoot = process.cwd()`，所以把 cwd 设成当前库 = AI 只能改这个库 |
-| **子进程 stdout 要显式 UTF-8** | 否则中文乱码；另外 NDJSON 里可能有被 ANSI 污染的行，解析要宽容 |
-| **补全源必须首行判 composing** | 实测 CodeMirror 的 autocompletion 在 `view.composing === true` 时**仍会**调用补全源 → 中文组词时补全弹窗与输入法候选词抢按键（就是 Monaco #2199 那个病）。每个补全源第一行写 `if (context.view?.composing) return null;` |
-| **别用 PowerShell 的 `Get-Content` 读 UTF-8 文件** | 它默认按系统 ANSI（本机 GBK）解码 → 中文变乱码；再 `Set-Content -Encoding utf8` 写回就**永久损坏**（本项目 README.md 已中招一次）。判断编码与读写请用 Node，或至少 `-Encoding UTF8` |
-| **Electron 主进程/preload 必须是 CommonJS** | `import { app, BrowserWindow } from "electron"` 会报 `does not provide an export named 'BrowserWindow'` —— Electron 内置模块不提供 ESM 具名导出。主进程与 preload 用 `.cjs`，渲染进程照常 ESM |
-| **`ELECTRON_RUN_AS_NODE=1` 会让 Electron 变成 Node** | 环境里残留这个变量时，Electron 启动会报 `Cannot read properties of undefined (reading 'whenReady')`。调试 DSH 时设过它的话，记得清掉 |
-| **PowerShell 用 GBK 读 UTF-8 文件** | 会显示成乱码，但**文件本身是对的**。判断编码请用 Node 读，别信 `Get-Content` |
+| **Chinese FTS must use trigram** | SQLite's default `unicode61` treats Chinese characters as token characters, and Chinese has no spaces → a whole sentence becomes one token, and **retrieval silently returns 0 results**. Solved with a dual index (trigram recall + jieba pre-tokenization ranking) |
+| **Vault paths must not be hard-coded** | "Documents" may be redirected (on this machine it is on drive D). Use `app.getPath('documents')`, and read the registry under plain Node |
+| **Indexes and caches go in `%APPDATA%`** | If the vault is in a sync directory such as OneDrive, SQLite in WAL mode can be interrupted mid-write by the cloud drive and become corrupted |
+| **Do not spawn `.cmd` files** | Node 24 reports `EINVAL`. The DSH bridge calls `DeepSeek Harness.exe` directly + `ELECTRON_RUN_AS_NODE=1`; **bypassing the shell also bypasses the command-injection surface** |
+| **DSH's cwd is the sandbox boundary** | `sandbox-policy.workspaceRoot = process.cwd()`, so setting the cwd to the current vault = the AI can only modify this vault |
+| **Child process stdout must be explicitly UTF-8** | Otherwise Chinese is garbled; also, NDJSON may contain lines polluted by ANSI, so parsing must be tolerant |
+| **Completion sources must check composing on the first line** | Measured: CodeMirror's autocompletion **still** invokes the completion source when `view.composing === true` → during Chinese composition, the completion popup and the IME candidate window compete for keystrokes (the same disease as Monaco #2199). Write `if (context.view?.composing) return null;` on the first line of every completion source |
+| **Don't use PowerShell's `Get-Content` to read UTF-8 files** | It decodes according to the system ANSI code page (GBK on this machine) by default → Chinese becomes garbled; writing back with `Set-Content -Encoding utf8` then causes **permanent corruption** (this project's README.md has already been hit once). Use Node to detect encoding and read/write, or at least use `-Encoding UTF8` |
+| **Electron main process/preload must be CommonJS** | `import { app, BrowserWindow } from "electron"` reports `does not provide an export named 'BrowserWindow'` — Electron built-in modules do not provide ESM named exports. Use `.cjs` for the main process and preload; the renderer uses ESM as usual |
+| **`ELECTRON_RUN_AS_NODE=1` turns Electron into Node** | When this variable remains in the environment, Electron startup reports `Cannot read properties of undefined (reading 'whenReady')`. If you set it while debugging DSH, remember to clear it |
+| **PowerShell reads UTF-8 files as GBK** | It displays garbled text, but **the file itself is fine**. Use Node to determine the encoding; don't trust `Get-Content` |
 
 ---
 
-## 依赖许可红线
+## Dependency License Red Lines
 
-调研发现一批"看起来能用、实际不能用"的库，已在 CI 门禁里拦住：
+Research found a batch of libraries that "look usable but are actually not"; they have been blocked in the CI gate:
 
-- **AGPL-3.0**：PyMuPDF、`ezexam`（Typst 试卷模板）、Logseq / AppFlowy / Trilium / 思源
-- **非商业**：Nougat 模型权重（CC-BY-NC-4.0）
-- **明文禁止生产使用**：tldraw
-- **非 OSI 开源**：Anytype
+- **AGPL-3.0**: PyMuPDF, `ezexam` (Typst exam-paper template), Logseq / AppFlowy / Trilium / SiYuan
+- **Non-commercial**: Nougat model weights (CC-BY-NC-4.0)
+- **Explicitly prohibits production use**: tldraw
+- **Not OSI open source**: Anytype
 
-替代方案见 [格致-开发计划.md](格致-开发计划.md) 的风险登记册 R2b/R2c。
+For alternatives, see the risk register R2b/R2c in [gezhi-development-plan.md](gezhi-development-plan.md).
 
 ---
 
-## 已验证的能力（都有可复跑的证据）
+## Verified Capabilities (All Have Rerunnable Evidence)
 
-| 能力 | 状态 | 证据 |
+| Capability | Status | Evidence |
 | --- | --- | --- |
-| P0 地基（库结构 / DSH 桥 / 许可门禁 / 密钥防线） | ✅ 9/9 | `node scripts/p0.mjs` |
-| 中文输入法（组合输入） | ✅ 8/8 | `poc/ime/cdp_ime_final.py` |
-| R13 自动补全 × 输入法 | ✅ 5/5 | `poc/ime/cdp_r13_test.py` |
-| 腾讯云 ASR / TTS（含合成→识别闭环） | ✅ 10/10 | `packages/voice/verify-tencent.mjs`（需环境变量密钥） |
-| 产出物去品牌化 + 知识点详细度 | ✅ 10/10 | `typst compile templates/typst/handout-sample.typ` |
-| Electron 壳（启动 / IPC / 安全约束 / 文件树 / 标签页） | 见 `apps/desktop/smoke-electron.mjs` | — |
+| P0 foundation (vault schema / DSH bridge / license gate / credential defenses) | ✅ 9/9 | `node scripts/p0.mjs` |
+| Chinese input method (composition input) | ✅ 8/8 | `poc/ime/cdp_ime_final.py` |
+| R13 autocomplete × input method | ✅ 5/5 | `poc/ime/cdp_r13_test.py` |
+| Tencent Cloud ASR / TTS (including the synthesis→recognition loop) | ✅ 10/10 | `packages/voice/verify-tencent.mjs` (requires environment-variable keys) |
+| De-branding of outputs + knowledge-point detail | ✅ 10/10 | `typst compile templates/typst/handout-sample.typ` |
+| Electron shell (startup / IPC / security constraints / file tree / tabs) | see `apps/desktop/smoke-electron.mjs` | — |
 
-## 下一步
+## Next Steps
 
-P1 = 知识库与编辑器（Electron 壳 + 文件树 + 标签页 + CodeMirror 6 + Live Preview）。
+P1 = knowledge base and editor (Electron shell + file tree + tabs + CodeMirror 6 + Live Preview).
 
-进度与验收标准见 [格致-开发计划.md](格致-开发计划.md) §5。
+For progress and acceptance criteria, see §5 of [gezhi-development-plan.md](gezhi-development-plan.md).
 
 </details>

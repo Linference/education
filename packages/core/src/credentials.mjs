@@ -1,20 +1,20 @@
-// 格致 · 密钥存储
+// Gezhi · Credential storage
 //
-// 目标：学生的 API 密钥（DeepSeek / 腾讯云 / 智谱）不落在任何明文文件里，
-//       不随库同步，不进 git，也不放在 DSH 的凭据目录下
-//       （实测 DSH 的 .credentials.yaml 允许 CodexSandboxUsers 组读取）。
+// Goal: students' API keys (DeepSeek / Tencent Cloud / Zhipu) never land in any plaintext file,
+//       are not synced with the vault, do not enter git, and are not placed in DSH's credential directory
+//       (measurements show DSH's .credentials.yaml is readable by the CodexSandboxUsers group).
 //
-// 存储位置：%APPDATA%\gezhi\credentials.enc   —— 在库之外，不随 OneDrive 同步
+// Storage location: %APPDATA%\gezhi\credentials.enc   — outside the vault, not synced by OneDrive
 //
-// 两种保护模式，按安全强度排序：
-//   ① passphrase（默认，最强）：scrypt 从主密码派生密钥，AES-256-GCM 加密。
-//      主密码不落盘 —— 每次解锁都要输。攻击者拿到文件也没用。
-//   ② dpapi（便利）：Windows DPAPI CurrentUser 加密，绑定当前 Windows 账户。
-//      开机即用，但同一 Windows 账户下的任何进程都能解 —— 防的是"文件被拷走"。
+// Two protection modes, ordered by security strength:
+//   ① passphrase (default, strongest): derive a key from the master password with scrypt, encrypt with AES-256-GCM.
+//      The master password is never written to disk — it must be entered on every unlock. An attacker who gets the file gains nothing.
+//   ② dpapi (convenience): Windows DPAPI CurrentUser encryption, bound to the current Windows account.
+//      Works right after boot, but any process under the same Windows account can decrypt it — it protects against "the file being copied away".
 //
-// 关于为什么不用纯 Node 做 DPAPI：Node 没有内置 DPAPI 绑定，必须走 PowerShell +
-// System.Security.Cryptography。而那条路要把明文通过**命令行参数**传给子进程，
-// 同机进程可能从进程列表里窥探到 —— 反而降低了安全性。所以默认模式是 ①。
+// Why not implement DPAPI in pure Node: Node has no built-in DPAPI binding, so it must go through PowerShell +
+// System.Security.Cryptography. That path requires passing plaintext to a child process via **command-line arguments**,
+// which other processes on the same machine may be able to observe in the process list — actually reducing security. So the default mode is ①.
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -32,10 +32,10 @@ function ensureDir(p) {
   fs.mkdirSync(path.dirname(p), { recursive: true });
 }
 
-// ------------------------------------------------------------------ 加密基元
+// ------------------------------------------------------------------ Crypto primitives
 
 function deriveKey(passphrase, salt) {
-  // scrypt：内存硬，抗 GPU 暴力破解。参数按交互式解锁的体感取（约 100ms 级）
+  // scrypt: memory-hard, resists GPU brute force. Parameters chosen for interactive unlock feel (~100ms range)
   return crypto.scryptSync(passphrase, salt, 32, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 }
 
@@ -71,7 +71,7 @@ function decryptWithPassphrase(file, passphrase) {
   return JSON.parse(pt.toString("utf8"));
 }
 
-// ------------------------------------------------------------------ DPAPI（便利模式）
+// ------------------------------------------------------------------ DPAPI (convenience mode)
 
 function dpapiProtect(text) {
   const ps = [
@@ -82,10 +82,10 @@ function dpapiProtect(text) {
   ].join(" ");
   const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", ps], {
     encoding: "utf8",
-    env: { ...process.env, GEZHI_PLAIN: text },   // 用环境变量而非命令行参数，少一个泄露面
+    env: { ...process.env, GEZHI_PLAIN: text },   // use an environment variable instead of a command-line argument, one less leak surface
     windowsHide: true,
   });
-  if (r.status !== 0) throw new Error("DPAPI Protect 失败：" + (r.stderr || "").slice(0, 300));
+  if (r.status !== 0) throw new Error("DPAPI Protect failed: " + (r.stderr || "").slice(0, 300));
   return r.stdout.trim();
 }
 
@@ -101,7 +101,7 @@ function dpapiUnprotect(b64) {
     env: { ...process.env, GEZHI_B64: b64 },
     windowsHide: true,
   });
-  if (r.status !== 0) throw new Error("DPAPI Unprotect 失败：" + (r.stderr || "").slice(0, 300));
+  if (r.status !== 0) throw new Error("DPAPI Unprotect failed: " + (r.stderr || "").slice(0, 300));
   return r.stdout.trim();
 }
 
@@ -114,12 +114,12 @@ function encryptWithDpapi(obj) {
   };
 }
 
-// ------------------------------------------------------------------ 对外 API
+// ------------------------------------------------------------------ Public API
 
 /**
- * 保存密钥。
- * @param {object} secrets   形如 { tencent: { secretId, secretKey }, deepseek: { apiKey } }
- * @param {object} opts      { passphrase } 指定则用主密码模式；缺省用 DPAPI
+ * Save secrets.
+ * @param {object} secrets   Of the form { tencent: { secretId, secretKey }, deepseek: { apiKey } }
+ * @param {object} opts      { passphrase } if given, use passphrase mode; otherwise DPAPI
  */
 export function saveSecrets(secrets, { passphrase } = {}) {
   const p = credentialsPath();
@@ -131,22 +131,22 @@ export function saveSecrets(secrets, { passphrase } = {}) {
 }
 
 /**
- * 载入密钥。
+ * Load secrets.
  * @param {object} opts { passphrase }
  */
 export function loadSecrets({ passphrase } = {}) {
   const p = credentialsPath();
   if (!fs.existsSync(p)) return null;
   const file = JSON.parse(fs.readFileSync(p, "utf8"));
-  if (file.magic !== MAGIC) throw new Error("凭据文件格式不认识（magic 不匹配）");
+  if (file.magic !== MAGIC) throw new Error("Unrecognized credential file format (magic mismatch)");
   if (file.mode === "passphrase") {
-    if (!passphrase) throw new Error("该凭据库用主密码保护，需要提供 passphrase");
-    return decryptWithPassphrase(file, passphrase);   // 密码错会因 GCM 校验失败而抛
+    if (!passphrase) throw new Error("This credential store is protected by a master password; passphrase is required");
+    return decryptWithPassphrase(file, passphrase);   // a wrong password throws on GCM verification failure
   }
   if (file.mode === "dpapi") {
     return JSON.parse(dpapiUnprotect(file.payload));
   }
-  throw new Error("不支持的凭据保护模式：" + file.mode);
+  throw new Error("Unsupported credential protection mode: " + file.mode);
 }
 
 export function credentialsInfo() {
@@ -154,7 +154,7 @@ export function credentialsInfo() {
   if (!fs.existsSync(p)) return { exists: false, path: p };
   const st = fs.statSync(p);
   let mode = "?";
-  try { mode = JSON.parse(fs.readFileSync(p, "utf8")).mode; } catch { /* 忽略 */ }
+  try { mode = JSON.parse(fs.readFileSync(p, "utf8")).mode; } catch { /* ignore */ }
   return { exists: true, path: p, mode, bytes: st.size, mtime: st.mtime.toISOString() };
 }
 
@@ -165,20 +165,20 @@ export function deleteSecrets() {
 }
 
 /**
- * 收紧文件权限：只允许当前用户访问。
- * 为什么需要：实测 DSH 自己的 .credentials.yaml 允许 CodexSandboxUsers 组读取，
- * 于是沙箱进程能读到里面所有 provider 的 key。格致不重复这个错误。
+ * Tighten file permissions: allow access only by the current user.
+ * Why this is needed: measurements show DSH's own .credentials.yaml is readable by the CodexSandboxUsers group,
+ * so sandbox processes can read every provider's key in it. Gezhi does not repeat that mistake.
  */
 export function hardenAcl(target) {
   if (process.platform !== "win32") {
-    try { fs.chmodSync(target, 0o600); } catch { /* 忽略 */ }
+    try { fs.chmodSync(target, 0o600); } catch { /* ignore */ }
     return { hardened: true, how: "chmod 600" };
   }
   const user = process.env.USERNAME;
   const ps = [
     `$p = $env:GEZHI_TARGET;`,
     `$acl = Get-Acl -LiteralPath $p;`,
-    `$acl.SetAccessRuleProtection($true, $false);`,   // 断开继承，清空已有规则
+    `$acl.SetAccessRuleProtection($true, $false);`,   // break inheritance and clear existing rules
     `$me = New-Object System.Security.AccessControl.FileSystemAccessRule($env:GEZHI_USER,'FullControl','Allow');`,
     `$acl.SetAccessRule($me);`,
     `Set-Acl -LiteralPath $p -AclObject $acl;`,
@@ -190,5 +190,5 @@ export function hardenAcl(target) {
     windowsHide: true,
   });
   if (r.status !== 0) return { hardened: false, error: (r.stderr || "").slice(0, 200) };
-  return { hardened: true, how: "icacls 断开继承", rules: r.stdout.trim().split(/\r?\n/).filter(Boolean) };
+  return { hardened: true, how: "icacls inheritance broken", rules: r.stdout.trim().split(/\r?\n/).filter(Boolean) };
 }

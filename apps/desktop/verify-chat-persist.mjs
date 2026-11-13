@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-// AI 对话不丢失验证
+// AI conversation persistence verification
 //
-// 用户实测反馈："点一下信息再回来，AI 助手的对话就全没了"。
-// 根因：右栏用三元表达式切换，切到「信息」时 AiChat 被**卸载**，
-//       React 把它的 state（全部对话）销毁。
+// User-reported bug: "click the info tab and come back, and the AI assistant's conversation is all gone".
+// Root cause: the right rail switches with a ternary; when switching to '信息' (Info), AiChat is **unmounted**,
+//       and React destroys its state (the whole conversation).
 //
-// 这个测试锁死两条：
-//   1. 切到「信息」再切回来，对话还在
-//   2. 关掉窗口重开，对话还在（持久化到 localStorage）
+// This test locks in two things:
+//   1. switch to '信息' (Info) and back, the conversation is still there
+//   2. close and reopen the window, the conversation is still there (persisted to localStorage)
 //
-// 不真跑 AI（要几十秒且花钱）：直接往 localStorage 种一段对话，
-// 界面载入后应该显示出来。
+// Don't actually run AI (takes tens of seconds and costs money): seed a conversation into localStorage,
+// and the UI should display it after loading.
 import { _electron as electron } from "playwright";
 import fs from "node:fs";
 import path from "node:path";
@@ -32,7 +32,7 @@ fs.mkdirSync(path.join(vault, ".gezhi"), { recursive: true });
 fs.writeFileSync(path.join(vault, ".gezhi", "vault.json"), JSON.stringify({ id: "chat" }), "utf8");
 fs.writeFileSync(path.join(vault, "笔记.md"), "# 笔记\n", "utf8");
 
-/** 种一段对话（模拟用户之前聊过的内容） */
+/** Seed a conversation (simulating what the user chatted before) */
 const SEED = {
   msgs: [
     { role: "user", text: "帮我把这篇笔记整理成大纲" },
@@ -48,7 +48,7 @@ const SEED = {
   sessionId: "session-seeded-1234",
 };
 
-console.log("=== AI 对话不丢失验证 ===\n");
+console.log("=== AI conversation persistence verification ===\n");
 
 const app = await electron.launch({
   executablePath: path.join(HERE, "node_modules", "electron", "dist", "electron.exe"),
@@ -63,11 +63,11 @@ try {
   await page.waitForSelector(".app", { timeout: 30000 });
   await page.waitForFunction(() => Boolean(window.__gezhiTest), { timeout: 20000 });
 
-  // ---- 先种对话到 localStorage，**再刷新页面** ----
-  // ⚠️ 顺序很重要：loadPersisted 只在组件挂载时跑一次。
-  //    如果在组件已经挂载后才写 localStorage，界面不会重新读 —— 测试会假失败。
-  //    第一版就是这么写的，四个断言全挂，看着像功能坏了，其实是测试的时序错了。
-  //    这里改成"种数据 → reload → 让组件带着数据重新挂载"。
+  // ---- first seed the conversation into localStorage, **then reload the page** ----
+  // ⚠️ Order matters: loadPersisted only runs once when the component mounts.
+  //    If you write localStorage after the component has already mounted, the UI won't re-read it — the test would fail falsely.
+  //    The first version was written this way: all four assertions failed, looking like a broken feature when it was actually a test timing mistake.
+  //    Changed here to "seed data → reload → let the component remount with the data".
   await page.evaluate(([key, seed]) => {
     localStorage.setItem(key, JSON.stringify(seed));
   }, [`gezhi.chat.${vault}`, SEED]);
@@ -79,31 +79,31 @@ try {
   await page.waitForTimeout(900);
 
   const beforeSwitch = await page.evaluate(() => document.body.innerText);
-  check("★ 对话从持久化里载入成功",
+  check("★ conversation loads successfully from persistence",
     beforeSwitch.includes("帮我把这篇笔记整理成大纲") && beforeSwitch.includes("我整理成了三级大纲"),
-    beforeSwitch.includes("帮我把这篇笔记整理成大纲") ? "" : "界面上没看到种下的对话");
+    beforeSwitch.includes("帮我把这篇笔记整理成大纲") ? "" : "seeded conversation not visible in the UI");
 
-  // ---- 切到「信息」再切回「AI 助手」----
+  // ---- switch to '信息' (Info) then back to 'AI 助手' (AI Assistant) ----
   const infoTab = page.locator("button", { hasText: "信息" }).first();
   const aiTab = page.locator("button", { hasText: "AI 助手" }).first();
-  check("右栏有「信息」页签", (await infoTab.count()) > 0);
-  check("右栏有「AI 助手」页签", (await aiTab.count()) > 0);
+  check("right rail shows the '信息' (Info) tab", (await infoTab.count()) > 0);
+  check("right rail shows the 'AI 助手' (AI Assistant) tab", (await aiTab.count()) > 0);
 
   await infoTab.click();
   await page.waitForTimeout(500);
   const onInfo = await page.evaluate(() => document.body.innerText);
-  check("切到信息后确实显示信息面板", onInfo.includes("当前文件") || onInfo.includes("打开一个文件后这里显示详情"));
+  check("after switching to Info it actually shows the info panel", onInfo.includes("当前文件") || onInfo.includes("打开一个文件后这里显示详情"));
 
   await aiTab.click();
   await page.waitForTimeout(500);
   const afterSwitch = await page.evaluate(() => document.body.innerText);
-  check("★ 切回 AI 助手后对话还在（本轮修的 bug）",
+  check("★ conversation is still there after switching back to AI Assistant (the bug fixed this round)",
     afterSwitch.includes("帮我把这篇笔记整理成大纲") && afterSwitch.includes("我整理成了三级大纲"),
-    afterSwitch.includes("帮我把这篇笔记整理成大纲") ? "" : "★ 对话丢失了");
+    afterSwitch.includes("帮我把这篇笔记整理成大纲") ? "" : "★ conversation lost");
 
-  check("第二轮问答也还在", afterSwitch.includes("再把公式补上") && afterSwitch.includes("补充了公式"));
+  check("the second round of Q&A is also still there", afterSwitch.includes("再把公式补上") && afterSwitch.includes("补充了公式"));
 
-  // ---- 反复切几次，确认稳定 ----
+  // ---- switch back and forth a few times to confirm stability ----
   for (let i = 0; i < 3; i++) {
     await infoTab.click();
     await page.waitForTimeout(200);
@@ -111,9 +111,9 @@ try {
     await page.waitForTimeout(200);
   }
   const afterMany = await page.evaluate(() => document.body.innerText);
-  check("反复切换 3 次后对话仍完整", afterMany.includes("帮我把这篇笔记整理成大纲"));
+  check("conversation is still intact after 3 switches", afterMany.includes("帮我把这篇笔记整理成大纲"));
 
-  // ---- 关掉窗口重开，验证持久化 ----
+  // ---- close the window and reopen to verify persistence ----
   await page.screenshot({ path: path.join(OUT, "ui-chat-persist.png"), clip: { x: 1400, y: 0, width: 500, height: 600 } });
   await app.close();
 
@@ -129,14 +129,14 @@ try {
     await page.evaluate((d) => window.__gezhiTest.openVault(d), vault);
 
     /*
-     * ⚠️ 这里必须**显式等待对话渲染出来**，不能用固定 waitForTimeout。
+     * ⚠️ Here we must **explicitly wait for the conversation to render**, not use a fixed waitForTimeout.
      *
-     * 原来写的是 waitForTimeout(1000)，于是偶发失败（时好时坏）。
-     * 原因：重新启动应用是**冷启动**，比首次启动慢；
-     * 1 秒内 AiChat 还没把 localStorage 里的对话读出来渲染，断言就跑了。
+     * The original wrote waitForTimeout(1000), causing occasional flaky failures (sometimes passes, sometimes fails).
+     * Reason: restarting the app is a **cold start**, slower than first launch;
+     * within 1 second AiChat hasn't yet read the conversation out of localStorage and rendered it, so the assertion runs too early.
      *
-     * 这种偶发失败最误导人 —— 看着像"持久化坏了"，其实功能是好的。
-     * 我用完整种子手工复现过两轮：数据一直在磁盘上，界面也一直显示。
+     * This kind of flaky failure is the most misleading — it looks like "persistence is broken" when the feature is actually fine.
+     * I reproduced it twice by hand with the full seed: the data stays on disk, and the UI keeps showing it.
      */
     let rendered = false;
     for (let i = 0; i < 60; i++) {
@@ -146,22 +146,22 @@ try {
       await page.waitForTimeout(250);
     }
     const afterRestart = await page.evaluate(() => document.body.innerText);
-    check("★ 重启软件后对话仍在（持久化生效）", rendered,
-      rendered ? "" : "等了 15 秒仍未渲染出对话");
-    check("重启后两轮问答都完整",
+    check("★ conversation still there after restarting the app (persistence works)", rendered,
+      rendered ? "" : "conversation still not rendered after 15 seconds");
+    check("both rounds of Q&A complete after restart",
       afterRestart.includes("我整理成了三级大纲") && afterRestart.includes("补充了公式"),
       "");
   } finally {
     await app2.close();
   }
 
-  check("无 JS 报错", errs.length === 0, errs.slice(0, 2).join(" | "));
+  check("no JS errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 } finally {
-  try { await app.close(); } catch { /* 可能已关 */ }
-  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* 忽略 */ }
+  try { await app.close(); } catch { /* may already be closed */ }
+  try { fs.rmSync(vault, { recursive: true, force: true }); } catch { /* ignore */ }
 }
 
 const passed = results.filter((r) => r.pass).length;
-console.log(`\n=== 结果：${passed}/${results.length} 通过 ===`);
+console.log(`\n=== Result: ${passed}/${results.length} passed ===`);
 for (const r of results) if (!r.pass) console.log(`  FAIL ${r.name}: ${r.detail}`);
 process.exit(passed === results.length ? 0 : 1);

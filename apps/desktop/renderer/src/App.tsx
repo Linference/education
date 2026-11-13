@@ -219,7 +219,7 @@ export default function App() {
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("就绪");
+  const [status, setStatus] = useState("Ready");
   const [rightWidth, setRightWidth] = useState(340);
   const [leftWidth, setLeftWidth] = useState(260);
   const [showRight, setShowRight] = useState(true);
@@ -334,13 +334,13 @@ export default function App() {
           window.gezhi.vault.info(arg).then((v) => { void loadVault(v); }).catch(() => { /* 忽略 */ });
         }
       })
-      .catch((e) => setStatus("初始化失败：" + e.message));
+      .catch((e) => setStatus("Initialization failed: " + e.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---------------------------------------------------------------- 打开库
   const loadVault = useCallback(async (v: VaultInfo) => {
-    if (!v.ok || !v.path) { setStatus("打开失败：" + (v.error ?? "未知错误")); return; }
+    if (!v.ok || !v.path) { setStatus("Open failed: " + (v.error ?? "unknown error")); return; }
     // 告诉主进程当前库 —— 文件写入的路径校验要用（防止写到库外面）
     await window.gezhi.vault.set(v.path);
     setVault(v);
@@ -359,9 +359,9 @@ export default function App() {
     try {
       const r = await window.gezhi.vault.list(v.path);
       setTree(r.entries ?? []);
-      setStatus(`已打开 ${v.name}（${(r.entries ?? []).length} 项）`);
+      setStatus(`Opened ${v.name} (${(r.entries ?? []).length} items)`);
     } catch (e: any) {
-      setStatus("列目录失败：" + e.message);
+      setStatus("Failed to list the directory: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -380,10 +380,10 @@ export default function App() {
         setSoffice(p);
         if (!p.available) {
           // 没装也不报错 —— 只是少一个增强功能，文字模式照样能用
-          setStatus("提示：装上 LibreOffice 后，PPT/Word 可以高保真查看（不用额外配置）");
+          setStatus("Tip: with LibreOffice installed, PPT/Word open with full fidelity (no extra configuration needed)");
         }
       })
-      .catch(() => setSoffice({ available: false, reason: "探测失败", engine: null, version: null }));
+      .catch(() => setSoffice({ available: false, reason: "probe failed", engine: null, version: null }));
   }, []);
 
   // 订阅索引事件：完成后刷新统计并让反链面板重新拉数据
@@ -392,9 +392,9 @@ export default function App() {
       if (chan === "search:indexed") {
         setIndexVersion((v) => v + 1);
         setIndexStatus({ docs: p?.indexed ?? 0, chunks: p?.chunks ?? 0, links: p?.links ?? 0 });
-        setStatus(`索引已更新：${p?.indexed ?? 0} 篇变化，共 ${p?.scanned ?? 0} 篇`);
+        setStatus(`Index updated: ${p?.indexed ?? 0} changed, ${p?.scanned ?? 0} total`);
       } else if (chan === "search:error") {
-        setStatus("索引出错：" + String(p?.error ?? ""));
+        setStatus("Index error: " + String(p?.error ?? ""));
       }
     });
     return off;
@@ -456,13 +456,13 @@ export default function App() {
       const dir = fullPath.slice(0, fullPath.lastIndexOf(sep));
       const name = fullPath.slice(fullPath.lastIndexOf(sep) + 1);
       const r = await window.gezhi.vault.list(dir);
-      if (r?.ok === false) { setStatus("打开失败：" + (r.error ?? "目录读不到")); return; }
+      if (r?.ok === false) { setStatus("Open failed: " + (r.error ?? "directory unreadable")); return; }
       const entry = r.entries.find((e) => e.name === name);
-      if (!entry) { setStatus(`打开失败：找不到 ${name}`); return; }
+      if (!entry) { setStatus(`Open failed: ${name} not found`); return; }
       // openFile 是通过 ref 拿的，避开"定义在后面"的循环依赖
       await openFileRef.current?.(entry);
     } catch (e: any) {
-      setStatus("打开失败：" + (e?.message ?? e));
+      setStatus("Open failed: " + (e?.message ?? e));
     }
   }, []);
 
@@ -486,7 +486,7 @@ export default function App() {
 
     if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
 
-    setFsNotice({ ok: true, text: `已新建 ${creating.kind === "file" ? "文件" : "文件夹"}「${r.name}」` });
+    setFsNotice({ ok: true, text: `Created ${creating.kind === "file" ? "file" : "folder"} "${r.name}"` });
     const created = r;
     setCreating(null);
     setNewName("");
@@ -527,7 +527,7 @@ export default function App() {
     setRenaming(null);
     if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
     if (r.unchanged) return;
-    setFsNotice({ ok: true, text: `已重命名为「${r.name}」` });
+    setFsNotice({ ok: true, text: `Renamed to "${r.name}"` });
 
     // 如果重命名的是当前打开的文件，标签页也要跟着改
     setTabs((prev) => prev.map((t) => t.path === target ? { ...t, path: r.path!, name: r.name! } : t));
@@ -551,13 +551,13 @@ export default function App() {
   }, [renameValue, refreshTree]);
 
   const doDelete = useCallback(async (entry: TreeEntry) => {
-    const label = entry.isDir ? "文件夹" : "文件";
+    const label = entry.isDir ? "folder" : "file";
     // 删除文件夹时提示会连带删除内容
-    const extra = entry.isDir ? "（连同里面的所有内容）" : "";
-    if (!window.confirm(`删除${label}「${entry.name}」${extra}？\n\n会移到回收站，可以从那里恢复。`)) return;
+    const extra = entry.isDir ? " (including everything inside)" : "";
+    if (!window.confirm(`Delete ${label} "${entry.name}"${extra}?\n\nIt will be moved to the recycle bin, where you can restore it.`)) return;
     const r = await window.gezhi.fsx.remove({ target: entry.path });
     if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
-    setFsNotice({ ok: true, text: `已删除「${entry.name}」（在回收站）` });
+    setFsNotice({ ok: true, text: `Deleted "${entry.name}" (moved to the recycle bin)` });
     // 关掉相关标签页
     setTabs((prev) => prev.filter((t) => t.path !== entry.path && !t.path.startsWith(entry.path + "\\") && !t.path.startsWith(entry.path + "/")));
     if (activePath && (activePath === entry.path || activePath.startsWith(entry.path))) setActivePath(null);
@@ -578,17 +578,17 @@ export default function App() {
     const text = drafts.get(tab.path);
     if (text === undefined || !dirty.has(tab.path)) return true;
 
-    setStatus("正在保存…");
+    setStatus("Saving…");
     const r = await window.gezhi.fsx.writeText({ path: tab.path, text });
     if (!r.ok) {
-      setStatus("保存失败：" + r.error);
-      setFsNotice({ ok: false, text: "保存失败：" + r.error });
+      setStatus("Save failed: " + r.error);
+      setFsNotice({ ok: false, text: "Save failed: " + r.error });
       return false;
     }
     setDirty((prev) => { const n = new Set(prev); n.delete(tab.path); return n; });
     setTabs((prev) => prev.map((t) => t.path === tab.path ? { ...t, text, size: r.size ?? t.size } : t));
-    setStatus(`已保存 ${tab.name}`);
-    setFsNotice({ ok: true, text: `已保存「${tab.name}」` });
+    setStatus(`Saved ${tab.name}`);
+    setFsNotice({ ok: true, text: `Saved "${tab.name}"` });
 
     // 保存后重新索引这个文件 —— 否则刚写的内容搜不到，
     // 而且新加的 [[wikilink]] 也不会出现在反向链接里。
@@ -667,7 +667,7 @@ export default function App() {
     const needsPdfConversion = kind === "pptx" || kind === "ppt";
     if (needsPdfConversion && hiFiEnabled) {
       setLoading(true);
-      setStatus(`正在转换 ${entry.name}（首次约 10~40 秒）…`);
+      setStatus(`Converting ${entry.name} (about 10–40 s the first time)…`);
       try {
         const c = await window.gezhi.convert.toPdf({ src: entry.path });
         if (c.ok && c.pdfPath) {
@@ -687,15 +687,15 @@ export default function App() {
               convertMs: c.ms,
             }]);
             setActivePath(entry.path);
-            setStatus(`已高保真打开 ${entry.name}（转换耗时 ${((c.ms ?? 0) / 1000).toFixed(1)}s）`);
+            setStatus(`Opened ${entry.name} with full fidelity (converted in ${((c.ms ?? 0) / 1000).toFixed(1)}s)`);
             return;
           }
         }
         // 转换失败 → 退回文字模式，并把原因告诉用户
-        setStatus(`高保真转换失败，已用文字模式：${c.error ?? "未知原因"}`);
+        setStatus(`High-fidelity conversion failed; using text mode: ${c.error ?? "unknown reason"}`);
         if (c.hint) setFsNotice({ ok: false, text: `${c.error}。${c.hint}` });
       } catch (e: any) {
-        setStatus("高保真转换出错，已用文字模式：" + e.message);
+        setStatus("High-fidelity conversion error; using text mode: " + e.message);
       }
     }
 
@@ -709,14 +709,14 @@ export default function App() {
         const r = await window.gezhi.file.readBinary(entry.path);
         tab = r.ok
           ? { ...base, bytes: r.bytes! }
-          : { ...base, error: r.error ?? "读取失败" };
+          : { ...base, error: r.error ?? "read failed" };
       } else if (kind === "xlsx") {
         // ★ 电子表格走**原生表格查看器**，不转 PDF。
         //   表格数据要能排序、筛选、看单元格 —— PDF 里只是静态图，没法用。
         const r = await window.gezhi.file.readSheet(entry.path);
         tab = r.ok
           ? { ...base, sheet: r.sheets, sheetTotal: r.sheetCount, docMs: r.ms }
-          : { ...base, error: r.error ?? "读取失败" };
+          : { ...base, error: r.error ?? "read failed" };
       } else if (kind === "pptx") {
         /**
          * .pptx 高保真模式已在上面处理（转 PDF）。
@@ -725,7 +725,7 @@ export default function App() {
         const r = await window.gezhi.file.readPptx?.(entry.path);
         tab = r?.ok
           ? { ...base, pptSlides: (r as PptResult).slides, docMs: r.ms, lossyText: true }
-          : { ...base, error: r?.error ?? "读取失败" };
+          : { ...base, error: r?.error ?? "read failed" };
       } else if (kind === "doc" || kind === "ppt") {
         // 旧版 Office 二进制（OLE 复合文档）必须走主进程解析器 ——
         // 渲染进程没有 fs，而且解析是 Node 侧的 Buffer 操作。
@@ -743,17 +743,17 @@ export default function App() {
               // .ppt 的近似分页也带上，查看器直接渲染
               pptSlides: kind === "ppt" ? (r as PptResult).slides : undefined,
             }
-          : { ...base, error: r.error ?? "读取失败" };
+          : { ...base, error: r.error ?? "read failed" };
       } else {
         const r = await window.gezhi.file.read(entry.path);
         tab = r.ok
           ? { ...base, text: r.text!, size: r.size ?? entry.size, mtime: r.mtime ?? entry.mtime }
-          : { ...base, error: r.error ?? "读取失败" };
+          : { ...base, error: r.error ?? "read failed" };
       }
 
       setTabs((prev) => [...prev, tab]);
       setActivePath(entry.path);
-      setStatus(tab.error ? `打开失败：${tab.error}` : `已打开 ${entry.name}`);
+      setStatus(tab.error ? `Open failed: ${tab.error}` : `Opened ${entry.name}`);
     } finally {
       setLoading(false);
     }
@@ -792,7 +792,7 @@ export default function App() {
     };
     const hit = await find(vault.path, 0);
     if (hit) await openFile(hit);
-    else setStatus(`找不到笔记「${name}」`);
+    else setStatus(`Note "${name}" not found`);
   }, [vault, openFile]);
 
   // ---------------------------------------------------------------- 分栏拖拽
@@ -834,7 +834,7 @@ export default function App() {
         const name = p.slice(p.lastIndexOf("\\") + 1);
         const r = await window.gezhi.vault.list(dir);
         const entry = r.entries.find((e) => e.name === name);
-        if (!entry) throw new Error(`找不到 ${name}`);
+        if (!entry) throw new Error(`${name} not found`);
         await openFile(entry);
         return entry.path;
       },
@@ -1021,7 +1021,7 @@ export default function App() {
               <span className={`tw${isOpen ? " open" : ""}`}>{e.isDir ? "▶" : ""}</span>
               <span className="ic"><FileIcon ext={e.ext} isDir={e.isDir} /></span>
               <span className="nm">{e.name}</span>
-              {isDirty && <span className="dot" title="有未保存的改动">●</span>}
+              {isDirty && <span className="dot" title="Unsaved changes">●</span>}
               {!e.isDir && e.size > 0 && <span className="sz">{fmtSize(e.size)}</span>}
             </div>
           )}
@@ -1040,7 +1040,7 @@ export default function App() {
                   else if (ev.key === "Escape") { setCreating(null); setNewName(""); }
                 }}
                 onBlur={() => { if (!newName.trim()) setCreating(null); }}
-                placeholder={creating.kind === "folder" ? "新文件夹名" : "新文件名（自动加 .md）"}
+                placeholder={creating.kind === "folder" ? "New folder name" : "New file name (.md added automatically)"}
                 style={{
                   flex: "1 1 auto", minWidth: 0, fontSize: 13, padding: "1px 4px",
                   border: "1px solid var(--accent)", borderRadius: 3, outline: "none",
@@ -1072,7 +1072,7 @@ export default function App() {
             else if (ev.key === "Escape") { setCreating(null); setNewName(""); }
           }}
           onBlur={() => { if (!newName.trim()) setCreating(null); }}
-          placeholder={creating.kind === "folder" ? "新文件夹名" : "新文件名（自动加 .md）"}
+          placeholder={creating.kind === "folder" ? "New folder name" : "New file name (.md added automatically)"}
           style={{
             flex: "1 1 auto", minWidth: 0, fontSize: 13, padding: "1px 4px",
             border: "1px solid var(--accent)", borderRadius: 3, outline: "none",
@@ -1110,24 +1110,24 @@ export default function App() {
     if (!activeTab) {
       return (
         <div className="welcome-shell">
-          <div className="welcome-kicker"><img className="brand-mark" src={logoMark} width={36} height={36} alt="" />格物 · 致知</div>
-          <h1>让知识连接，<br />让理解发生。</h1>
-          <p>{vault ? `欢迎回到「${vault.name}」。从一篇笔记开始，或把今天学到的知识讲给小格。` : "你的笔记、教材与学习计划，在一个安静的工作空间里。打开资料库，开始今天的学习。"}</p>
+          <div className="welcome-kicker"><img className="brand-mark" src={logoMark} width={36} height={36} alt="" />Investigate things · Extend knowledge</div>
+          <h1>Connect knowledge,<br />let understanding happen.</h1>
+          <p>{vault ? `Welcome back to "${vault.name}". Start with a note, or explain what you learned today to Xiaoge.` : "Your notes, textbooks and study plans in one quiet workspace. Open a vault to start today's learning."}</p>
           <div className="welcome-actions">
-            <button className="welcome-action" onClick={() => openStudio()}><span>◐</span><div><strong>进入学习工作室</strong><small>检验误区、迁移知识、动手做实验</small></div></button>
-            <button className="welcome-action" onClick={openVaultDialog}><span><Icon.folder /></span><div><strong>打开资料库</strong><small>接着整理你的笔记与教材</small></div></button>
-            <button className="welcome-action" onClick={() => openStudio({ view: 'teach' })}><span><Icon.sparkle /></span><div><strong>进入角色空间</strong><small>选择听众，获得六维讲解反馈</small></div></button>
-            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setMainView("graph"); }}><span>◎</span><div><strong>探索知识图谱</strong><small>发现笔记之间的连接</small></div></button>
-            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setLeftView("cal"); setShowLeft(true); }}><span><Icon.calendar /></span><div><strong>安排今天</strong><small>查看日程、待办与倒计时</small></div></button>
+            <button className="welcome-action" onClick={() => openStudio()}><span>◐</span><div><strong>Enter the Learning Studio</strong><small>Test misconceptions, transfer knowledge, run experiments</small></div></button>
+            <button className="welcome-action" onClick={openVaultDialog}><span><Icon.folder /></span><div><strong>Open a vault</strong><small>Continue organizing your notes and textbooks</small></div></button>
+            <button className="welcome-action" onClick={() => openStudio({ view: 'teach' })}><span><Icon.sparkle /></span><div><strong>Enter Digital Space</strong><small>Pick a listener and get six-dimensional feedback</small></div></button>
+            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setMainView("graph"); }}><span>◎</span><div><strong>Explore the knowledge graph</strong><small>Find the connections between your notes</small></div></button>
+            <button className="welcome-action" onClick={() => { if (!vault) { void openVaultDialog(); return; } setLeftView("cal"); setShowLeft(true); }}><span><Icon.calendar /></span><div><strong>Plan today</strong><small>See your schedule, to-dos and countdowns</small></div></button>
           </div>
-          <div className="welcome-hint"><kbd>Ctrl</kbd> + <kbd>O</kbd> 打开资料库 · 从左侧选择文件即可阅读</div>
+          <div className="welcome-hint"><kbd>Ctrl</kbd> + <kbd>O</kbd> open a vault · pick a file on the left to read it</div>
         </div>
       );
     }
     if (activeTab.error) {
       return (
         <div className="empty-state">
-          <div style={{ fontSize: 15 }}>打不开这个文件</div>
+          <div style={{ fontSize: 15 }}>This file cannot be opened</div>
           <div style={{ fontSize: 13, maxWidth: 460, textAlign: "center" }}>{activeTab.error}</div>
         </div>
       );
@@ -1175,9 +1175,9 @@ export default function App() {
         if (!activeTab.sheet?.length) {
           return (
             <div className="empty-state">
-              <div style={{ fontSize: 15 }}>读不出这个表格</div>
+              <div style={{ fontSize: 15 }}>This spreadsheet cannot be read</div>
               <div style={{ color: "var(--text-muted)", maxWidth: 520, textAlign: "center", lineHeight: 1.9 }}>
-                {activeTab.error ?? "文件里没有可显示的工作表"}
+                {activeTab.error ?? "The file has no sheets to display"}
               </div>
             </div>
           );
@@ -1214,12 +1214,12 @@ export default function App() {
         <img
           className="brand-mark"
           src={logoMark}
-          alt="格致"
+          alt="Gezhi"
           width={32}
           height={32}
           style={{ borderRadius: 6, flex: "0 0 auto" }}
         />
-        <span className="titlebar-brand">格致</span>
+        <span className="titlebar-brand">Gezhi</span>
 
         <div style={{ width: 1, height: 16, background: "var(--bd-strong)", margin: "0 2px" }} />
 
@@ -1232,7 +1232,7 @@ export default function App() {
         >
           <button
             onClick={openVaultDialog}
-            title={vault?.path ?? "点这里打开一个库（Ctrl+O）"}
+            title={vault?.path ?? "Click to open a vault (Ctrl+O)"}
             style={{
               fontSize: 13, color: vault ? "var(--text-muted)" : "var(--text-faint)",
               padding: "2px 5px", borderRadius: 4, whiteSpace: "nowrap",
@@ -1240,7 +1240,7 @@ export default function App() {
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
           >
-            {vault ? vault.name : "未打开库"}
+            {vault ? vault.name : "No vault open"}
           </button>
           {activeTab && (
             <>
@@ -1260,9 +1260,9 @@ export default function App() {
 
         <div style={{ flex: 1 }} />
         <div className="titlebar-meta">
-          <span className="local-badge"><i />资料保存在本机</span>
-          <button className="theme-switch" aria-label={theme === "light" ? "切换深色主题" : "切换浅色主题"} onClick={() => setTheme(t => t === "light" ? "dark" : "light")}>
-            {theme === "light" ? "◐" : "☀"}<span>{theme === "light" ? "深色" : "浅色"}</span>
+          <span className="local-badge"><i />Data stays on this device</span>
+          <button className="theme-switch" aria-label={theme === "light" ? "Switch to the dark theme" : "Switch to the light theme"} onClick={() => setTheme(t => t === "light" ? "dark" : "light")}>
+            {theme === "light" ? "◐" : "☀"}<span>{theme === "light" ? "Dark" : "Light"}</span>
           </button>
         </div>
       </div>
@@ -1278,7 +1278,7 @@ export default function App() {
           <button
             className={`ribbon-btn${showLeft ? " active" : ""}`}
             onClick={() => setShowLeft((s) => !s)}
-            title={showLeft ? "折叠文件栏（Ctrl+E）" : "展开文件栏（Ctrl+E）"}
+            title={showLeft ? "Collapse the file panel (Ctrl+E)" : "Expand the file panel (Ctrl+E)"}
           >
             {/* 图标随状态变化：展开时画"左栏高亮"（说明当前左栏是开着的），
                 折叠后画"向左的箭头"（说明点它会展开）。
@@ -1302,14 +1302,14 @@ export default function App() {
 
           <div className="ribbon-sep" />
 
-          <button className="ribbon-btn" onClick={openVaultDialog} title="打开库（Ctrl+O）">
+          <button className="ribbon-btn" onClick={openVaultDialog} title="Open a vault (Ctrl+O)">
             <Icon.folder />
           </button>
 
           <button
             className={`ribbon-btn${leftView === "search" ? " active" : ""}`}
             onClick={() => { setShowLeft(true); setLeftView((v) => (v === "search" ? "files" : "search")); }}
-            title={leftView === "search" ? "回到文件列表" : "全文检索（Ctrl+Shift+F）"}
+            title={leftView === "search" ? "Back to the file list" : "Full-text search (Ctrl+Shift+F)"}
           >
             <Icon.search />
           </button>
@@ -1317,7 +1317,7 @@ export default function App() {
           <button
             className={`ribbon-btn${rightTab === "ai" && showRight && mainView !== "learning" ? " active" : ""}`}
             onClick={() => { if (mainView === "learning") setMainView("files"); setRightTab("ai"); setShowRight(true); }}
-            title="AI 助手（DeepSeek Harness）"
+            title="AI assistant (DeepSeek Harness)"
           >
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3l1.9 4.6L18.5 9l-4.6 1.4L12 15l-1.9-4.6L5.5 9l4.6-1.4z" />
@@ -1337,9 +1337,9 @@ export default function App() {
               onClick={() => setHiFiEnabled((v) => !v)}
               title={
                 (hiFiEnabled
-                  ? "高保真查看：已开启\n打开 PPT/Word/Excel 时先用 LibreOffice 转成 PDF，视觉完全还原（首次约 10~40 秒）"
-                  : "高保真查看：已关闭\n当前只提取文字（快，但图片和排版看不到）")
-                + `\n\n引擎：${soffice.engine ?? ""}`
+                  ? "High-fidelity view: on\nPPT/Word/Excel are converted to PDF with LibreOffice first, so the layout is fully preserved (about 10–40 s the first time)"
+                  : "High-fidelity view: off\nOnly text is extracted (fast, but images and layout are lost)")
+                + `\n\nEngine: ${soffice.engine ?? ""}`
               }
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1355,14 +1355,14 @@ export default function App() {
           {/* 主视图切换：关系图谱 / 题库组卷 / 日历计划。
               图谱与题库是**中间栏换视图**（不是弹窗）——
               它们要看的内容量大，弹窗会挤得没法用。 */}
-          <button className={'ribbon-btn' + (mainView === 'learning' ? ' active' : '')} aria-current={mainView === 'learning' ? 'page' : undefined} onClick={() => mainView === 'learning' ? setMainView('files') : openStudio()} title="学习工作室（角色空间 / 自信度 / 错误侦探 / 学习证据 / 迁移挑战 / 概念实验）" aria-label="学习工作室">
+          <button className={'ribbon-btn' + (mainView === 'learning' ? ' active' : '')} aria-current={mainView === 'learning' ? 'page' : undefined} onClick={() => mainView === 'learning' ? setMainView('files') : openStudio()} title="Learning Studio (Digital Space / confidence / Error Detective / learning evidence / Transfer Challenge / concept experiments)" aria-label="Learning Studio">
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 2 22 8v8l-10 6L2 16V8Z" /><path d="m2 8 10 6 10-6M12 14v8M7 5l10 6" /></svg>
           </button>
-          <button className="ribbon-btn" aria-label="比赛英文展示" title="比赛英文展示 · 离线备用 · 人工复核与 AI 使用记录" onClick={()=>setPresentationOpen(true)}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 3h10v5a5 5 0 0 1-10 0ZM7 5H3v2a4 4 0 0 0 4 4M17 5h4v2a4 4 0 0 1-4 4M12 13v6M7 21h10M9 19h6"/></svg></button>
+          <button className="ribbon-btn" aria-label="Competition English showcase" title="Competition English showcase · offline fallback · human review and AI-use disclosure" onClick={()=>setPresentationOpen(true)}><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M7 3h10v5a5 5 0 0 1-10 0ZM7 5H3v2a4 4 0 0 0 4 4M17 5h4v2a4 4 0 0 1-4 4M12 13v6M7 21h10M9 19h6"/></svg></button>
           <button
             className={`ribbon-btn${mainView === "graph" ? " active" : ""}`}
             onClick={() => setMainView((v) => (v === "graph" ? "files" : "graph"))}
-            title={mainView === "graph" ? "返回文件视图" : "关系图谱（把笔记间的链接画成图）"}
+            title={mainView === "graph" ? "Back to the file view" : "Graph (draw the links between notes)"}
             aria-current={mainView === 'graph' ? 'page' : undefined}
           >
             <Icon.graph />
@@ -1370,7 +1370,7 @@ export default function App() {
           <button
             className={`ribbon-btn${mainView === "bank" ? " active" : ""}`}
             onClick={() => setMainView((v) => (v === "bank" ? "files" : "bank"))}
-            title={mainView === "bank" ? "返回文件视图" : "题库组卷（抽题 → 导出试卷）"}
+            title={mainView === "bank" ? "Back to the file view" : "Question Bank (pick questions → export a paper)"}
             aria-current={mainView === 'bank' ? 'page' : undefined}
           >
             <Icon.book />
@@ -1383,7 +1383,7 @@ export default function App() {
               setShowLeft(true);
               setLeftView((v) => (v === "cal" ? "files" : "cal"));
             }}
-            title={leftView === "cal" ? "回到文件列表" : "日历计划（月历 / 待办 / 倒计时）"}
+            title={leftView === "cal" ? "Back to the file list" : "Calendar and planning (month view / to-dos / countdowns)"}
           >
             <Icon.calendar />
           </button>
@@ -1393,7 +1393,7 @@ export default function App() {
           <button
             className={`ribbon-btn${rightTab === "settings" && showRight ? " active" : ""}`}
             onClick={() => { setRightTab("settings"); setShowRight(true); }}
-            title="设置（密钥 / AI 大脑 / 选项）"
+            title="Settings (keys / AI kernel / options)"
           >
             <Icon.settings />
           </button>
@@ -1404,8 +1404,8 @@ export default function App() {
           <>
             <div ref={sidebarMotion} className="sidebar motion-surface" style={{ width: leftWidth }}>
               {/* 左栏视图：文件 / 检索 / 日历。 */}
-              <div className="workspace-panel-tabs" role="tablist" aria-label="学习工具" style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
-                {([["files", "文件"], ["search", "检索"], ["cal", "日历"]] as const).map(([k, label]) => (
+              <div className="workspace-panel-tabs" role="tablist" aria-label="Learning tools" style={{ display: "flex", borderBottom: "1px solid var(--bd)", flex: "0 0 auto" }}>
+                {([["files", "Files"], ["search", "Search"], ["cal", "Calendar"]] as const).map(([k, label]) => (
                   <button
                     key={k}
                     role="tab"
@@ -1442,7 +1442,7 @@ export default function App() {
                     const rr = await window.gezhi.vault.list(dir);
                     const entry = rr.entries.find((x) => x.name === name);
                     if (entry) await openFile(entry);
-                    else setFsNotice({ ok: false, text: `找不到文件：${name}` });
+                    else setFsNotice({ ok: false, text: `File not found: ${name}` });
                   }}
                 />
               ) : leftView === "files" ? (
@@ -1450,14 +1450,14 @@ export default function App() {
               {/* 面板头：标题 + 新建按钮。新建入口必须**一眼可见** ——
                   藏进右键菜单的话，很多人根本不知道能新建。 */}
               <div className="panel-head" style={{ paddingRight: 6 }}>
-                <span>文件</span>
+                <span>Files</span>
                 <span style={{ display: "flex", gap: 2, alignItems: "center" }}>
                   {vault && (
                     <>
                       <button
                         className="icon-btn"
                         style={{ width: 22, height: 22 }}
-                        title="新建文件（在当前库里）"
+                        title="New file (in the current vault)"
                         onClick={() => openCreate("file", vault.path!, 0)}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
@@ -1468,7 +1468,7 @@ export default function App() {
                       <button
                         className="icon-btn"
                         style={{ width: 22, height: 22 }}
-                        title="新建文件夹"
+                        title="New folder"
                         onClick={() => openCreate("folder", vault.path!, 0)}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
@@ -1483,7 +1483,7 @@ export default function App() {
                       onClick={() => setFilter("")}
                       style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "none", letterSpacing: 0 }}
                     >
-                      清除
+                      Clear
                     </button>
                   )}
                 </span>
@@ -1512,7 +1512,7 @@ export default function App() {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Escape") setFilter(""); }}
-                    placeholder="筛选文件名…"
+                    placeholder="Filter file names…"
                     style={{
                       width: "100%", fontSize: 12.5, padding: "4px 8px",
                       border: "1px solid var(--bd-strong)", borderRadius: 5,
@@ -1526,16 +1526,16 @@ export default function App() {
               <div className="tree">
                 {!vault ? (
                   <div className="tree-empty">
-                    还没有打开库。
+                    No vault is open yet.
                     <br />
-                    按 <kbd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>Ctrl+O</kbd> 或点左上角文件夹图标。
+                    Press <kbd style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>Ctrl+O</kbd> or click the folder icon at the top left.
                   </div>
                 ) : tree.length === 0 ? (
-                  <div className="tree-empty">（这个文件夹是空的）</div>
+                  <div className="tree-empty">(This folder is empty)</div>
                 ) : (
                   (() => {
                     if (filterLoading) {
-                      return <div className="tree-empty">正在筛选「{filter}」…</div>;
+                      return <div className="tree-empty">Filtering "{filter}"…</div>;
                     }
                     const rendered = renderTree(tree, 0);
                     const isEmpty = Array.isArray(rendered) && rendered.length === 0;
@@ -1543,7 +1543,7 @@ export default function App() {
                       <>
                         {/* 库根的新建输入框（没展开任何目录时也要能新建） */}
                         {renderRootCreate()}
-                        {isEmpty && !creating ? <div className="tree-empty">没有匹配「{filter}」的文件</div> : rendered}
+                        {isEmpty && !creating ? <div className="tree-empty">No files match "{filter}"</div> : rendered}
                       </>
                     );
                   })()
@@ -1553,7 +1553,7 @@ export default function App() {
               {/* 提示：右键菜单 */}
               {vault && tree.length > 0 && (
                 <div style={{ flex: "0 0 auto", padding: "4px 10px 8px", fontSize: 11, color: "var(--text-faint)" }}>
-                  右键文件可重命名 / 删除
+                  Right-click a file to rename or delete it
                 </div>
               )}
               </>
@@ -1605,14 +1605,14 @@ export default function App() {
                 <span className="tname">{t.name}</span>
                 {/* 未保存标记：小圆点。比"标题加星号"更不干扰阅读 */}
                 {dirty.has(t.path) && (
-                  <span style={{ color: "var(--accent)", fontSize: 9, lineHeight: 1 }} title="有未保存的改动">●</span>
+                  <span style={{ color: "var(--accent)", fontSize: 9, lineHeight: 1 }} title="Unsaved changes">●</span>
                 )}
                 <span className="tclose" onClick={(e) => closeTab(t.path, e)}>✕</span>
               </div>
             ))}
             {tabs.length === 0 && (
               <div style={{ padding: "0 12px", display: "flex", alignItems: "center", color: "var(--text-faint)", fontSize: 13 }}>
-                没有打开的文件
+                No file is open
               </div>
             )}
             <div style={{ flex: "1 1 auto" }} />
@@ -1631,7 +1631,7 @@ export default function App() {
                     <button
                       key={m}
                       onClick={() => setMode(m)}
-                      title={m === "read" ? "阅读模式（渲染后的效果）" : "编辑模式（改 Markdown 源码）"}
+                      title={m === "read" ? "Reading mode (rendered result)" : "Editing mode (edit the Markdown source)"}
                       style={{
                         padding: "3px 10px",
                         background: mode === m ? "var(--accent-soft)" : "transparent",
@@ -1639,7 +1639,7 @@ export default function App() {
                         fontWeight: mode === m ? 600 : 400,
                       }}
                     >
-                      {m === "read" ? "阅读" : "编辑"}
+                      {m === "read" ? "Read" : "Edit"}
                     </button>
                   ))}
                 </div>
@@ -1647,13 +1647,13 @@ export default function App() {
                 {dirty.has(activeTab.path) && (
                   <button
                     onClick={() => { void saveActive(); }}
-                    title="保存（Ctrl+S）"
+                    title="Save (Ctrl+S)"
                     style={{
                       padding: "3px 10px", borderRadius: 5, fontSize: 12,
                       background: "var(--accent)", color: "#fff",
                     }}
                   >
-                    保存
+                    Save
                   </button>
                 )}
 
@@ -1688,7 +1688,7 @@ export default function App() {
                     · 容器允许横向滚动，挤的时候能滑
                     · 每个页签不换行、不压缩
                   比"把名字改短"更好的做法 —— 改短是在为布局牺牲可读性。 */}
-              <div className="workspace-panel-tabs" role="tablist" aria-label="当前文件上下文" style={{
+              <div className="workspace-panel-tabs" role="tablist" aria-label="Current file context" style={{
                 display: "flex", alignItems: "center",
                 borderBottom: "1px solid var(--bd)", flex: "0 0 auto",
                 overflowX: "auto",
@@ -1709,10 +1709,10 @@ export default function App() {
                       fontWeight: rightTab === k ? 600 : 400,
                     }}
                   >
-                    {k === "ai" ? "AI 助手"
-                      : k === "info" ? "信息"
-                      : k === "links" ? "链接"
-                      : "设置"}
+                    {k === "ai" ? "AI Assistant"
+                      : k === "info" ? "Info"
+                      : k === "links" ? "Links"
+                      : "Settings"}
                   </button>
                 ))}
                 {/* 折叠按钮。
@@ -1722,7 +1722,7 @@ export default function App() {
                     保证任何时候都有路回到这里。 */}
                 <button
                   onClick={() => setShowRight(false)}
-                  title="折叠右栏（Ctrl+B）"
+                  title="Collapse the right panel (Ctrl+B)"
                   style={{
                     flex: "0 0 auto", width: 26, alignSelf: "stretch",
                     color: "var(--text-faint)", fontSize: 13,
@@ -1777,7 +1777,7 @@ export default function App() {
                     if (!vault?.path) return;
                     const r = await window.gezhi.fsx.createFile({ dir: vault.path, name });
                     if (!r.ok) { setFsNotice({ ok: false, text: r.error }); return; }
-                    setFsNotice({ ok: true, text: `已创建「${r.name}」` });
+                    setFsNotice({ ok: true, text: `Created "${r.name}"` });
                     await refreshTree();
                   }}
                 />
@@ -1818,44 +1818,44 @@ export default function App() {
               >
                 {activeTab ? (
                   <>
-                    <div className="section-title">当前文件</div>
+                    <div className="section-title">Current file</div>
                     <div className="info-list">
-                      <div className="info-item"><span className="k">名称</span><span className="v selectable">{activeTab.name}</span></div>
-                      <div className="info-item"><span className="k">类型</span><span className="v">{activeTab.kind}</span></div>
-                      <div className="info-item"><span className="k">大小</span><span className="v">{fmtSize(activeTab.size)}</span></div>
+                      <div className="info-item"><span className="k">Name</span><span className="v selectable">{activeTab.name}</span></div>
+                      <div className="info-item"><span className="k">Type</span><span className="v">{activeTab.kind}</span></div>
+                      <div className="info-item"><span className="k">Size</span><span className="v">{fmtSize(activeTab.size)}</span></div>
                       {stats && (
                         <>
                           {/* words 可能是 null（超大文件只统计字符数，不跑分词正则） */}
                           {stats.words !== null && (
-                            <div className="info-item"><span className="k">字数</span><span className="v">{stats.words}</span></div>
+                            <div className="info-item"><span className="k">Words</span><span className="v">{stats.words}</span></div>
                           )}
-                          <div className="info-item"><span className="k">字符</span><span className="v">{stats.chars}</span></div>
+                          <div className="info-item"><span className="k">Characters</span><span className="v">{stats.chars}</span></div>
                         </>
                       )}
                       {activeTab.mtime && (
                         <div className="info-item">
-                          <span className="k">修改时间</span>
-                          <span className="v">{new Date(activeTab.mtime).toLocaleString("zh-CN")}</span>
+                          <span className="k">Modified</span>
+                          <span className="v">{new Date(activeTab.mtime).toLocaleString("en-GB")}</span>
                         </div>
                       )}
                       {/* 转换来源：让用户知道这份 PDF 是从 PPT 转来的 */}
                       {activeTab.convertedFrom && (
                         <div className="info-item">
-                          <span className="k">高保真</span>
+                          <span className="k">High fidelity</span>
                           <span className="v">
-                            由 {activeTab.convertedFrom} 转换
+                            Converted from {activeTab.convertedFrom}
                             {activeTab.convertMs ? `（${(activeTab.convertMs / 1000).toFixed(1)}s）` : ""}
                           </span>
                         </div>
                       )}
                     </div>
-                    <div className="section-title">反向链接</div>
+                    <div className="section-title">Backlinks</div>
                     <div className="info-list" style={{ color: "var(--text-faint)", fontSize: 12 }}>
-                      （P3 阶段实现：需要先建立链接索引）
+                      (planned for P3: it needs a link index first)
                     </div>
                   </>
                   ) : (
-                    <div className="tree-empty">打开一个文件后这里显示详情</div>
+                    <div className="tree-empty">Details appear here once a file is open</div>
                   )}
               </div>
             </div>
@@ -1873,7 +1873,7 @@ export default function App() {
            */
           <button
             onClick={() => setShowRight(true)}
-            title="展开右栏（Ctrl+B）"
+            title="Expand the right panel (Ctrl+B)"
             style={{
               flex: "0 0 auto", width: 26, alignSelf: "stretch",
               display: "flex", flexDirection: "column", alignItems: "center",
@@ -1893,7 +1893,7 @@ export default function App() {
           >
             <span style={{ fontSize: 13 }}>‹</span>
             <span style={{ writingMode: "vertical-rl", letterSpacing: 1 }}>
-              {rightTab === "ai" ? "AI 助手" : rightTab === "info" ? "信息" : "链接"}
+              {rightTab === "ai" ? "AI Assistant" : rightTab === "info" ? "Info" : "Links"}
             </span>
           </button>
         )}
@@ -1922,14 +1922,14 @@ export default function App() {
           {ctxMenu.entry?.isDir && (
             <>
               <CtxItem
-                label="在此新建文件"
+                label="New file here"
                 onClick={() => {
                   setCtxMenu(null);
                   openCreate("file", ctxMenu.entry!.path, 0);
                 }}
               />
               <CtxItem
-                label="在此新建文件夹"
+                label="New folder here"
                 onClick={() => {
                   setCtxMenu(null);
                   openCreate("folder", ctxMenu.entry!.path, 0);
@@ -1941,7 +1941,7 @@ export default function App() {
           {ctxMenu.entry && (
             <>
               <CtxItem
-                label="重命名"
+                label="Rename"
                 onClick={() => {
                   setRenaming(ctxMenu.entry!.path);
                   setRenameValue(ctxMenu.entry!.name);
@@ -1950,7 +1950,7 @@ export default function App() {
               />
               {!ctxMenu.entry.isDir && (
                 <CtxItem
-                  label="在文件夹中显示"
+                  label="Show in folder"
                   onClick={() => {
                     window.gezhi.file.reveal(ctxMenu.entry!.path);
                     setCtxMenu(null);
@@ -1959,7 +1959,7 @@ export default function App() {
               )}
               <div style={{ height: 1, background: "var(--bd)" }} />
               <CtxItem
-                label="删除（移到回收站）"
+                label="Delete (move to the recycle bin)"
                 danger
                 onClick={() => {
                   const e = ctxMenu.entry!;
@@ -1971,8 +1971,8 @@ export default function App() {
           )}
           {!ctxMenu.entry && vault?.path && (
             <>
-              <CtxItem label="新建文件" onClick={() => { setCtxMenu(null); openCreate("file", vault.path!, 0); }} />
-              <CtxItem label="新建文件夹" onClick={() => { setCtxMenu(null); openCreate("folder", vault.path!, 0); }} />
+              <CtxItem label="New file" onClick={() => { setCtxMenu(null); openCreate("file", vault.path!, 0); }} />
+              <CtxItem label="New folder" onClick={() => { setCtxMenu(null); openCreate("folder", vault.path!, 0); }} />
             </>
           )}
         </div>
@@ -1981,7 +1981,7 @@ export default function App() {
       {/* 状态栏。文件路径放这里 —— 它是"偶尔要看一眼"的信息，
           占右栏一整块是浪费（用户反馈过这点）。 */}
       <div className="statusbar">
-        <span>{loading ? "载入中…" : status}</span>
+        <span>{loading ? "Loading…" : status}</span>
         <div className="spacer" />
         {activeTab && (
           <span className="selectable" title={activeTab.path} style={{ maxWidth: "45%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", direction: "rtl", textAlign: "left" }}>
@@ -1990,10 +1990,10 @@ export default function App() {
         )}
         {stats && (
           <span>
-            {stats.words !== null ? `${stats.words} 个词 · ` : ""}{stats.chars} 个字符
+            {stats.words !== null ? `${stats.words} words · ` : ""}{stats.chars} characters
           </span>
         )}
-        {vault && <span>{tabs.length} 个标签页</span>}
+        {vault && <span>{tabs.length} tabs</span>}
       </div>
     </div>
   );
@@ -2029,7 +2029,7 @@ function ImageView({ bytes, name }: { bytes: Uint8Array; name: string }) {
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [bytes]);
-  if (!url) return <div className="empty-state">载入图片…</div>;
+  if (!url) return <div className="empty-state">Loading image…</div>;
   return (
     <div style={{ height: "100%", display: "grid", placeItems: "center", background: "var(--bg-tertiary)", padding: 24 }}>
       <img src={url} alt={name} style={{ maxWidth: "100%", maxHeight: "100%", boxShadow: "0 2px 12px rgba(0,0,0,.18)", background: "#fff" }} />

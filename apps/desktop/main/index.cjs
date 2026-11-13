@@ -1,19 +1,19 @@
-// 格致桌面端 · 主进程
+// Gezhi desktop · main process
 //
-// ⚠️ 这个文件是 CommonJS，不是 ESM —— 这不是偷懒，是 Electron 的硬限制：
-//   `import { app, BrowserWindow } from "electron"` 会报
+// ⚠️ This file is CommonJS, not ESM — this is not laziness, it is a hard limit of Electron:
+//   `import { app, BrowserWindow } from "electron"` throws
 //   "The requested module 'electron' does not provide an export named 'BrowserWindow'"
-//   Electron 的内置模块是 CJS，不提供 ESM 具名导出探测。
-//   所以主进程与 preload 用 .cjs；渲染进程照常可以用 ESM（它走的是浏览器那套）。
-//   实测记录见 docs/06。
+//   Electron's built-in modules are CJS and do not provide ESM named-export detection.
+//   So the main process and preload use .cjs; the renderer can keep using ESM (it goes through the browser path).
+//   Field notes are in docs/06.
 //
-// 主进程只做三件事：
-//   ① 管窗口与生命周期
-//   ② 提供受控的 IPC（渲染进程不能直接碰文件系统）
-//   ③ 承载将来要放主进程的东西（DSH 桥、SQLite、语音、导出）
+// The main process only does three things:
+//   ① Manage windows and lifecycle
+//   ② Provide controlled IPC (the renderer must not touch the filesystem directly)
+//   ③ Host things that belong in the main process later (DSH bridge, SQLite, voice, export)
 //
-// 安全约束：contextIsolation 必须开、nodeIntegration 必须关。
-// 密钥不出主进程（见 docs/04）。
+// Security constraints: contextIsolation must be on, nodeIntegration must be off.
+// Secrets never leave the main process (see docs/04).
 const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
@@ -49,18 +49,19 @@ let mainWindow = null;
 
 function createWindow() {
   /**
-   * 窗口尺寸**按屏幕自适应**，不写死。
+   * Window size **adapts to the screen** instead of being hard-coded.
    *
-   * ★ 为什么必须这样：
-   *   原来写死 width:1440, height:900。实测用户屏幕 1440×900，
-   *   扣掉任务栏后工作区只有 **1440×852** —— 窗口比工作区高 48px，
-   *   底部被切；宽度也顶到边，右侧栏（AI 助手/日历/数字人）容易被推到屏幕外。
+   * ★ Why it must be this way:
+   *   Originally it was hard-coded width:1440, height:900. On a real 1440×900 screen,
+   *   after subtracting the taskbar the work area is only **1440×852** — the window
+   *   is 48px taller than the work area, so the bottom gets clipped; the width also
+   *   presses against the edge, and the right panel (AI assistant / calendar / digital human) is easily pushed off-screen.
    *
-   *   写死尺寸在任何一台分辨率不同的机器上都会出问题，
-   *   所以改成：优先用"工作区大小"，再按理想尺寸取小。
+   *   A hard-coded size breaks on any machine with a different resolution,
+   *   so we changed it to: prefer the "work area size", then take the smaller of the ideal size.
    */
   const { screen } = require("electron");
-  const wa = screen.getPrimaryDisplay().workAreaSize;   // 已扣掉任务栏
+  const wa = screen.getPrimaryDisplay().workAreaSize;   // taskbar already subtracted
   const width = Math.min(1440, wa.width);
   const height = Math.min(900, wa.height);
 
@@ -69,29 +70,29 @@ function createWindow() {
     height,
     minWidth: Math.min(900, wa.width),
     minHeight: Math.min(600, wa.height),
-    // 居中：避免窗口跑出屏幕外（多显示器/小屏时尤其明显）
+    // Center it: avoid the window running off-screen (especially on multiple monitors / small screens)
     center: true,
-    title: "格致",
+    title: "Gezhi",
     icon: app.isPackaged
       ? path.join(process.resourcesPath, "branding", "icon-256.png")
       : path.resolve(HERE, "..", "..", "..", "brand", "assets", "icon-256.png"),
     backgroundColor: "#ffffff",
-    show: false,                    // 等 ready-to-show，避免白屏闪烁
+    show: false,                    // wait for ready-to-show to avoid a white-screen flash
     webPreferences: {
       preload: path.join(HERE, "preload.cjs"),
-      contextIsolation: true,        // ★ 必须
-      nodeIntegration: false,        // ★ 必须
-      sandbox: false,                // preload 要用 node 模块
+      contextIsolation: true,        // ★ required
+      nodeIntegration: false,        // ★ required
+      sandbox: false,                // preload needs node modules
       spellcheck: false,
     },
   });
 
-  // 记一下实际生效的尺寸，排查"界面被切"这类问题时能一眼看到
-  console.log(`[格致] 窗口 ${width}×${height}（屏幕工作区 ${wa.width}×${wa.height}）`);
+  // Log the actual effective size so "UI is clipped" issues are visible at a glance
+  console.log(`[Gezhi] window ${width}×${height} (screen work area ${wa.width}×${wa.height})`);
 
   mainWindow.once("ready-to-show", () => mainWindow.show());
 
-  // 外部链接交给系统浏览器
+  // Hand external links to the system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
@@ -99,17 +100,17 @@ function createWindow() {
 
   const devUrl = process.env.GEZHI_DEV_URL;
   if (devUrl) {
-    // 开发模式：连 Vite dev server（有 HMR）
+    // Dev mode: connect to the Vite dev server (has HMR)
     mainWindow.loadURL(devUrl);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    // 生产模式：加载 Vite 构建产物
-    // 注意产物在 renderer/dist/ —— 第一版直接 loadFile(renderer/index.html)
-    // 加载的是源文件，所以只有纯静态页能跑，编辑器/PDF 全都上不了。
+    // Production mode: load the Vite build output
+    // Note the output lives in renderer/dist/ — the first version directly loadFile(renderer/index.html),
+    // which loaded the source files, so only purely static pages worked; editor / PDF were all broken.
     const built = path.join(ROOT, "renderer", "dist", "index.html");
     const fallback = path.join(ROOT, "renderer", "index.html");
     const target = fs.existsSync(built) ? built : fallback;
-    // GEZHI_TEST=1 时带 ?test=1，启用界面里的自动化测试钩子（详见 renderer/src/App.tsx）
+    // When GEZHI_TEST=1, append ?test=1 to enable the UI's automation test hooks (see renderer/src/App.tsx)
     const params = new URLSearchParams();
     if (process.env.GEZHI_TEST === '1') params.set('test', '1');
     if (process.env.GEZHI_DEMO_EN === '1') params.set('demo', 'en');
@@ -134,8 +135,8 @@ app.on("window-all-closed", () => {
 
 // ------------------------------------------------------------------ IPC
 //
-// 原则：渲染进程永远不直接读文件系统，一切经由这里，且路径必须校验。
-// P1 先给只读能力（浏览库、读文件），写入能力等编辑器落地再加。
+// Principle: the renderer never reads the filesystem directly, everything goes through here, and paths must be validated.
+// P1 gives read-only capability first (browse vault, read files); write capability is added once the editor lands.
 
 const TEXT_EXT = new Set([
   ".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".csv",
@@ -143,47 +144,47 @@ const TEXT_EXT = new Set([
   ".c", ".cpp", ".h", ".java", ".rs", ".go", ".sh", ".ps1", ".sql",
 ]);
 /**
- * 文本文件读取上限。
+ * Text file read limit.
  *
- * 实测用户最大的 CSV 是 **42.8 MB**（FIRMS 全球火点数据），原来设 8MB 会直接拒掉。
- * 放宽到 96MB：CSV 视图是虚拟滚动的，几十万行也能流畅显示，
- * 所以"大"本身不是问题 —— 真正会卡的是把几十万行全塞进 DOM，那在视图层解决。
+ * The largest CSV we measured is **42.8 MB** (FIRMS global fire point data); the old 8MB limit would just reject it.
+ * Relaxed to 96MB: the CSV view is virtualized, so hundreds of thousands of rows still scroll smoothly,
+ * so "large" is not the problem by itself — what really jams is stuffing hundreds of thousands of rows into the DOM, which is solved at the view layer.
  */
 const MAX_READ_BYTES = 96 * 1024 * 1024;
 const SKIP_DIRS = new Set(["node_modules", ".git", "$RECYCLE.BIN", "System Volume Information", ".cache"]);
 
 function registerIpc() {
   ipcMain.handle("app:info", () => ({
-    name: "格致",
+    name: "Gezhi",
     version: app.getVersion(),
     electron: process.versions.electron,
     chrome: process.versions.chrome,
     node: process.versions.node,
     platform: process.platform,
-    // ★ 用系统 API 取「文档」目录，不硬编码（见计划 §4.1）
+    // ★ Use the system API to get the "Documents" directory, not hard-coded (see plan §4.1)
     documentsDir: app.getPath("documents"),
     cwd: process.cwd(),
     /**
-     * 命令行传入的库路径（试用/开发用，省掉每次选目录）。
+     * Vault path passed on the command line (for trials / development, saves selecting a directory every time).
      *
-     * 用法：electron . "D:\某个库"
+     * Usage: electron . "D:\some-vault"
      *
-     * ⚠️ 参数解析比看上去麻烦（第一次就踩了）：
-     *   `electron . <dir>` 时 process.argv 是
+     * ⚠️ Argument parsing is trickier than it looks (we hit this on the first try):
+     *   With `electron . <dir>`, process.argv is
      *     [electron.exe, ".", "<dir>"]
-     *   而 `electron <script> <dir>` 时是
+     *   while with `electron <script> <dir>` it is
      *     [electron.exe, "<script>", "<dir>"]
-     *   如果只是"取第一个存在的目录"，会先把 "." 解析成 **应用自己的工作目录**
-     *   （实测：窗口里打开的是 apps\desktop，而不是传入的库）。
+     *   If we just "take the first existing directory", "." gets resolved first to **the app's own working directory**
+     *   (measured: the window opened apps\desktop instead of the passed-in vault).
      *
-     *   所以规则收紧为：
-     *     1. 必须存在、是目录
-     *     2. 不能是应用自己的目录（__dirname 及其祖先）
-     *     3. 必须**看起来像资料库** —— 有 .gezhi 目录、或至少不是源码目录
+     *   So the rules are tightened to:
+     *     1. Must exist and be a directory
+     *     2. Must not be the app's own directory (__dirname or its ancestors)
+     *     3. Must **look like a vault** — has a .gezhi directory, or at least is not a source directory
      */
     vaultFromArgv: (() => {
       const appDir = path.resolve(__dirname, "..");          // apps/desktop
-      const repoRoot = path.resolve(appDir, "..", "..");     // 仓库根
+      const repoRoot = path.resolve(appDir, "..", "..");     // repo root
       const isAppPath = (p) => {
         const r = path.resolve(p);
         return r === appDir || r === repoRoot || appDir.startsWith(r + path.sep) || r.startsWith(appDir + path.sep);
@@ -195,7 +196,7 @@ function registerIpc() {
         if (!st.isDirectory()) return false;
         const abs = path.resolve(a);
         if (isAppPath(abs)) return false;
-        // 排除应用自身的入口路径
+        // Exclude the app's own entry path
         if (a.endsWith("index.cjs") || a === ".") return false;
         return true;
       });
@@ -205,7 +206,7 @@ function registerIpc() {
 
   ipcMain.handle("vault:pick", async () => {
     const r = await dialog.showOpenDialog(mainWindow, {
-      title: "选择或新建一个库目录",
+      title: "Choose or create a vault directory",
       properties: ["openDirectory", "createDirectory"],
     });
     if (r.canceled || !r.filePaths.length) return null;
@@ -217,56 +218,56 @@ function registerIpc() {
   ipcMain.handle("file:read", (_e, filePath) => readTextFile(filePath));
   ipcMain.handle("file:reveal", (_e, p) => { shell.showItemInFolder(p); return true; });
 
-  // 二进制读取：PDF / Word / Excel / 图片走这条。
-  // 为什么不让渲染进程直接读：渲染进程没有 fs（contextIsolation 已开），
-  // 而且 file:// 在 webSecurity 下取二进制会被 CORS 拦。
-  // 返回 ArrayBuffer 的 Uint8Array 形式，渲染进程可直接喂给 pdf.js / docx-preview。
+  // Binary reads: PDF / Word / Excel / images go through this.
+  // Why the renderer can't read directly: the renderer has no fs (contextIsolation is on),
+  // and reading binary via file:// under webSecurity is blocked by CORS.
+  // Returns an ArrayBuffer as Uint8Array, which the renderer can feed directly to pdf.js / docx-preview.
   ipcMain.handle("file:readBinary", (_e, filePath) => readBinaryFile(filePath));
 
-  // 旧版 .doc：OLE 二进制格式，必须在主进程解析
+  // Legacy .doc: OLE binary format, must be parsed in the main process
   ipcMain.handle("file:readDoc", (_e, filePath) => readDocFile(filePath));
 
-  // 旧版 .ppt：同样是 OLE 二进制，主进程解析
+  // Legacy .ppt: also OLE binary, parsed in the main process
   ipcMain.handle("file:readPpt", (_e, filePath) => readPptFile(filePath));
 
   /**
-   * PPTX：**在主进程解析，只把文字传回渲染进程**。
+   * PPTX: **parsed in the main process, only the text is sent back to the renderer**.
    *
-   * 为什么不走 file:readBinary：
-   *   实测用户最大的 PPTX 是 219 MB。把 2.19 亿字节通过 IPC 传过去，
-   *   结构化克隆要复制一份、渲染进程还要驻留一份 —— 测试里直接崩了。
-   *   而 219 MB 的课件提取出的文字通常只有几百 KB，传输量降三个数量级。
+   * Why not use file:readBinary:
+   *   The largest PPTX we measured is 219 MB. Pushing 219 million bytes through IPC means
+   *   structured clone copies one copy and the renderer keeps another in memory — it crashed outright in testing.
+   *   The text extracted from a 219 MB courseware is usually only a few hundred KB, three orders of magnitude less transfer.
    */
   /**
-   * 读 PPTX 的**原始字节**，给渲染进程用纯 JS 库（pptxviewjs）画到 canvas 上。
+   * Read the **raw bytes** of a PPTX for the renderer to draw on canvas with a pure JS library (pptxviewjs).
    *
-   * 为什么不复用 file:readPptx（那个返回提取好的文字）：
-   *   Canvas 渲染需要的是原始 OOXML 字节，不是提好的文字。
+   * Why not reuse file:readPptx (which returns extracted text):
+   *   Canvas rendering needs the raw OOXML bytes, not the extracted text.
    *
-   * ⚠️ 体积上限单独设，比 MAX_BINARY_BYTES 小得多：
-   *   结构化克隆要把整个 ArrayBuffer 复制一遍，渲染进程还要再驻留一份。
-   *   实测 219 MB 的课件直接走字节 IPC 会把渲染进程搞崩。
-   *   所以这里卡在 64 MB —— 超过的课件退回"文字提取模式"，
-   *   并且在返回值里说明原因，而不是静默失败。
+   * ⚠️ The size limit is set separately and much smaller than MAX_BINARY_BYTES:
+   *   Structured clone has to copy the entire ArrayBuffer, and the renderer keeps another copy in memory.
+   *   A measured 219 MB courseware pushed through byte IPC crashes the renderer.
+   *   So here we cap at 64 MB — anything larger falls back to "text extraction mode",
+   *   and the reason is reported in the return value instead of failing silently.
    */
   const MAX_PPTX_RENDER_BYTES = 64 * 1024 * 1024;
   /**
-   * 读电子表格（.xlsx / .xls / .ods）。
+   * Read a spreadsheet (.xlsx / .xls / .ods).
    *
-   * ★ 为什么不像 PPT 那样转 PDF：
-   *   表格数据要的是看单元格、对比数值。转 PDF 只是一张静态图，
-   *   既不能选中也不能排序 —— 那是把表格当图片处理，方向就错了。
+   * ★ Why not convert to PDF like PPT:
+   *   Spreadsheet data needs to be read cell by cell and values compared. Converting to PDF is just a static image,
+   *   you can't select or sort it — that's treating a table as an image, which is the wrong direction.
    *
-   * ★ 为什么在主进程解析：
-   *   xlsx 是 zip + XML，渲染进程没有 fs，也没有解压能力。
-   *   主进程解析完只回传**用到的区域**（去掉尾部空行空列），
-   *   避免 13 万单元格的结构化克隆把渲染进程拖死。
+   * ★ Why parse in the main process:
+   *   xlsx is zip + XML; the renderer has no fs and no decompression.
+   *   After parsing, the main process returns only the **used range** (trailing empty rows and columns removed),
+   *   avoiding the structured-clone cost of 130k cells dragging the renderer down.
    */
   ipcMain.handle("file:readSheet", (_e, filePath) => {
-    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
     try {
       const st = fs.statSync(filePath);
-      if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
+      if (st.isDirectory()) return { ok: false, error: "This is a directory" };
       const r = parseSheetFile(filePath);
       return r;
     } catch (e) {
@@ -275,17 +276,17 @@ function registerIpc() {
   });
 
   ipcMain.handle("file:readPptxBytes", (_e, filePath) => {
-    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
     let st;
     try { st = fs.statSync(filePath); } catch (e) { return { ok: false, error: e.message }; }
-    if (st.isDirectory()) return { ok: false, error: "这是一个目录" };
+    if (st.isDirectory()) return { ok: false, error: "This is a directory" };
     if (st.size > MAX_PPTX_RENDER_BYTES) {
       return {
         ok: false,
         tooLarge: true,
         size: st.size,
         limit: MAX_PPTX_RENDER_BYTES,
-        error: `文件 ${(st.size / 1024 / 1024).toFixed(0)} MB 超过渲染上限 ${MAX_PPTX_RENDER_BYTES / 1024 / 1024} MB`,
+        error: `File ${(st.size / 1024 / 1024).toFixed(0)} MB exceeds the render limit of ${MAX_PPTX_RENDER_BYTES / 1024 / 1024} MB`,
       };
     }
     try {
@@ -297,12 +298,12 @@ function registerIpc() {
   });
 
   ipcMain.handle("file:readPptx", (_e, filePath) => {
-    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+    if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
     const ext = path.extname(filePath).toLowerCase();
     if (ext !== ".pptx") {
-      // 兼容 .ppt 改名的情况
-      if (ext === ".ppt") return { ok: false, isActuallyPptx: false, error: "这是 .ppt，请用旧版解析" };
-      return { ok: false, error: "只处理 .pptx 文件" };
+      // Handle renamed .ppt files
+      if (ext === ".ppt") return { ok: false, isActuallyPptx: false, error: "This is a .ppt, use the legacy parser" };
+      return { ok: false, error: "Only .pptx files are handled" };
     }
     let st;
     try { st = fs.statSync(filePath); } catch (e) { return { ok: false, error: e.message }; }
@@ -321,10 +322,10 @@ function registerIpc() {
     };
   });
 
-  // 另存为：导出功能用（P5 文档产线会用到）
+  // Save as: used by export (the P5 document pipeline will use it)
   ipcMain.handle("file:saveAs", async (_e, { defaultName, data }) => {
     const r = await dialog.showSaveDialog(mainWindow, {
-      title: "另存为",
+      title: "Save As",
       defaultPath: defaultName,
     });
     if (r.canceled || !r.filePath) return { ok: false, canceled: true };
@@ -336,32 +337,32 @@ function registerIpc() {
     }
   });
 
-  // AI 助手：把 DeepSeek Harness 接进来（这是"融合 DSH"落地的地方）
+  // AI assistant: bring DeepSeek Harness in (this is where "integrating DSH" lands)
   registerAI(ipcMain, () => mainWindow);
   registerAIStream(ipcMain, () => mainWindow);
 
-  // 导出：Markdown → PDF / Word / Markdown
+  // Export: Markdown → PDF / Word / Markdown
   registerExport(ipcMain, () => mainWindow);
 
-  // 库内文件操作：新建 / 重命名 / 删除 / 保存
+  // Vault file operations: create / rename / delete / save
   registerVaultFs(ipcMain);
 
-  // 全文检索与反向链接（SQLite + FTS5，索引库放 %APPDATA%）
+  // Full-text search and backlinks (SQLite + FTS5, index database stored in %APPDATA%)
   registerSearch(ipcMain, () => mainWindow, app);
 
-  // 高保真查看：用系统上的 LibreOffice 把 Office 文档转 PDF（可选增强）
+  // High-fidelity viewing: use LibreOffice on the system to convert Office docs to PDF (optional enhancement)
   registerConvert(ipcMain, () => mainWindow, app);
 
-  // 日历 / 计划 / 倒计时（SQLite，库放 %APPDATA%）
+  // Calendar / plans / countdowns (SQLite, database stored in %APPDATA%)
   registerCalendar(ipcMain, () => mainWindow, app);
 
-  // 数字人能力检测（语音凭据 / 口型算法 / 设备）
+  // Digital human capability detection (voice credentials / lip-sync algorithm / device)
   registerAvatar(ipcMain, () => mainWindow, app);
 
-  // 设置：凭据管理 + 应用选项
+  // Settings: credential management + app options
   registerSettings(ipcMain, () => mainWindow, app);
 
-  // 题库与组卷（SQLite，库放 %APPDATA%）
+  // Question bank and paper assembly (SQLite, database stored in %APPDATA%)
   registerBank(ipcMain, () => mainWindow, app);
   registerLearning(ipcMain, app);
   registerCompanions(ipcMain, app);
@@ -369,30 +370,30 @@ function registerIpc() {
   registerCompetition(ipcMain, app);
 }
 
-/** 读库信息：认识 .gezhi/vault.json；不是格致库也允许当普通文件夹浏览 */
+/** Read vault info: recognizes .gezhi/vault.json; non-Gezhi vaults are still allowed to be browsed as plain folders */
 function readVaultInfo(dir) {
-  if (typeof dir !== "string" || !dir) return { ok: false, error: "路径无效" };
+  if (typeof dir !== "string" || !dir) return { ok: false, error: "Invalid path" };
   let st;
   try {
     st = fs.statSync(dir);
   } catch (e) {
-    return { ok: false, error: `目录不存在：${e.message}` };
+    return { ok: false, error: `Directory does not exist: ${e.message}` };
   }
-  if (!st.isDirectory()) return { ok: false, error: "不是目录" };
+  if (!st.isDirectory()) return { ok: false, error: "Not a directory" };
 
   const configPath = path.join(dir, ".gezhi", "vault.json");
   let vault = null;
   try {
     vault = JSON.parse(fs.readFileSync(configPath, "utf8"));
   } catch {
-    /* 不是格致库，当普通文件夹 */
+    /* Not a Gezhi vault, treat as a plain folder */
   }
   return { ok: true, path: dir, name: path.basename(dir), isVault: Boolean(vault), vault, configPath };
 }
 
-/** 列一层目录（懒加载）。排序：目录在前，中文按 localeCompare */
+/** List one directory level (lazy loading). Sorting: directories first, Chinese text via localeCompare */
 function listTree(dir) {
-  if (typeof dir !== "string" || !dir) return { ok: false, error: "路径无效", entries: [] };
+  if (typeof dir !== "string" || !dir) return { ok: false, error: "Invalid path", entries: [] };
   let names;
   try {
     names = fs.readdirSync(dir, { withFileTypes: true });
@@ -410,7 +411,7 @@ function listTree(dir) {
       const st = fs.statSync(full);
       size = st.size;
       mtime = st.mtime.toISOString();
-    } catch { /* 权限等问题忽略这一项 */ }
+    } catch { /* ignore this entry on permission errors, etc. */ }
     entries.push({
       name: d.name,
       path: full,
@@ -424,12 +425,12 @@ function listTree(dir) {
   return { ok: true, dir, entries };
 }
 
-/** 读文本文件（限类型与大小） */
+/** Read a text file (type and size limited) */
 function readTextFile(filePath) {
-  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
   const ext = path.extname(filePath).toLowerCase();
   if (!TEXT_EXT.has(ext)) {
-    return { ok: false, error: `暂不支持预览 ${ext || "(无扩展名)"} 文件`, unsupported: true };
+    return { ok: false, error: `Preview for ${ext || "(no extension)"} files is not supported yet`, unsupported: true };
   }
   let st;
   try {
@@ -438,7 +439,7 @@ function readTextFile(filePath) {
     return { ok: false, error: e.message };
   }
   if (st.size > MAX_READ_BYTES) {
-    return { ok: false, error: `文件 ${(st.size / 1024 / 1024).toFixed(1)}MB 过大（上限 8MB）` };
+    return { ok: false, error: `File ${(st.size / 1024 / 1024).toFixed(1)}MB is too large (limit 8MB)` };
   }
   try {
     return { ok: true, path: filePath, text: fs.readFileSync(filePath, "utf8"), size: st.size, mtime: st.mtime.toISOString() };
@@ -447,19 +448,19 @@ function readTextFile(filePath) {
   }
 }
 
-/** 二进制文件读取上限。
- *  实测用户最大的 PPTX 是 219 MB（机器学习课件），所以上限要高于它 ——
- *  原来设 200MB 会直接拒掉，用户看到的是"文件过大"。 */
+/** Binary file read limit.
+ *  The largest PPTX we measured is 219 MB (a machine-learning courseware), so the limit must be above it —
+ *  the old 200MB limit would just reject it and the user would see "file too large". */
 const MAX_BINARY_BYTES = 400 * 1024 * 1024;
 
 const BINARY_EXT = new Set([".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".zip"]);
 
-/** 读二进制文件，返回 Uint8Array（结构化克隆可直接传 Uint8Array） */
+/** Read a binary file, returns Uint8Array (structured clone can pass Uint8Array directly) */
 function readBinaryFile(filePath) {
-  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
   const ext = path.extname(filePath).toLowerCase();
   if (!BINARY_EXT.has(ext)) {
-    return { ok: false, error: `不是支持的二进制类型：${ext || "(无扩展名)"}`, unsupported: true };
+    return { ok: false, error: `Unsupported binary type: ${ext || "(no extension)"}`, unsupported: true };
   }
   let st;
   try {
@@ -468,11 +469,11 @@ function readBinaryFile(filePath) {
     return { ok: false, error: e.message };
   }
   if (st.size > MAX_BINARY_BYTES) {
-    return { ok: false, error: `文件 ${(st.size / 1024 / 1024).toFixed(0)}MB 过大` };
+    return { ok: false, error: `File ${(st.size / 1024 / 1024).toFixed(0)}MB is too large` };
   }
   try {
     const buf = fs.readFileSync(filePath);
-    // 转成 Uint8Array 而不是 Node Buffer：跨 IPC 后 Buffer 会变成普通对象
+    // Convert to Uint8Array rather than Node Buffer: after crossing IPC, Buffer becomes a plain object
     return {
       ok: true,
       path: filePath,
@@ -487,17 +488,17 @@ function readBinaryFile(filePath) {
 }
 
 /**
- * 读旧版 .doc（Word 97-2003 二进制格式）。
+ * Read legacy .doc (Word 97-2003 binary format).
  *
- * docx 是 zip+XML，渲染进程能直接处理；
- * 但 .doc 是 OLE 复合文档，**必须在主进程解析**（渲染进程没有 fs，
- * 而且解析逻辑是 Node 侧的 Buffer 操作）。
- * 解析器见 lib/doc-extract.cjs（自己实现，含 OLE 容器 + 分片表 + 编码判定）。
+ * docx is zip+XML, which the renderer can handle directly;
+ * but .doc is an OLE compound document, so it **must be parsed in the main process** (the renderer has no fs,
+ * and the parsing logic operates on Buffers on the Node side).
+ * The parser lives in lib/doc-extract.cjs (implemented ourselves, with OLE container + piece table + encoding detection).
  */
 function readDocFile(filePath) {
-  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
   const ext = path.extname(filePath).toLowerCase();
-  if (ext !== ".doc") return { ok: false, error: "只处理 .doc 文件" };
+  if (ext !== ".doc") return { ok: false, error: "Only .doc files are handled" };
 
   let st;
   try {
@@ -515,9 +516,9 @@ function readDocFile(filePath) {
   }
 
   if (!r.ok) {
-    // 特例：文件其实是 docx 改名 —— 告诉界面改走 docx 路径
+    // Special case: the file is actually a renamed docx — tell the UI to go through the docx path
     if (r.error === "__IS_DOCX__") {
-      return { ok: false, isActuallyDocx: true, error: r.hint ?? "这其实是 .docx 文件" };
+      return { ok: false, isActuallyDocx: true, error: r.hint ?? "This is actually a .docx file" };
     }
     return { ok: false, error: r.error };
   }
@@ -530,19 +531,19 @@ function readDocFile(filePath) {
     size: st.size,
     mtime: st.mtime.toISOString(),
     ms: Date.now() - t0,
-    // .doc 的版式无法还原，界面要如实告知（不能假装和 docx 一样）
+    // .doc layout cannot be faithfully reproduced; the UI must tell the user (it can't pretend to be identical to docx)
     lossy: true,
   };
 }
 
 /**
- * 读旧版 .ppt（PowerPoint 97-2003 二进制格式）。
- * 与 .doc 同理：OLE 复合文档，必须在主进程解析。
+ * Read legacy .ppt (PowerPoint 97-2003 binary format).
+ * Same reasoning as .doc: OLE compound document, must be parsed in the main process.
  */
 function readPptFile(filePath) {
-  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "路径无效" };
+  if (typeof filePath !== "string" || !filePath) return { ok: false, error: "Invalid path" };
   const ext = path.extname(filePath).toLowerCase();
-  if (ext !== ".ppt") return { ok: false, error: "只处理 .ppt 文件" };
+  if (ext !== ".ppt") return { ok: false, error: "Only .ppt files are handled" };
 
   let st;
   try {
@@ -561,17 +562,17 @@ function readPptFile(filePath) {
 
   if (!r.ok) {
     if (r.error === "__IS_PPTX__") {
-      return { ok: false, isActuallyPptx: true, error: r.hint ?? "这其实是 .pptx 文件" };
+      return { ok: false, isActuallyPptx: true, error: r.hint ?? "This is actually a .pptx file" };
     }
     return { ok: false, error: r.error };
   }
 
-  // .ppt 没有可靠的"每页"边界（页码信息在另一套结构里），
-  // 所以按空行切块当作"近似页"，并如实说明这不是精确页码。
+  // .ppt has no reliable "per page" boundary (page-number info lives in a separate structure),
+  // so we split on blank lines into blocks as "approximate pages", and state clearly that these are not exact page numbers.
   const blocks = r.text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
   const slides = blocks.map((b, i) => {
     const lines = b.split("\n").map((s) => s.trim()).filter(Boolean);
-    return { index: i + 1, title: lines[0] ?? `（第 ${i + 1} 段）`, lines };
+    return { index: i + 1, title: lines[0] ?? `(paragraph ${i + 1})`, lines };
   });
 
   return {

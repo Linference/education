@@ -1,16 +1,16 @@
-// 电子表格查看器（xlsx / xls）
+// Spreadsheet viewer (xlsx / xls)
 //
-// ★ 为什么不做"转 PDF"：
-//   表格数据要的是**看单元格、对比数值、排序**。
-//   转成 PDF 出来只是一张静态图 —— 那是把表格当图片处理，方向就错了。
-//   （用户直接指出过这一点：把 csv/xlsx 都转 PDF 是错的。）
+// ★ Why not "convert to PDF":
+//   Tabular data needs **cell inspection, value comparison, sorting**.
+//   A PDF is just a static image — that treats a table as a picture, which is the wrong approach.
+//   (A user pointed this out directly: converting csv/xlsx to PDF is wrong.)
 //
-// 数据由**主进程**解析好传进来（xlsx 是 zip + XML，渲染进程没有 fs）。
+// Data is parsed in the **main process** and passed in (xlsx is zip + XML; the renderer has no fs).
 //
-// ★ 必须有虚拟滚动：
-//   实测用户的表格有 449 行 × 302 列（13 万个单元格）。
-//   全量渲染 13 万个 <td> 会让界面卡死 —— 这是 CSV 查看器早先踩过的同一个坑。
-//   所以这里只渲染视口内的行。
+// ★ Virtual scrolling is required:
+//   A real user's sheet had 449 rows × 302 columns (130k cells).
+//   Rendering all 130k <td>s freezes the UI — the same pitfall the CSV viewer hit earlier.
+//   So only rows inside the viewport are rendered.
 import { useMemo, useRef, useState, useEffect } from "react";
 
 interface SheetData {
@@ -30,13 +30,13 @@ interface Props {
   ms?: number;
 }
 
-/** 行高（与 CSS 保持一致，虚拟滚动要用它算偏移） */
+/** Row height (keep in sync with CSS; virtual scrolling uses it for offsets) */
 const ROW_H = 24;
-/** 左侧行号列宽 */
+/** Width of the row-number gutter on the left */
 const GUTTER_W = 52;
-/** 视口上下各多渲染几行，滚动时不留白 */
+/** Extra rows rendered above and below the viewport so scrolling never shows blanks */
 const OVERSCAN = 12;
-/** 单元格最大显示宽度（超长内容截断，避免一格撑爆整表） */
+/** Max cell display width (long content is truncated so one cell cannot blow up the table) */
 const CELL_MAX_W = 180;
 
 export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
@@ -48,7 +48,7 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
   const sheet = sheets[active];
   const name = path.split(/[\\/]/).pop() ?? "";
 
-  // 视口高度变化时更新（窗口缩放）
+  // Update when the viewport height changes (window resize)
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -59,10 +59,10 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
     return () => ro.disconnect();
   }, []);
 
-  // 切表时回到顶部
+  // Return to top when switching sheets
   useEffect(() => { setScrollTop(0); scrollerRef.current?.scrollTo({ top: 0 }); }, [active]);
 
-  /** 只算要渲染的行区间 */
+  /** Compute only the row range to render */
   const { start, end } = useMemo(() => {
     if (!sheet) return { start: 0, end: 0 };
     const first = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
@@ -71,7 +71,7 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
   }, [scrollTop, viewH, sheet]);
 
   if (!sheets.length) {
-    return <div className="empty-state"><div>这个文件里没有可显示的工作表</div></div>;
+    return <div className="empty-state"><div>No worksheets to display in this file</div></div>;
   }
 
   const visible = sheet?.rows.slice(start, end) ?? [];
@@ -80,7 +80,7 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      {/* 工具条 */}
+      {/* Toolbar */}
       <div
         style={{
           flex: "0 0 auto", display: "flex", alignItems: "center", gap: 10,
@@ -89,22 +89,22 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
         }}
       >
         <span style={{ color: "var(--text-muted)" }}>
-          {totalRows.toLocaleString()} 行 × {cols.toLocaleString()} 列
+          {totalRows.toLocaleString()} rows × {cols.toLocaleString()} columns
         </span>
         {sheet?.truncatedRows && (
-          <span style={{ color: "var(--orange)" }} title={`只显示了前 ${totalRows} 行`}>
-            （行数过大，已截断显示）
+          <span style={{ color: "var(--orange)" }} title={`Only the first ${totalRows} rows are shown`}>
+            (Too many rows; display truncated)
           </span>
         )}
         {sheet?.truncatedCols && (
-          <span style={{ color: "var(--orange)" }}>（列数过大，已截断显示）</span>
+          <span style={{ color: "var(--orange)" }}>(Too many columns; display truncated)</span>
         )}
-        {ms !== undefined && <span style={{ color: "var(--text-faint)" }}>解析 {ms}ms</span>}
+        {ms !== undefined && <span style={{ color: "var(--text-faint)" }}>Parsed in {ms}ms</span>}
         <div style={{ flex: "1 1 auto" }} />
         <span style={{ color: "var(--text-faint)", fontSize: 11 }}>{name}</span>
       </div>
 
-      {/* 工作表切换（多于一张时才显示） */}
+      {/* Sheet switcher (shown only when there is more than one) */}
       {sheets.length > 1 && (
         <div
           style={{
@@ -123,30 +123,30 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
                 color: i === active ? "var(--accent)" : "var(--text-muted)",
                 fontWeight: i === active ? 600 : 400,
               }}
-              title={s.error ?? `${s.rowCount} 行`}
+              title={s.error ?? `${s.rowCount} rows`}
             >
               {s.name}
             </button>
           ))}
           {sheetCount !== undefined && sheetCount > sheets.length && (
             <span style={{ fontSize: 11, color: "var(--text-faint)", alignSelf: "center", paddingLeft: 6 }}>
-              （共 {sheetCount} 张，只解析了前 {sheets.length} 张）
+              ({sheetCount} total; only the first {sheets.length} parsed)
             </span>
           )}
         </div>
       )}
 
-      {/* 表格本体：虚拟滚动 */}
+      {/* Table body: virtual scrolling */}
       <div
         ref={scrollerRef}
         onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
         style={{ flex: "1 1 auto", overflow: "auto", minHeight: 0, position: "relative" }}
       >
         {sheet?.error ? (
-          <div className="tree-empty">读不出这张表：{sheet.error}</div>
+          <div className="tree-empty">Could not read this sheet: {sheet.error}</div>
         ) : (
           <div style={{ position: "relative", minWidth: "min-content" }}>
-            {/* 用上下两个占位块撑出总高度，只渲染中间可见的行 */}
+            {/* Two spacer blocks set the total height; only visible rows in the middle are rendered */}
             <div style={{ height: start * ROW_H }} />
             <table
               style={{
@@ -161,7 +161,7 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
                   const rowIdx = start + i;
                   return (
                     <tr key={rowIdx} style={{ height: ROW_H }}>
-                      {/* 行号：方便对照，也起到固定列的作用 */}
+                      {/* Row number: for reference, and acts as a sticky column */}
                       <td
                         style={{
                           width: GUTTER_W, minWidth: GUTTER_W, textAlign: "right",
@@ -202,7 +202,7 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
         )}
       </div>
 
-      {/* 底部说明 */}
+      {/* Bottom info */}
       <div
         style={{
           flex: "0 0 auto", padding: "4px 12px", fontSize: 11,
@@ -210,9 +210,9 @@ export default function SheetViewer({ sheets, path, sheetCount, ms }: Props) {
           background: "var(--bg-secondary)", display: "flex", gap: 12,
         }}
       >
-        <span>虚拟滚动：只渲染可见的行（大表也不卡）</span>
+        <span>Virtual scrolling: only visible rows are rendered (large sheets stay smooth)</span>
         <div style={{ flex: "1 1 auto" }} />
-        <span>工作表 {active + 1} / {sheets.length}</span>
+        <span>Sheet {active + 1} / {sheets.length}</span>
       </div>
     </div>
   );

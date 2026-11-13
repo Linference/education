@@ -52,7 +52,7 @@ try{
   await launch();assert.equal(await page.locator('.companion-card').count(),5);
   assert.match(await page.locator('.companion-card').filter({hasText:'研究伙伴'}).textContent(),/设计验证/);
   await teacher().click();await page.getByRole('textbox',{name:'角色文字讲解'}).fill(opening);await saved();
-  pass('五个角色各有任务描述，输入草稿自动保存到本机');
+  pass('five roles each show a task description, and drafts auto-save to this machine');
   await page.getByRole('button',{name:'让角色追问',exact:true}).click();
   await page.getByTestId('dialogue-assistant').waitFor();
   assert.equal(await page.getByTestId('dialogue-learner').count(),1);
@@ -61,13 +61,13 @@ try{
   await page.getByTestId('dialogue-assistant').getByRole('button',{name:'在资料中定位',exact:true}).click();
   await page.locator('.study-source-text mark').waitFor();
   assert.equal(await page.locator('.study-source-text mark').textContent(),'牛顿第二定律指出合力决定加速度。');
-  pass('首轮追问使用当前资料，逐字原文可在资料栏高亮定位');
+  pass('the first follow-up uses the current material, and the verbatim source can be highlighted and located in the material pane');
   await page.getByRole('textbox',{name:'回应角色追问'}).fill(reply);
   await page.getByRole('button',{name:'回应并继续',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===2);
   assert.equal(await page.getByTestId('dialogue-learner').count(),2);
   assert.match(await dialogue().textContent(),/质量增大/);await saved();
-  pass('真实界面可回应角色并继续下一轮，对话与补充次数同步');
+  pass('the real UI can respond to the role and continue to the next round, with dialogue and supplement counts in sync');
   await page.getByRole('textbox',{name:'回应角色追问'}).fill('这段回答尚未发送，重启后应保留。');await saved();
   await page.locator('.learning-studio').evaluate(el=>el.scrollTop=document.querySelector('.room-dialogue').offsetTop-50);
   await shot('dialogue-light');
@@ -75,7 +75,7 @@ try{
   await dialogue().waitFor();
   assert.equal(await page.getByTestId('dialogue-assistant').count(),2);
   assert.equal(await page.getByRole('textbox',{name:'回应角色追问'}).inputValue(),'这段回答尚未发送，重启后应保留。');
-  pass('完全关闭并重启桌面程序后，草稿、未发送回答与对话恢复');
+  pass('draft, unsent answer, and dialogue are restored after fully closing and restarting the desktop app');
   await app.evaluate(()=>globalThis.__roomQA.mode='fail');
   await page.getByRole('textbox',{name:'回应角色追问'}).fill('保持合力不变时，质量越大，加速度越小。');
   await page.getByRole('button',{name:'回应并继续',exact:true}).click();
@@ -85,7 +85,7 @@ try{
   await page.getByRole('button',{name:'重试上轮追问',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===3);
   assert.equal(await page.getByTestId('dialogue-learner').count(),3);
-  pass('额度失败仍保留回答，重试不会重复追加学习者讲解');
+  pass('answers are kept after a quota failure, and retrying does not append a duplicate learner explanation');
   await app.evaluate(()=>globalThis.__roomQA.mode='wait');
   await page.getByRole('textbox',{name:'回应角色追问'}).fill('合力为零时，加速度为零。');
   await page.getByRole('button',{name:'回应并继续',exact:true}).click();
@@ -96,7 +96,7 @@ try{
   await page.getByRole('button',{name:'重试上轮追问',exact:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('[data-testid="dialogue-assistant"]').length===4);
   assert.equal(await page.getByTestId('dialogue-learner').count(),4);
-  pass('思考状态跟随真实请求，停止后可重试同一轮');
+  pass('thinking state tracks the real request, and the same round can be retried after stopping');
   await page.getByRole('button',{name:'生成整段对话反馈',exact:true}).click();
   await page.getByTestId('companion-report').waitFor();
   const report=(await page.evaluate(v=>window.gezhi.companions.history({vault:v,roleId:'teacher'}),vault)).reports[0];
@@ -105,13 +105,13 @@ try{
   assert.equal(report.dimensions[1].referenceVerified,false);
   const summary=await page.evaluate(v=>window.gezhi.learning.summary({vault:v}),vault);
   assert.equal(summary.independent,0);assert.equal(summary.aiReportCount,1);
-  pass('整段六维反馈仅评价学习者发言，AI 分数仍不计入独立通过');
+  pass('the full six-dimension feedback evaluates only the learner\'s utterances, and AI scores still do not count toward independent passing');
   await page.getByTestId('companion-report').getByRole('button',{name:'定位讲解原话',exact:true}).first().click();
   await dialogue().locator('mark').waitFor();
   assert.equal(await dialogue().locator('mark').textContent(),report.dimensions[0].evidence);
   await page.getByTestId('companion-report').getByRole('button',{name:'在资料中定位',exact:true}).first().click();
   assert.equal(await page.locator('.study-source-text mark').textContent(),report.dimensions[0].referenceEvidence);
-  pass('反馈可同时定位学习者原话与资料原文，伪造原文不显示为已匹配');
+  pass('feedback can locate both the learner\'s original words and the source text, and fabricated source text is not shown as matched');
   const exported=path.join(vault,'多轮反馈.导出.md');
   await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});},exported);
   await page.getByTestId('companion-report').getByRole('button',{name:'导出反馈',exact:true}).click();
@@ -119,7 +119,7 @@ try{
   const exportedText=fs.readFileSync(exported,'utf8');
   assert.ok(exportedText.includes(reply));assert.match(exportedText,/本次反馈所依据的对话/);
   assert.ok(exportedText.includes('牛顿第二定律指出合力决定加速度。'));
-  pass('整段反馈真实导出 Markdown，包含学习者补充、对话快照与原文依据');
+  pass('the full feedback really exports Markdown, including learner supplements, a dialogue snapshot, and source references');
   await page.getByRole('button',{name:'← 返回角色空间',exact:true}).click();
   await page.locator('.companion-card').filter({hasText:'研究伙伴'}).click();
   await page.getByRole('textbox',{name:'角色文字讲解'}).fill('我准备验证合力与加速度的关系，先固定质量再改变合力。');
@@ -129,17 +129,17 @@ try{
   await page.getByRole('textbox',{name:'回应角色追问'}).waitFor({state:'visible'});
   await saved();await page.getByRole('button',{name:'← 返回角色空间',exact:true}).click();await teacher().click();await dialogue().waitFor();
   assert.equal(await page.getByTestId('dialogue-assistant').count(),4);
-  pass('研究伙伴默认验证假设，角色草稿和对话各自独立保存');
+  pass('the research partner verifies hypotheses by default, and role drafts and dialogues are saved independently');
   await page.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await page.locator('.role-portrait').evaluate(el=>getComputedStyle(el).animationName),'none');
   assert.equal(await page.getByTestId('dialogue-assistant').first().evaluate(el=>getComputedStyle(el).animationName),'none');
-  pass('角色与对话动画尊重系统减少动态效果设置');
+  pass('role and dialogue animations respect the system reduced-motion setting');
   await page.evaluate(()=>{document.documentElement.setAttribute('data-theme','dark');document.body.setAttribute('data-theme','dark');});
   await page.locator('.learning-studio').evaluate(el=>el.scrollTop=document.querySelector('.room-dialogue').offsetTop-50);await shot('dialogue-dark');
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1100,760));
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-  await shot('dialogue-compact');pass('紧凑窗口无整页水平溢出，深色与对话布局可用');
-  assert.deepEqual(errors,[]);pass('重启、多轮对话和报告全过程无未处理渲染异常');
+  await shot('dialogue-compact');pass('the compact window has no full-page horizontal overflow, and dark theme and dialogue layout are usable');
+  assert.deepEqual(errors,[]);pass('no unhandled renderer exceptions across restart, multiple dialogue rounds, and reports');
 }catch(e){checks.push({name:'integration',pass:false,detail:e.stack||String(e)});console.error(e);await shot('failure').catch(()=>{});process.exitCode=1;}
 finally{fs.writeFileSync(path.join(OUT,'verification.json'),JSON.stringify({at:new Date().toISOString(),checks,pageErrors:errors,runRoot,cloud:'AI/voice test doubles; real Electron, restart, preload, source selection and SQLite; no learning efficacy claims'},null,2));if(app)await app.close();}
 console.log(`${checks.filter(c=>c.pass).length} passed, ${checks.filter(c=>!c.pass).length} failed`);

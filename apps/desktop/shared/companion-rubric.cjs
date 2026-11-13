@@ -1,21 +1,21 @@
 const ROLES = [
-  { id: 'peer', name: '小川', title: '同学陪练', color: '#a38be8', description: '一起讨论，找出你解释中不够清楚的地方。', instruction: '你是平等、友好的同学。复述你理解的重点，用同学的口吻追问含糊处，不装作权威。' },
-  { id: 'teacher', name: '林老师', title: '教师指导', color: '#7ea4dd', description: '检查概念、条件与推理，给出具体改进步骤。', instruction: '你是耐心而严谨的教师。逐项指出原话中的缺漏和错误，解释修正原因，不代替学生完成整段讲解。' },
-  { id: 'student', name: '小禾', title: '学生听众', color: '#51b4a4', description: '把你当老师，从初学者的视角检验是否听懂。', instruction: '你是第一次学习此主题的学生。指出哪个术语没解释、哪一步跟不上，并提出朴素具体的为什么。' },
-  { id: 'examiner', name: '周考官', title: '考官追问', color: '#d7a35d', description: '用边界条件、反例和追问检验你的理解。', instruction: '你是口试考官。重点检查边界条件、论证与反例，问题有针对性，不用羞辱或恐吓语气。' },
-  { id: 'researcher', name: '知远', title: '研究伙伴', color: '#72bdcf', description: '讨论假设，设计小实验，把知识迁移到新情境。', instruction: '你是研究伙伴。追问假设、可检验预测与新情境，区分观察和推测，不虚构实验结果。' },
+  { id: 'peer', name: 'Chuan', title: 'Peer coach', color: '#a38be8', description: 'Discuss together and find the places where your explanation is unclear.', instruction: '你是平等、友好的同学。复述你理解的重点，用同学的口吻追问含糊处，不装作权威。' },
+  { id: 'teacher', name: 'Teacher Lin', title: 'Teacher guidance', color: '#7ea4dd', description: 'Check concepts, conditions, and reasoning, and give concrete improvement steps.', instruction: '你是耐心而严谨的教师。逐项指出原话中的缺漏和错误，解释修正原因，不代替学生完成整段讲解。' },
+  { id: 'student', name: 'Xiaohe', title: 'Student listener', color: '#51b4a4', description: 'Treats you as the teacher and checks understanding from the perspective of a beginner.', instruction: '你是第一次学习此主题的学生。指出哪个术语没解释、哪一步跟不上，并提出朴素具体的为什么。' },
+  { id: 'examiner', name: 'Examiner Zhou', title: 'Examiner follow-up', color: '#d7a35d', description: 'Test your understanding with boundary cases, counterexamples, and follow-up questions.', instruction: '你是口试考官。重点检查边界条件、论证与反例，问题有针对性，不用羞辱或恐吓语气。' },
+  { id: 'researcher', name: 'Zhiyuan', title: 'Research partner', color: '#72bdcf', description: 'Discuss hypotheses, design small experiments, and transfer knowledge to new situations.', instruction: '你是研究伙伴。追问假设、可检验预测与新情境，区分观察和推测，不虚构实验结果。' },
 ];
 const DIMENSIONS = [
-  { id: 'accuracy', label: '概念准确性', criterion: '概念与事实是否准确，能否区分相近概念。' },
-  { id: 'conditions', label: '条件完整性', criterion: '有没有说清适用条件、前提、单位与边界。' },
-  { id: 'reasoning', label: '推理连贯性', criterion: '步骤之间是否有依据，是否存在跳步或矛盾。' },
-  { id: 'clarity', label: '表达清晰度', criterion: '术语是否解释，听众能否理解，不以错别字代替理解评价。' },
-  { id: 'examples', label: '举例能力', criterion: '是否给出正确例子、反例或可检验演示。' },
-  { id: 'transfer', label: '迁移应用', criterion: '是否说明条件变化后怎样应用概念。' },
+  { id: 'accuracy', label: 'Conceptual accuracy', criterion: '概念与事实是否准确，能否区分相近概念。' },
+  { id: 'conditions', label: 'Completeness of conditions', criterion: '有没有说清适用条件、前提、单位与边界。' },
+  { id: 'reasoning', label: 'Reasoning coherence', criterion: '步骤之间是否有依据，是否存在跳步或矛盾。' },
+  { id: 'clarity', label: 'Clarity of expression', criterion: '术语是否解释，听众能否理解，不以错别字代替理解评价。' },
+  { id: 'examples', label: 'Use of examples', criterion: '是否给出正确例子、反例或可检验演示。' },
+  { id: 'transfer', label: 'Transfer and application', criterion: '是否说明条件变化后怎样应用概念。' },
 ];
 function prompt({ roleId, topic, transcript, context = '', sourceLocation = '', previous = null, focus = '', dialogue:conversation=[],locale='zh' }) {
   const found = ROLES.find(r => r.id === roleId);
-  if (!found) throw new Error('角色不存在');
+  if (!found) throw new Error('Role not found');
   const role={...found};
   if(locale==='en')role.instruction+=' Write summary, reason, nextStep, questions and referenceLimit entirely in English. Preserve literal learner and source quotations in their original language.';
   // These remain explicitly encoded discussion data, never instructions from a file.
@@ -29,18 +29,18 @@ function normalize(raw, transcript, reference='',locale='zh') {
   try {
     const text = String(raw).trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'');
     data = JSON.parse(text);
-  } catch { throw new Error('AI 返回的评估格式不完整，请重试；本次没有生成或保存评分。'); }
-  if (!data || !Array.isArray(data.dimensions) || data.dimensions.length !== 6 || new Set(data.dimensions.map(d => d.id)).size !== 6) throw new Error('AI 没有返回完整六维反馈，请重试。');
+  } catch { throw new Error('The evaluation format returned by the AI is incomplete; please try again. No score was generated or saved.'); }
+  if (!data || !Array.isArray(data.dimensions) || data.dimensions.length !== 6 || new Set(data.dimensions.map(d => d.id)).size !== 6) throw new Error('The AI did not return complete six-dimension feedback; please try again.');
   if(locale==='en'&&/[\u3400-\u9fff]/.test([data.summary,data.referenceLimit,...(Array.isArray(data.questions)?data.questions:[]),...data.dimensions.flatMap(d=>[d?.reason,d?.nextStep])].join('')))throw Error('The model did not return English feedback. No assessment has been saved; please retry.');
   const clean = value => typeof value === 'string' ? value.slice(0, 1800).trim() : '';
   const dimensions = DIMENSIONS.map(def => {
     const d = data.dimensions.find(item => item?.id === def.id);
-    if (!d) throw new Error('AI 缺少维度：' + def.label);
+    if (!d) throw new Error('AI is missing dimension: ' + def.label);
     const evidence = clean(d.evidence);
     const referenceEvidence=clean(d.referenceEvidence),referenceVerified=Boolean(referenceEvidence&&reference.includes(referenceEvidence));
     const valid = Number.isInteger(d.score) && d.score >= 0 && d.score <= 4 && evidence && transcript.includes(evidence);
-    return { ...def, score: valid ? d.score : null, evidence: evidence && transcript.includes(evidence) ? evidence : '',referenceEvidence:referenceVerified?referenceEvidence:'',referenceVerified,reason: clean(d.reason) || '当前讲解缺少足够证据。', nextStep: clean(d.nextStep) || '补充相关说明后再次讲解。' };
+    return { ...def, score: valid ? d.score : null, evidence: evidence && transcript.includes(evidence) ? evidence : '',referenceEvidence:referenceVerified?referenceEvidence:'',referenceVerified,reason: clean(d.reason) || 'The current explanation lacks sufficient evidence.', nextStep: clean(d.nextStep) || 'Add the relevant explanation and explain again.' };
   });
-  return { summary: clean(data.summary), dimensions, questions: Array.isArray(data.questions) ? data.questions.filter(q => typeof q === 'string').slice(0,3).map(clean) : [], referenceLimit: clean(data.referenceLimit) || 'AI 形成性反馈，评分尚未经教师校准，不能证明知识已掌握。' };
+  return { summary: clean(data.summary), dimensions, questions: Array.isArray(data.questions) ? data.questions.filter(q => typeof q === 'string').slice(0,3).map(clean) : [], referenceLimit: clean(data.referenceLimit) || 'AI formative feedback; the score has not been calibrated by a teacher and does not prove mastery.' };
 }
 module.exports = { ROLES, DIMENSIONS, prompt, normalize };

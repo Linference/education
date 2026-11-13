@@ -14,7 +14,7 @@ for base, section_count, figures, tables in [
     ('ProjectIntroduction_Gezhi', 5, 2, 1),
     ('ResearchReport_Gezhi', 8, 10, 7),
 ]:
-    path = out / (base + '_中文.pdf')
+    path = out / (base + '_zh.pdf')
     reader = PdfReader(path)
     text = '\n'.join(page.extract_text() for page in reader.pages)
     compact = re.sub(r'\s+', '', text)

@@ -69,11 +69,11 @@ export default function AvatarStage({ frames, speaking, actualMs, size = 200, st
     <div className={`avatar-stage ${speaking ? "is-speaking" : ""} is-${mood}`} data-testid="avatar-stage">
       <div className="avatar-scene" style={{ width: size, height: size }}>
         <div className="avatar-orbit" aria-hidden="true" />
-        <div className="avatar-portrait" ref={sprite} role="img" aria-label="小格，学习陪伴伙伴"
+        <div className="avatar-portrait" ref={sprite} role="img" aria-label="Xiaoge, your learning companion"
           style={{ backgroundImage: `url(${portrait})` }} />
-        <span className="avatar-presence" aria-label={speaking ? "正在说话" : mood === "listening" ? "正在倾听" : "准备好了"} />
+        <span className="avatar-presence" aria-label={speaking ? "Speaking" : mood === "listening" ? "Listening" : "Ready"} />
       </div>
-      <div className="avatar-identity"><strong>小格</strong><span>你的学习搭档</span></div>
+      <div className="avatar-identity"><strong>Xiaoge</strong><span>Your learning partner</span></div>
       {status && <div className="avatar-status" role="status">{status}</div>}
       <div className="avatar-wave" aria-hidden="true">{Array.from({ length: 11 }, (_, i) =>
         <i key={i} style={{ "--bar": i } as CSSProperties} />)}</div>

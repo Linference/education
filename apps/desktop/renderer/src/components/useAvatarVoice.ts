@@ -87,12 +87,12 @@ export function useAvatarVoice() {
     return new Promise((resolve) => {
       const synth = (window as any).speechSynthesis;
       if (!synth) {
-        setStatus("这个环境没有内置语音合成");
-        resolve({ ok: false, source: "system", error: "没有内置语音合成" });
+        setStatus("This environment has no built-in speech synthesis");
+        resolve({ ok: false, source: "system", error: "no built-in speech synthesis" });
         return;
       }
       const clean = text.trim();
-      if (!clean) { resolve({ ok: false, source: "system", error: "文本为空" }); return; }
+      if (!clean) { resolve({ ok: false, source: "system", error: "empty text" }); return; }
       stop();
       try { synth.cancel(); } catch { /* 忽略 */ }
 
@@ -102,7 +102,7 @@ export function useAvatarVoice() {
       setActualMs(null);
 
       const seq = ++seqRef.current;
-      cancelRef.current = () => resolve({ ok: false, source: 'system', error: '已停止' });
+      cancelRef.current = () => resolve({ ok: false, source: 'system', error: 'stopped' });
       const u = new SpeechSynthesisUtterance(clean);
       u.lang = document.documentElement.lang === 'en' ? 'en-US' : 'zh-CN';
       u.rate = 1.0;
@@ -112,7 +112,7 @@ export function useAvatarVoice() {
         startRef.current = performance.now();
         setSpeaking(true);
         setSource("system");
-        setStatus("正在用系统语音朗读…");
+        setStatus("Reading aloud with the system voice…");
       };
       u.onend = () => {
         if (seq !== seqRef.current) return;
@@ -121,7 +121,7 @@ export function useAvatarVoice() {
         setSpeaking(false);
         setCurChar("");
         if (real > 200) setActualMs(Math.round(real));
-        setStatus(`朗读完成（${(real / 1000).toFixed(1)} 秒）`);
+        setStatus(`Finished reading (${(real / 1000).toFixed(1)}s)`);
         resolve({ ok: true, source: "system", ms: Math.round(real) });
       };
       u.onerror = (e: any) => {
@@ -129,8 +129,8 @@ export function useAvatarVoice() {
         cancelRef.current = null;
         setSpeaking(false);
         setCurChar("");
-        const msg = e?.error ?? "未知原因";
-        setStatus("朗读失败：" + msg);
+        const msg = e?.error ?? "unknown reason";
+        setStatus("Reading aloud failed: " + msg);
         resolve({ ok: false, source: "system", error: String(msg) });
       };
       synth.speak(u);
@@ -140,16 +140,16 @@ export function useAvatarVoice() {
   /** 云端语音（腾讯云；需要凭据） */
   const speakCloud = useCallback(async (text: string): Promise<SpeakResult> => {
     const clean = text.trim();
-    if (!clean) return { ok: false, source: "cloud", error: "文本为空" };
+    if (!clean) return { ok: false, source: "cloud", error: "empty text" };
     stop();
     const seq = ++seqRef.current;
-    setStatus("正在请求云端语音…");
+    setStatus("Requesting cloud voice…");
     try {
       const r = await window.gezhi.avatar.tts({ text: clean });
-      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: '已停止' };
+      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: 'stopped' };
       if (!r.ok || !r.base64) {
-        const msg = `${r.error ?? "未知原因"}${r.hint ? ` —— ${r.hint}` : ""}`;
-        setStatus("云端合成失败：" + msg);
+        const msg = `${r.error ?? "unknown reason"}${r.hint ? ` —— ${r.hint}` : ""}`;
+        setStatus("Cloud synthesis failed: " + msg);
         return { ok: false, source: "cloud", error: msg };
       }
 
@@ -172,13 +172,13 @@ export function useAvatarVoice() {
           if (audioRef.current === audio) audioRef.current = null;
           if (seq === seqRef.current) cancelRef.current = null;
         };
-        cancelRef.current = () => { audio.pause(); cleanup(); resolve({ ok: false, source: 'cloud', error: '已停止' }); };
+        cancelRef.current = () => { audio.pause(); cleanup(); resolve({ ok: false, source: 'cloud', error: 'stopped' }); };
         audio.onplay = () => {
           if (seq !== seqRef.current) return;
           setSpeaking(true);
           setSource("cloud");
           setActualMs(knownMs);
-          setStatus('正在朗读…');
+          setStatus('Reading aloud…');
         };
         audio.onended = () => {
           if (seq !== seqRef.current) { URL.revokeObjectURL(url); return; }
@@ -186,15 +186,15 @@ export function useAvatarVoice() {
           setCurChar("");
           setActualMs(knownMs);
           cleanup();
-          setStatus(knownMs ? `朗读完成（${(knownMs / 1000).toFixed(1)} 秒）` : '朗读完成');
+          setStatus(knownMs ? `Finished reading (${(knownMs / 1000).toFixed(1)}s)` : 'Finished reading');
           resolve({ ok: true, source: "cloud", ms: knownMs ?? undefined });
         };
         audio.onerror = () => {
           cleanup();
-          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: '已停止' }); return; }
+          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: 'stopped' }); return; }
           setSpeaking(false);
-          setStatus("音频播放失败（格式可能不被支持）");
-          resolve({ ok: false, source: "cloud", error: "播放失败" });
+          setStatus("Audio playback failed (the format may not be supported)");
+          resolve({ ok: false, source: "cloud", error: "playback failed" });
         };
         audio.onloadedmetadata = () => {
           if (seq !== seqRef.current) return;
@@ -204,15 +204,15 @@ export function useAvatarVoice() {
         };
         audio.play().catch((err) => {
           cleanup();
-          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: '已停止' }); return; }
+          if (seq !== seqRef.current) { resolve({ ok: false, source: 'cloud', error: 'stopped' }); return; }
           setSpeaking(false);
-          setStatus("播放被拒绝：" + (err?.message ?? err));
+          setStatus("Playback was refused: " + (err?.message ?? err));
           resolve({ ok: false, source: "cloud", error: String(err?.message ?? err) });
         });
       });
     } catch (e: any) {
-      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: '已停止' };
-      setStatus("云端朗读失败：" + (e?.message ?? e));
+      if (seq !== seqRef.current) return { ok: false, source: 'cloud', error: 'stopped' };
+      setStatus("Cloud read-aloud failed: " + (e?.message ?? e));
       return { ok: false, source: "cloud", error: String(e?.message ?? e) };
     }
   }, [stop]);

@@ -267,7 +267,7 @@ OpenAI 图像生成 & 内置工具，模型修订版本未暴露。 & 生成 AI 
 # Translate the explanatory notes for local references without changing their identity.
 REPORT = REPORT.replace('Six-page circular supplied by the team; submission requirements and rubric on pages 4--6.', '团队提供的六页比赛文件，提交要求与评分标准位于第 4--6 页。')
 REPORT = REPORT.replace('Prototype release, verification reports, real AI event logs, simulated attempt summary and video verification. Evidence identifiers E1--E6; source locations are supplied in the local delivery manifest.', '原型发布清单、验证报告、真实 AI 事件日志、模拟作答汇总与视频验证，证据编号 E1--E6；源文件位置保存在本地交付清单中。')
-for name, content in [('ProjectIntroduction_Gezhi_中文',INTRO),('ResearchReport_Gezhi_中文',REPORT)]:
+for name, content in [('ProjectIntroduction_Gezhi_zh',INTRO),('ResearchReport_Gezhi_zh',REPORT)]:
     (OUT / (name+'.tex')).write_text(PRE+content,encoding='utf-8')
 manifest = {'translatedFrom': ['ProjectIntroduction_Gezhi.tex','ResearchReport_Gezhi.tex'], 'translationDate':'2026-10-03', 'pageLimit':None, 'sourceIllustrationsPreserved':True, 'sourceBibliographyPreserved':True, 'members':['Lin Kit','Lei Chengchek','Feng Ziwen'], 'teacherChineseName':'曾剑辉', 'realStudentTrial':False}
 (OUT/'translation-manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')

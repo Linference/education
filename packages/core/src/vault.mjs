@@ -1,18 +1,19 @@
-// 格致 · 库（Vault）脚手架
+// Gezhi · Vault scaffolding
 //
-// 两条硬规则（都是调研得出的）：
-//   1. 默认位置必须"问系统"，不能硬编码 —— 大多数 Windows 用户的「文档」在
-//      C:\Users\<名>\Documents，但它随时可能被重定向（本机就重定向到了 D 盘）。
-//      Electron 里用 app.getPath('documents')；这里在纯 Node 环境下做等价推断。
-//   2. 索引与缓存放 %APPDATA%（库之外）—— 库若落在 OneDrive 同步目录里，
-//      WAL 模式的 SQLite 被云盘中途打断写入会损坏或锁死。
+// Two hard rules (both from research):
+//   1. The default location must be "asked from the system", never hard-coded — most Windows users keep
+//      Documents at C:\Users\<name>\Documents, but it can be redirected at any time (on this machine it
+//      is redirected to the D drive). In Electron use app.getPath('documents'); here we make the
+//      equivalent inference in a pure Node environment.
+//   2. Keep the index and cache under %APPDATA% (outside the vault) — if the vault lives in a OneDrive
+//      sync folder, a WAL-mode SQLite interrupted mid-write by the cloud drive can corrupt or lock up.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { appDataDir, indexPathFor } from "../../db/src/index.mjs";
 
-/** 库内的目录骨架。 */
+/** Directory skeleton inside a vault. */
 export const VAULT_SUBDIRS = [
   "笔记",
   "教材",
@@ -29,16 +30,16 @@ export const VAULT_SUBDIRS = [
 export const VAULT_DIR_NAME = "格致";
 
 /**
- * 解析系统"文档"目录。
+ * Resolve the system "Documents" directory.
  * @returns {{ dir: string, via: string }}
  */
 export function resolveDocumentsDir() {
-  // 1) 显式覆盖（测试与高级用户用）
+  // 1) Explicit override (for tests and advanced users)
   if (process.env.GEZHI_DOCUMENTS) {
-    return { dir: process.env.GEZHI_DOCUMENTS, via: "环境变量 GEZHI_DOCUMENTS" };
+    return { dir: process.env.GEZHI_DOCUMENTS, via: "GEZHI_DOCUMENTS environment variable" };
   }
 
-  // 2) Windows：读注册表里真实的已知文件夹位置（支持重定向）
+  // 2) Windows: read the real known-folder location from the registry (supports redirection)
   if (process.platform === "win32") {
     try {
       const out = execFileSync(
@@ -50,19 +51,19 @@ export function resolveDocumentsDir() {
       if (m) {
         const expanded = m[1].trim().replace(/%([^%]+)%/g, (_, name) => process.env[name] ?? `%${name}%`);
         if (expanded && fs.existsSync(expanded)) {
-          return { dir: expanded, via: "注册表 User Shell Folders\\Personal" };
+          return { dir: expanded, via: "registry User Shell Folders\\Personal" };
         }
       }
     } catch {
-      /* 落到下面的默认值 */
+      /* fall through to the default below */
     }
   }
 
-  // 3) 默认
-  return { dir: path.join(os.homedir(), "Documents"), via: "默认推断" };
+  // 3) Default
+  return { dir: path.join(os.homedir(), "Documents"), via: "default inference" };
 }
 
-/** 库的根目录（多库并列的地方）：<文档>\格致\ */
+/** Vaults root (where multiple vaults sit side by side): <Documents>\格致\ */
 export function resolveVaultsRoot() {
   const { dir, via } = resolveDocumentsDir();
   return { root: path.join(dir, VAULT_DIR_NAME), documentsDir: dir, via };
@@ -75,31 +76,31 @@ export function makeVaultId(name) {
 }
 
 /**
- * 建库。
+ * Create a vault.
  * @param {object} opts
- * @param {string} opts.name       库名（也就是文件夹名）
- * @param {string} [opts.root]     库根（默认 <文档>\格致\）
- * @param {string} [opts.subject]  学科
- * @param {string} [opts.grade]    年级
- * @param {boolean} [opts.dryRun]  只报告将要做什么，不落盘
+ * @param {string} opts.name       Vault name (also the folder name)
+ * @param {string} [opts.root]     Vaults root (default <Documents>\格致\)
+ * @param {string} [opts.subject]  Subject
+ * @param {string} [opts.grade]    Grade
+ * @param {boolean} [opts.dryRun]  Only report what would be done, write nothing
  */
 export function createVault({ name, root, subject = null, grade = null, dryRun = false } = {}) {
-  if (!name) throw new Error("建库需要 name");
-  const rootInfo = root ? { root, documentsDir: path.dirname(root), via: "显式指定" } : resolveVaultsRoot();
+  if (!name) throw new Error("Creating a vault requires a name");
+  const rootInfo = root ? { root, documentsDir: path.dirname(root), via: "explicitly specified" } : resolveVaultsRoot();
   const vaultDir = path.join(rootInfo.root, name);
   const configDir = path.join(vaultDir, ".gezhi");
   const id = makeVaultId(name);
 
   const actions = [];
   const doMkdir = (p) => {
-    actions.push(`建目录 ${path.relative(rootInfo.root, p) || "."}`);
+    actions.push(`create directory ${path.relative(rootInfo.root, p) || "."}`);
     if (!dryRun) fs.mkdirSync(p, { recursive: true });
   };
 
   doMkdir(vaultDir);
   for (const sub of VAULT_SUBDIRS) doMkdir(path.join(vaultDir, sub));
 
-  // vault.json：库级配置
+  // vault.json: vault-level configuration
   const vaultJson = {
     schemaVersion: 1,
     id,
@@ -107,26 +108,26 @@ export function createVault({ name, root, subject = null, grade = null, dryRun =
     subject,
     grade,
     createdAt: new Date().toISOString(),
-    // 说明：索引与缓存不在库内，见 indexPath / cacheDir
+    // Note: the index and cache are not inside the vault; see indexPath / cacheDir
     dataPolicy: {
-      notes: "Markdown 是唯一真源，可用任何编辑器打开",
-      index: "索引与缓存位于 %APPDATA%\\gezhi，可从库内容重建",
-      backup: ".gezhi/backup 存放不可重建的数据（题库 / 计划 / 评分）",
+      notes: "Markdown is the single source of truth and can be opened with any editor",
+      index: "The index and cache live in %APPDATA%\\gezhi and can be rebuilt from vault contents",
+      backup: ".gezhi/backup holds data that cannot be rebuilt (question bank / plans / scores)",
     },
     exportDefaults: { pdf: "typst", docx: "python-docx", html: "chromium-print" },
   };
-  actions.push("写 .gezhi/vault.json");
+  actions.push("write .gezhi/vault.json");
   if (!dryRun) fs.writeFileSync(path.join(configDir, "vault.json"), JSON.stringify(vaultJson, null, 2), "utf8");
 
-  // vaults.json：多库清单（放在格致根，便于切换）
+  // vaults.json: multi-vault registry (kept at the Gezhi root so vaults can be switched easily)
   const registryPath = path.join(rootInfo.root, "vaults.json");
-  actions.push("更新 vaults.json（库清单）");
+  actions.push("update vaults.json (vault registry)");
   if (!dryRun) {
     let reg = { schemaVersion: 1, vaults: [] };
     try {
       reg = JSON.parse(fs.readFileSync(registryPath, "utf8"));
     } catch {
-      /* 首次或损坏就重建 */
+      /* first run or corrupted, so rebuild */
     }
     reg.vaults = Array.isArray(reg.vaults) ? reg.vaults : [];
     if (!reg.vaults.some((v) => v.id === id)) {
@@ -135,7 +136,7 @@ export function createVault({ name, root, subject = null, grade = null, dryRun =
     fs.writeFileSync(registryPath, JSON.stringify(reg, null, 2), "utf8");
   }
 
-  // workspace.json：标签页与面板布局（先给默认值，P1 起用）
+  // workspace.json: tab and panel layout (defaults for now, used from P1 onward)
   const workspaceJson = {
     schemaVersion: 1,
     openTabs: [],
@@ -143,7 +144,7 @@ export function createVault({ name, root, subject = null, grade = null, dryRun =
     layout: { sidebarWidth: 260, rightPanelWidth: 320, rightPanelVisible: true },
     editorMode: "live", // source | live | reading
   };
-  actions.push("写 .gezhi/workspace.json");
+  actions.push("write .gezhi/workspace.json");
   if (!dryRun) fs.writeFileSync(path.join(configDir, "workspace.json"), JSON.stringify(workspaceJson, null, 2), "utf8");
 
   const indexPath = indexPathFor(id);
@@ -165,7 +166,7 @@ export function createVault({ name, root, subject = null, grade = null, dryRun =
   };
 }
 
-/** 列出所有库（读 vaults.json，并核对目录是否还在）。 */
+/** List all vaults (reads vaults.json and checks whether each directory still exists). */
 export function listVaults() {
   const { root } = resolveVaultsRoot();
   const registryPath = path.join(root, "vaults.json");

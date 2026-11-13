@@ -1,16 +1,16 @@
-// 格致 · 库内的文件操作（新建 / 重命名 / 删除 / 保存）
+// Gezhi · In-vault file operations (create / rename / delete / save)
 //
-// 为什么这些必须在主进程：渲染进程没有 fs（contextIsolation 已开）。
+// Why these must live in the main process: the renderer has no fs (contextIsolation is on).
 //
-// ★ 安全约束（很重要，不能省）：
-//   所有路径操作都必须**限制在当前打开的库目录之内**。
-//   否则渲染进程被注入一段脚本，就能让主进程往 C:\Windows 里写文件。
-//   这里用 realpath 解析后做前缀比对 —— 只比对字符串是不够的，
-//   因为 `库/../..` 这种路径字符串上看着在库里，解析后却在外面。
+// ★ Security constraint (important, not optional):
+//   All path operations must be **confined to the currently opened vault directory**.
+//   Otherwise an injected script in the renderer could make the main process write files into C:\Windows.
+//   Here we resolve with realpath and compare prefixes — comparing strings alone is not enough,
+//   because a path like `vault/../..` looks like it is inside the vault but resolves outside it.
 const fs = require("node:fs");
 const path = require("node:path");
 
-/** 应用当前打开的库目录（由渲染进程在 openVault 时同步过来） */
+/** The currently opened vault directory (synced from the renderer when openVault runs) */
 let currentVault = null;
 
 function setVault(dir) {
@@ -23,31 +23,31 @@ function setVault(dir) {
 }
 
 /**
- * 校验目标路径在库内。
+ * Verify that a target path is inside the vault.
  *
- * 两个要点：
- *   1. 用 realpathSync 解析（跟随符号链接、消掉 ../），再做前缀比对
- *   2. 目标可能还不存在（新建文件），这时对**父目录**做 realpath
+ * Two key points:
+ *   1. Resolve with realpathSync (follow symlinks, resolve ../), then compare prefixes
+ *   2. The target may not exist yet (new file), in which case realpath the **parent directory**
  */
 function assertInsideVault(target, { mustExist = false } = {}) {
-  if (!currentVault) throw new Error("还没有打开库");
+  if (!currentVault) throw new Error("No vault is open yet");
   const abs = path.resolve(target);
 
   if (mustExist) {
-    if (!fs.existsSync(abs)) throw new Error(`路径不存在：${abs}`);
+    if (!fs.existsSync(abs)) throw new Error(`Path does not exist: ${abs}`);
     const real = fs.realpathSync(abs);
     if (!isInside(real, currentVault)) {
-      throw new Error("拒绝操作：目标不在当前库内");
+      throw new Error("Operation denied: target is not inside the current vault");
     }
     return real;
   }
 
-  // 目标还不存在 → 校验父目录
+  // Target does not exist yet → validate the parent directory
   const parent = path.dirname(abs);
-  if (!fs.existsSync(parent)) throw new Error(`父目录不存在：${parent}`);
+  if (!fs.existsSync(parent)) throw new Error(`Parent directory does not exist: ${parent}`);
   const realParent = fs.realpathSync(parent);
   if (!isInside(realParent, currentVault)) {
-    throw new Error("拒绝操作：目标不在当前库内");
+    throw new Error("Operation refused: the target is outside the current library");
   }
   return path.join(realParent, path.basename(abs));
 }
@@ -58,69 +58,69 @@ function isInside(child, parent) {
 }
 
 /**
- * 文件名合法性检查。
+ * File name validity check.
  *
- * 三个实测踩过的坑：
- *   1. **必须先 trim 再判空**。原实现是 `!name.trim()` 判空后直接 `const n = name.trim()`，
- *      看着没问题 —— 但调用方在**校验前**就把 ".md" 拼上了：
- *      "   " → "  .md" → trim 后是 ".md"，非空、通过校验，
- *      结果建出一个名叫 ".md" 的文件。所以这里要连**主干名**一起校验。
- *   2. **保留名要按主干比对**。Windows 保留的是 "CON"，"CON.md" 同样会被系统拒绝。
- *      原实现只比对整串，"CON.md" 直接漏过。
- *   3. 非法字符检查要针对用户输入，而不是拼完扩展名的结果（否则同理会漏）。
+ * Three pitfalls hit in practice:
+ *   1. **Trim first, then check for empty.** The original implementation checked `!name.trim()` and then used `const n = name.trim()`,
+ *      which looks fine — but the caller appends ".md" **before** validation:
+ *      "   " → "  .md" → after trim it is ".md", non-empty, passes validation,
+ *      and ends up creating a file named ".md". So the **stem name** must be validated too.
+ *   2. **Reserved names must be compared by stem.** Windows reserves "CON", and "CON.md" is likewise rejected by the system.
+ *      The original implementation compared the whole string, so "CON.md" slipped through.
+ *   3. Illegal-character checks must target the user input, not the result after appending the extension (otherwise it leaks through the same way).
  */
 function validateName(name) {
-  if (typeof name !== "string") throw new Error("名称必须是文本");
+  if (typeof name !== "string") throw new Error("Name must be text");
   const n = name.trim();
-  if (!n) throw new Error("名称不能为空");
+  if (!n) throw new Error("Name cannot be empty");
 
-  // 主干名（去掉扩展名）—— 保留名与空名都要按它判
+  // Stem name (without extension) — reserved names and empty names are judged by this
   const ext = path.extname(n);
   const stem = ext ? n.slice(0, -ext.length) : n;
   if (!stem.trim()) {
-    throw new Error("文件名不能只有扩展名");
+    throw new Error("File name cannot be only an extension");
   }
 
   if (/[<>:"/\\|?*\u0000-\u001f]/.test(n)) {
-    throw new Error("名称不能包含 < > : \" / \\ | ? * 这些字符");
+    throw new Error("Name cannot contain these characters: < > : \" / \\ | ? *");
   }
-  // Windows 保留名：CON / PRN / AUX / NUL / COM1-9 / LPT1-9
-  // 注意要判**主干**，因为 CON.md 同样不被允许
+  // Windows reserved names: CON / PRN / AUX / NUL / COM1-9 / LPT1-9
+  // Note that we must check the **stem**, because CON.md is equally disallowed
   if (/^(con|prn|aux|nul|com\d|lpt\d)$/i.test(stem)) {
-    throw new Error(`「${stem}」是 Windows 保留名，换个名字`);
+    throw new Error(`"${stem}" is a Windows reserved name; choose a different name`);
   }
   if (n.startsWith(".") && stem.startsWith(".")) {
-    // 允许隐藏文件（如 .gezhi），但不允许 ".md" 这种只有扩展名的
+    // Allow hidden files (such as .gezhi), but not something like ".md" that is only an extension
   }
-  if (n.length > 120) throw new Error("名称过长（限 120 字符）");
+  if (n.length > 120) throw new Error("Name too long (limit 120 characters)");
   return n;
 }
 
-/** 防止把同一个名字用两次 */
+/** Prevent using the same name twice */
 function uniquePath(dir, base, ext = "") {
   let candidate = path.join(dir, base + ext);
   let i = 2;
   while (fs.existsSync(candidate)) {
     candidate = path.join(dir, `${base} ${i}${ext}`);
     i++;
-    if (i > 999) throw new Error("同名文件太多");
+    if (i > 999) throw new Error("Too many files with the same name");
   }
   return candidate;
 }
 
 function registerVaultFs(ipcMain) {
-  // 打开库时同步目录，供路径校验用
+  // Sync the directory when opening a vault, for path validation
   ipcMain.handle("vault:set", (_e, dir) => ({ ok: true, vault: setVault(dir) }));
 
   /**
-   * 统一的 IPC 包装。
+   * Unified IPC wrapper.
    *
-   * ⚠️ 为什么要包一层：Electron 的 ipcMain.handle 遇到**未捕获异常**时，
-   *    渲染进程收到的是 `Error: An object could not be cloned` 之类的模糊错误，
-   *    而我们想看的是具体原因（"名称不能为空"）。更要命的是：
-   *    如果返回的对象里有不可克隆的值，渲染进程会收到**空对象 {}** —— 
-   *    断言 `!r.ok` 通过、`r.error` 是 undefined，报错信息全丢。
-   *    所以这里保证：任何路径都返回一个只含基本类型的 {ok, ...} 对象。
+   * ⚠️ Why wrap at all: when ipcMain.handle hits an **uncaught exception**,
+   *     the renderer receives a vague error like `Error: An object could not be cloned`,
+   *     whereas we want the specific reason ("Name cannot be empty"). Even worse:
+   *     if the returned object contains a non-cloneable value, the renderer receives an **empty object {}** —
+   *     the `!r.ok` assertion passes and `r.error` is undefined, losing the whole error message.
+   *     So here we guarantee: every path returns a {ok, ...} object containing only primitive types.
    */
   const wrap = (fn) => async (_e, arg) => {
     try {
@@ -132,21 +132,21 @@ function registerVaultFs(ipcMain) {
     }
   };
 
-  /** 新建文件 */
+  /** Create a file */
   ipcMain.handle("fs:createFile", wrap(({ dir, name, content = "" }) => {
     try {
-      // ★ 顺序：**先用用户原样输入校验，再拼扩展名**。
-      //   反过来的话（原实现），"   " 会被拼成 "   .md"，
-      //   再 trim 成 ".md" —— 非空、合法，于是建出一个名叫 ".md" 的文件。
-      //   实测踩过：调试输出里真的出现了 `.md` 这个文件。
+      // ★ Order: **validate the user's raw input first, then append the extension**.
+      //   The other way around (the original implementation), "   " gets joined into "   .md",
+      //   then trimmed to ".md" — non-empty and legal, so it creates a file named ".md".
+      //   Hit in practice: the debug output really did show a `.md` file.
       const base = validateName(name);
       const safe = base.includes(".") ? base : `${base}.md`;
-      // 拼完再校验一次整串（防 "CON" + ".md" 这类绕过）
+      // Validate the full string once more after appending (to block bypasses like "CON" + ".md")
       validateName(safe);
       const parent = assertInsideVault(path.join(dir, safe), { mustExist: false });
       const target = path.join(path.dirname(parent), safe);
-      if (fs.existsSync(target)) return { ok: false, error: `「${safe}」已存在` };
-      // 默认内容：给一个新笔记的标题骨架（比空文件友好）
+      if (fs.existsSync(target)) return { ok: false, error: `"${safe}" already exists` };
+      // Default content: a title skeleton for a new note (friendlier than an empty file)
       const finalContent = content || (safe.endsWith(".md") ? `# ${safe.replace(/\.md$/i, "")}\n\n` : "");
       fs.writeFileSync(target, finalContent, "utf8");
       return { ok: true, path: target, name: safe };
@@ -155,13 +155,13 @@ function registerVaultFs(ipcMain) {
     }
   }));
 
-  /** 新建文件夹 */
+  /** Create a folder */
   ipcMain.handle("fs:createFolder", wrap(({ dir, name }) => {
     try {
       const safe = validateName(name);
       assertInsideVault(path.join(dir, safe), { mustExist: false });
       const target = path.join(dir, safe);
-      if (fs.existsSync(target)) return { ok: false, error: `「${safe}」已存在` };
+      if (fs.existsSync(target)) return { ok: false, error: `"${safe}" already exists` };
       fs.mkdirSync(target);
       return { ok: true, path: target, name: safe };
     } catch (e) {
@@ -170,25 +170,25 @@ function registerVaultFs(ipcMain) {
   }));
 
   /**
-   * 重命名（文件或文件夹）。
-   * 只允许改名，不允许改路径 —— 移动是另一个操作，混在一起容易出 bug。
+   * Rename (file or folder).
+   * Only the name may change, not the path — moving is a separate operation, and mixing them is bug-prone.
    */
   ipcMain.handle("fs:rename", wrap(({ target: oldPath, newName }) => {
     try {
       const real = assertInsideVault(oldPath, { mustExist: true });
       const isDir = fs.statSync(real).isDirectory();
       const safe = validateName(newName);
-      // 文件保留原扩展名（除非用户明确写了新扩展名）
+      // Files keep their original extension (unless the user explicitly wrote a new extension)
       const curExt = path.extname(real);
       const finalName = !isDir && curExt && !safe.includes(".") ? safe + curExt : safe;
       const newPath = path.join(path.dirname(real), finalName);
 
-      // ⚠️ 顺序很重要：**先判重名，再判"没变化"**。
-      //    反过来的话（原实现就是这样），"重命名成自己已存在的名字"
-      //    会因为 newPath === real 而走 unchanged 分支，直接被放行 ——
-      //    用户看到"成功"但什么也没发生，而重名冲突根本没被拦住。
+      // ⚠️ Order matters: **check for a name collision first, then check "no change"**.
+      //     The other way around (which is how the original implementation did it), "renaming to its own existing name"
+      //     takes the unchanged branch because newPath === real and is allowed through —
+      //     the user sees "success" but nothing happens, and the name collision is never caught.
       if (path.resolve(newPath) !== path.resolve(real) && fs.existsSync(newPath)) {
-        return { ok: false, error: `「${finalName}」已存在` };
+        return { ok: false, error: `"${finalName}" already exists` };
       }
       if (newPath === real) return { ok: true, path: real, name: finalName, unchanged: true };
 
@@ -200,12 +200,12 @@ function registerVaultFs(ipcMain) {
   }));
 
   /**
-   * 删除。
+   * Delete.
    *
-   * ★ 默认**移到回收站**而不是直接删 —— 笔记是用户的命根子，
-   *   一次误点就永久丢失是不可接受的。只有回收站不可用时才真删，
-   *   并且这时界面上会明确提示。
-   *   （Electron 的 shell.trashItem 是异步的）
+   * ★ By default **move to the trash** rather than delete outright — notes are the user's lifeline,
+   *   and a single misclick losing them permanently is unacceptable. Only when the trash is unavailable
+   *   do we actually delete, and in that case the UI is clearly informed.
+   *   (Electron's shell.trashItem is asynchronous)
    */
   ipcMain.handle("fs:delete", async (_e, { target, permanent = false }) => {
     try {
@@ -222,22 +222,22 @@ function registerVaultFs(ipcMain) {
     }
   });
 
-  /** 保存文本文件（编辑器用） */
+  /** Save a text file (used by the editor) */
   ipcMain.handle("fs:writeText", wrap(({ path: filePath, text }) => {
     try {
-      if (typeof text !== "string") return { ok: false, error: "内容必须是字符串" };
+      if (typeof text !== "string") return { ok: false, error: "Content must be a string" };
       const real = assertInsideVault(filePath, { mustExist: true });
       const st = fs.statSync(real);
-      if (st.isDirectory()) return { ok: false, error: "目标是文件夹，不能写入" };
-      // 写前把原文件备份一份（同名 .bak），防止编辑器 bug 把笔记写坏
-      // 只对已有内容的文件备份，且限制大小（别为了备份把磁盘写满）
+      if (st.isDirectory()) return { ok: false, error: "Target is a folder and cannot be written to" };
+      // Back up the original file before writing (same name + .bak) so an editor bug can't corrupt a note
+      // Only back up files that already have content, and cap the size (don't fill the disk just to back up)
       if (st.size > 0 && st.size < 8 * 1024 * 1024) {
         try {
           const bak = real + ".bak";
-          // 只保留一份备份：覆盖前一个
+          // Keep only one backup: overwrite the previous one
           if (fs.existsSync(bak)) fs.unlinkSync(bak);
           fs.copyFileSync(real, bak);
-        } catch { /* 备份失败不阻断保存 */ }
+        } catch { /* A failed backup must not block the save */ }
       }
       fs.writeFileSync(real, text, "utf8");
       const after = fs.statSync(real);
@@ -247,7 +247,7 @@ function registerVaultFs(ipcMain) {
     }
   }));
 
-  /** 查询当前库（调试与测试用） */
+  /** Query the current vault (for debugging and testing) */
   ipcMain.handle("fs:currentVault", () => ({ vault: currentVault }));
 }
 

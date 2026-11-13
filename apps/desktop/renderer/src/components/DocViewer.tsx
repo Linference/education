@@ -31,10 +31,10 @@ interface DocResult {
 }
 
 const METHOD_LABEL: Record<string, string> = {
-  "piece-table": "按分片表精确提取",
-  "scan-fallback": "扫描提取（FIB 字段不准时的兜底）",
-  rtf: "RTF 解析",
-  plaintext: "纯文本",
+  "piece-table": "exact extraction from the piece table",
+  "scan-fallback": "scan extraction (fallback when the FIB fields are unreliable)",
+  rtf: "RTF parsing",
+  plaintext: "plain text",
 };
 
 export default function DocViewer({ path, name }: Props) {
@@ -53,18 +53,18 @@ export default function DocViewer({ path, name }: Props) {
   }, [path]);
 
   if (!r) {
-    return <div className="empty-state">正在解析 .doc（Word 97-2003 二进制格式）…</div>;
+    return <div className="empty-state">Parsing .doc (Word 97-2003 binary format)…</div>;
   }
 
   if (!r.ok) {
     return (
       <div className="empty-state">
-        <div style={{ fontSize: 15 }}>{r.isActuallyDocx ? "这个文件其实是 .docx" : "无法读取这个 .doc 文件"}</div>
+        <div style={{ fontSize: 15 }}>{r.isActuallyDocx ? "This file is actually a .docx" : "This .doc file cannot be read"}</div>
         <div style={{ maxWidth: 520, textAlign: "center", lineHeight: 1.8 }}>{r.error}</div>
         {r.isActuallyDocx && (
           <div style={{ fontSize: 12.5, color: "var(--text-muted)", maxWidth: 520, textAlign: "center" }}>
-            把扩展名从 .doc 改成 .docx 后重新打开即可 —— 有些软件保存时会写成 .doc，
-            但内容实际是新的 .docx 格式。
+            Rename the extension from .doc to .docx and open it again — some software writes .doc
+            while the content is actually the newer .docx format.
           </div>
         )}
       </div>
@@ -94,22 +94,22 @@ export default function DocViewer({ path, name }: Props) {
           }}
         >
           <span style={{ flex: "1 1 auto" }}>
-            <b>文字提取模式</b>：.doc 是旧版二进制格式，这里显示的是提取出的文字，
-            <b>图片、公式对象与原版排版无法还原</b>。
-            {r.method && <> 提取方式：{METHOD_LABEL[r.method] ?? r.method}，耗时 {r.ms}ms。</>}
+            <b>Text extraction mode</b>: .doc is a legacy binary format, so this shows the extracted text only.
+            <b>Images, equation objects, and the original layout cannot be reproduced</b>.
+            {r.method && <> Method: {METHOD_LABEL[r.method] ?? r.method}, took {r.ms}ms.</>}
             {hasEmbed && (
               <>
                 <br />
-                文中出现的 <code>EMBED Equation.DSMT4</code> 之类是原文档里的
-                <b>公式对象占位符</b>（MathType 等以 OLE 对象嵌入，二进制里没有纯文本形态），
-                导出 PDF 时会缺失 —— 需要公式请用 .docx 或重新录入。
+                Items such as <code>EMBED Equation.DSMT4</code> are <b>placeholder markers for equation objects</b> in
+                the original document (MathType and similar are embedded as OLE objects and have no plain-text form in the binary),
+                so they will be missing from exported PDFs — use .docx or re-enter the equations if you need them.
               </>
             )}
           </span>
           <button
             onClick={() => setShowNotice(false)}
             style={{ flex: "0 0 auto", color: "#7a5300", opacity: 0.7, fontSize: 14 }}
-            title="知道了"
+            title="Got it"
           >
             ✕
           </button>
@@ -141,7 +141,7 @@ export default function DocViewer({ path, name }: Props) {
           background: "var(--bg-secondary)",
         }}
       >
-        {text.length} 字 · {lines.length} 行 · 原文件 {((r.size ?? 0) / 1024).toFixed(0)} KB
+        {text.length} characters · {lines.length} lines · original file {((r.size ?? 0) / 1024).toFixed(0)} KB
       </div>
     </div>
   );
